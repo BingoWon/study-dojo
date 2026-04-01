@@ -1,4 +1,4 @@
-import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { streamText } from "ai";
 import { Hono } from "hono";
 
@@ -24,9 +24,8 @@ app.post("/api/chat", async (c) => {
 			return c.json({ error: "Missing API Key" }, 500);
 		}
 
-		// Initialize OpenRouter custom provider
-		const openrouter = createOpenAI({
-			baseURL: "https://openrouter.ai/api/v1",
+		// Initialize OpenRouter native provider
+		const openrouter = createOpenRouter({
 			apiKey: c.env.OPENROUTER_API_KEY,
 			headers: {
 				"HTTP-Referer": "https://openclaw.ai",
