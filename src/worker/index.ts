@@ -19,24 +19,62 @@ type UIMessage = {
 	content?: string;
 };
 
+/** Parse a data URL into { mimeType, uint8 } — required by Vercel AI SDK for uploaded images. */
+function parseDataUrl(
+	dataUrl: string,
+): { mimeType: string; uint8: Uint8Array } | null {
+	const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+	if (!match) return null;
+	const [, mimeType, b64] = match;
+	const binary = atob(b64);
+	const uint8 = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) uint8[i] = binary.charCodeAt(i);
+	return { mimeType, uint8 };
+}
+
 /** Convert Assistant-UI UIMessage parts → Vercel AI SDK CoreMessage content array. */
 function toCoreParts(parts: MessagePart[]) {
 	return parts
 		.map((p) => {
 			if (p.type === "text") return { type: "text" as const, text: p.text };
-			if (p.type === "image")
-				return { type: "image" as const, image: p.image ?? p.url ?? "" };
-			if (p.type === "image_url")
-				return {
-					type: "image" as const,
-					image: p.image_url?.url ?? p.url ?? "",
-				};
-			if (p.type === "file")
+
+			if (p.type === "image" || p.type === "image_url") {
+				const raw =
+					p.type === "image_url"
+						? (p.image_url?.url ?? p.url ?? "")
+						: (p.image ?? p.url ?? "");
+				// data URLs must be decoded to Uint8Array — SDK rejects the data: scheme
+				if (raw.startsWith("data:")) {
+					const parsed = parseDataUrl(raw);
+					if (parsed)
+						return {
+							type: "image" as const,
+							image: parsed.uint8,
+							mimeType: parsed.mimeType,
+						};
+				}
+				// plain http(s) URLs
+				return { type: "image" as const, image: raw };
+			}
+
+			if (p.type === "file") {
+				const raw = p.url ?? "";
+				if (raw.startsWith("data:")) {
+					const parsed = parseDataUrl(raw);
+					if (parsed)
+						return {
+							type: "file" as const,
+							data: parsed.uint8,
+							mimeType: parsed.mimeType,
+						};
+				}
 				return {
 					type: "file" as const,
+					data: raw,
 					mimeType: p.mediaType ?? "application/octet-stream",
-					data: p.url ?? "",
 				};
+			}
+
 			return null;
 		})
 		.filter(Boolean);
