@@ -165,3 +165,7 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+# Internal — never expose on GitHub
+docs/
+scripts/
