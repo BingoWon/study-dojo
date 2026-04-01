@@ -35,11 +35,37 @@ app.post("/api/chat", async (c) => {
 			},
 		});
 
+		// Convert Assistant-UI message parts to Vercel AI SDK CoreMessages
+		const coreMessages = messages.map((m: any) => {
+			if (m.parts) {
+				return {
+					role: m.role,
+					content: m.parts
+						.map((p: any) => {
+							if (p.type === "text") return { type: "text", text: p.text };
+							if (p.type === "image")
+								return { type: "image", image: p.image || p.url };
+							if (p.type === "image_url")
+								return { type: "image", image: p.image_url?.url || p.url };
+							if (p.type === "file")
+								return {
+									type: "file",
+									mimeType: p.mediaType || "application/octet-stream",
+									data: p.url,
+								};
+							return null;
+						})
+						.filter(Boolean),
+				};
+			}
+			return { role: m.role, content: m.content || "" };
+		});
+
 		console.log("[Worker] Prompting LLM (xiaomi/mimo-v2-omni)...");
 		// Multi-modal model for handling Text, Images, Video, Audio
 		const result = streamText({
 			model: openrouter("xiaomi/mimo-v2-omni"),
-			messages,
+			messages: coreMessages,
 			system:
 				"你现在是林亦频道的“暴躁教授”。你需要用极其刻薄、但也足够专业的学术口吻回答问题。偶尔会嘲讽用户的无知或者提出自己独特的冷幽默。保持中文交流，短句为主。",
 		});
