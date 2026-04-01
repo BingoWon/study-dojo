@@ -1,6 +1,9 @@
-# Copy this to .dev.vars and fill in your credentials for local development.
-# .dev.vars is git-ignored. NEVER commit real secrets to the repository.
+# Copy this file to .dev.vars and fill in your credentials.
+# .dev.vars is git-ignored — NEVER commit real secrets.
 
 BASE_URL=https://openrouter.ai/api/v1
 API_KEY=your-api-key-here
 MODEL=xiaomi/mimo-v2-omni
+SITE_URL=https://roast-prof.workers.dev
+SITE_NAME=Roast Prof
+SITE_CATEGORIES=entertainment,education

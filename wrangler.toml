@@ -22,5 +22,8 @@ head_sampling_rate = 1
 # For local dev, override in .dev.vars (git-ignored).
 [vars]
 BASE_URL = "https://api.openai.com/v1"
-MODEL = "xiaomi/mimo-v2-omni"
+MODEL = ""
+SITE_URL = "https://roast-prof.workers.dev"
+SITE_NAME = "Roast Prof"
+SITE_CATEGORIES = "entertainment,education"
 # API_KEY must be set as a secret: `wrangler secret put API_KEY`
