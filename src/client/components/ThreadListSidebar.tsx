@@ -11,7 +11,7 @@ export const ThreadListSidebar: FC<{
 	onRename: (id: string, title: string) => void;
 }> = ({ threads, activeThreadId, onSelect, onCreate, onDelete, onRename }) => {
 	return (
-		<div className="w-[260px] h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col border-r border-zinc-200 dark:border-white/5 transition-all flex-shrink-0 z-40 relative">
+		<div className="w-1/6 min-w-[200px] h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col border-r border-zinc-200 dark:border-white/5 transition-all flex-shrink-0 z-40 relative">
 			<div className="p-3">
 				<button
 					type="button"

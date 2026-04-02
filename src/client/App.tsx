@@ -1,8 +1,13 @@
 import type { UIMessage as Message } from "@ai-sdk/react";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./Chat";
+import {
+	INITIAL_RECIPE,
+	type Recipe,
+	RecipePanel,
+} from "./components/RecipePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThreadListSidebar } from "./components/ThreadListSidebar";
 import { useThreads } from "./lib/useThreads";
@@ -21,6 +26,10 @@ function App() {
 
 	const [initialMessages, setInitialMessages] = useState<Message[]>([]);
 	const [chatReady, setChatReady] = useState(false);
+	const [recipe, setRecipe] = useState<Recipe>(INITIAL_RECIPE);
+	const [changedKeys, setChangedKeys] = useState<string[]>([]);
+	const [isAiLoading, setIsAiLoading] = useState(false);
+	const improveRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
 		if (!activeThreadId) {
@@ -53,6 +62,20 @@ function App() {
 		[activeThreadId, setThreadTitle],
 	);
 
+	const handleRecipeUpdate = useCallback((partial: Partial<Recipe>) => {
+		setRecipe((prev) => {
+			const next = { ...prev, ...partial };
+			const keys = Object.keys(partial);
+			setChangedKeys(keys);
+			setTimeout(() => setChangedKeys([]), 2000);
+			return next;
+		});
+	}, []);
+
+	const handleImprove = useCallback(() => {
+		improveRef.current?.();
+	}, []);
+
 	return (
 		<main className="h-screen w-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 flex transition-colors duration-300">
 			<header className="absolute top-0 right-0 p-4 z-50 flex items-center justify-end gap-3">
@@ -72,7 +95,7 @@ function App() {
 								viewBox="0 0 24 24"
 								stroke="currentColor"
 								role="img"
-								aria-label="AI 沙盒"
+								aria-label="AI 食谱助手"
 							>
 								<path
 									strokeLinecap="round"
@@ -83,12 +106,11 @@ function App() {
 							</svg>
 						</div>
 						<h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-							AI 沙盒
+							AI 食谱助手
 						</h1>
 						<p className="text-zinc-500 dark:text-zinc-400 text-lg leading-relaxed">
-							您的智能助手，准备就绪。登录以保存您的对话历史并体验所有高级功能。
+							智能食谱创建器，准备就绪。登录以保存您的对话历史并体验所有高级功能。
 						</p>
-
 						<div className="flex flex-col sm:flex-row gap-3 pt-6 justify-center">
 							<SignInButton mode="modal">
 								<button
@@ -120,9 +142,22 @@ function App() {
 					onDelete={deleteThread}
 					onRename={updateThreadTitle}
 				/>
-				<div className="flex-1 relative h-full">
+
+				{/* 中间食谱面板 3/6 */}
+				<div className="w-3/6 h-full overflow-y-auto flex items-start justify-center py-8 px-4">
+					<RecipePanel
+						recipe={recipe}
+						onUpdate={handleRecipeUpdate}
+						isLoading={isAiLoading}
+						changedKeys={changedKeys}
+						onImprove={handleImprove}
+					/>
+				</div>
+
+				{/* 右侧聊天面板 2/6 */}
+				<div className="w-2/6 h-full border-l border-zinc-200 dark:border-zinc-800 flex-shrink-0">
 					{loading && (
-						<div className="absolute inset-0 flex items-center justify-center">
+						<div className="h-full flex items-center justify-center">
 							<Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
 						</div>
 					)}
@@ -132,6 +167,12 @@ function App() {
 							threadId={activeThreadId}
 							initialMessages={initialMessages}
 							onTitleUpdate={handleTitleUpdate}
+							recipe={recipe}
+							onRecipeUpdate={handleRecipeUpdate}
+							onLoadingChange={setIsAiLoading}
+							registerImprove={(fn) => {
+								improveRef.current = fn;
+							}}
 						/>
 					)}
 				</div>

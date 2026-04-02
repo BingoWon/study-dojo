@@ -1,8 +1,8 @@
 import { type UIMessage as Message, useChat } from "@ai-sdk/react";
+import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import {
 	ActionBarPrimitive,
 	AssistantRuntimeProvider,
-	AttachmentPrimitive,
 	BranchPickerPrimitive,
 	ComposerPrimitive,
 	MessagePrimitive,
@@ -12,21 +12,20 @@ import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { DefaultChatTransport } from "ai";
 import {
 	Bot,
+	Check,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	Copy,
-	Paperclip,
 	RefreshCw,
 	Send,
 	Trash2,
 	User,
-	X,
 } from "lucide-react";
-import { type FC, useMemo, useRef } from "react";
-import { EmptyState } from "./components/EmptyState";
+import { type FC, useEffect, useMemo, useRef } from "react";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
+import type { Recipe } from "./components/RecipePanel";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { WeatherToolUI } from "./components/tools/WeatherToolUI";
@@ -77,33 +76,6 @@ const AssistantActionBar: FC = () => (
 	</ActionBarPrimitive.Root>
 );
 
-// ── Attachment Components ─────────────────────────────────────────────────────
-
-const UserAttachment: FC = () => (
-	<AttachmentPrimitive.Root className="group relative flex h-14 w-40 items-center justify-between rounded-xl bg-black/5 dark:bg-black/10 px-3 py-2 backdrop-blur-md border border-zinc-200 dark:border-white/5 transition-all hover:bg-black/10 dark:hover:bg-black/20">
-		<div className="flex items-center gap-2 overflow-hidden">
-			<AttachmentPrimitive.unstable_Thumb className="h-10 w-10 shrink-0 rounded-lg bg-black/5 dark:bg-white/10 object-cover" />
-			<span className="truncate text-xs font-medium text-zinc-700 dark:text-white/80">
-				<AttachmentPrimitive.Name />
-			</span>
-		</div>
-	</AttachmentPrimitive.Root>
-);
-
-const ComposerAttachment: FC = () => (
-	<AttachmentPrimitive.Root className="group relative flex h-16 w-48 items-center justify-between rounded-2xl bg-white dark:bg-zinc-800/80 px-3 py-2 shadow-sm dark:shadow-inner border border-zinc-200 dark:border-white/5">
-		<div className="flex items-center gap-3 overflow-hidden">
-			<AttachmentPrimitive.unstable_Thumb className="h-12 w-12 shrink-0 rounded-xl bg-zinc-100 dark:bg-zinc-900 object-cover shadow-sm" />
-			<span className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-				<AttachmentPrimitive.Name />
-			</span>
-		</div>
-		<AttachmentPrimitive.Remove className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition-transform hover:scale-110 active:scale-95">
-			<X className="w-3.5 h-3.5" />
-		</AttachmentPrimitive.Remove>
-	</AttachmentPrimitive.Root>
-);
-
 // ── Message Components ────────────────────────────────────────────────────────
 
 const UserMessage: FC = () => (
@@ -115,11 +87,6 @@ const UserMessage: FC = () => (
 			</div>
 		</div>
 		<div className="relative rounded-3xl rounded-tr-sm bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 px-6 py-4 text-zinc-900 dark:text-zinc-100 shadow-xl dark:shadow-2xl border border-zinc-300/50 dark:border-white/5 backdrop-blur-xl">
-			<div className="mb-3 flex flex-wrap gap-2 empty:hidden">
-				<MessagePrimitive.Attachments
-					components={{ Attachment: UserAttachment }}
-				/>
-			</div>
 			<div className="leading-relaxed whitespace-pre-wrap text-sm flex flex-col gap-2">
 				<MessagePrimitive.Parts />
 			</div>
@@ -170,6 +137,7 @@ const AssistantMessage: FC = () => (
 						by_name: {
 							get_weather: WeatherToolUI,
 							search_web: SearchToolUI,
+							update_recipe: RecipeToolUI,
 						},
 					},
 				}}
@@ -180,20 +148,102 @@ const AssistantMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
+// ── Recipe Tool UI ────────────────────────────────────────────────────────────
+
+let _recipeUpdateCallback: ((data: Partial<Recipe>) => void) | null = null;
+
+export function setRecipeUpdateCallback(
+	cb: ((data: Partial<Recipe>) => void) | null,
+) {
+	_recipeUpdateCallback = cb;
+}
+
+const RecipeToolUI: FC<ToolCallMessagePartProps> = ({ result, isError }) => {
+	const appliedRef = useRef(false);
+
+	useEffect(() => {
+		if (result && !isError && !appliedRef.current) {
+			appliedRef.current = true;
+			const data = result as Partial<Recipe>;
+			_recipeUpdateCallback?.(data);
+		}
+	}, [result, isError]);
+
+	if (isError)
+		return <div className="mb-2 text-xs text-red-500">食谱更新失败</div>;
+	if (!result) {
+		return (
+			<div className="mb-2 flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+				<span className="animate-spin">🍳</span> 正在更新食谱...
+			</div>
+		);
+	}
+	return (
+		<div className="mb-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+			<Check className="w-3.5 h-3.5" /> 食谱已更新
+		</div>
+	);
+};
+
+// ── Empty State (Recipe-specific) ─────────────────────────────────────────────
+
+const RecipeEmptyState: FC<{ onSend: (text: string) => void }> = ({
+	onSend,
+}) => (
+	<div className="flex flex-col items-center justify-center h-full text-center px-4 select-none">
+		<div className="text-4xl mb-4">🍳</div>
+		<h2 className="text-lg font-bold text-zinc-700 dark:text-zinc-300 mb-2">
+			AI 食谱助手
+		</h2>
+		<p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 max-w-xs">
+			告诉我你想做什么菜，或者点击下方快速开始
+		</p>
+		<div className="flex flex-col gap-2 w-full max-w-xs">
+			{[
+				{ label: "意大利面", prompt: "做一道经典的意大利面" },
+				{ label: "中式炒菜", prompt: "做一道简单的家常炒菜" },
+				{ label: "健康沙拉", prompt: "做一份低卡健康沙拉" },
+			].map((item) => (
+				<button
+					key={item.label}
+					type="button"
+					onClick={() => onSend(item.prompt)}
+					className="text-left px-4 py-3 rounded-xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-sm text-zinc-700 dark:text-zinc-300"
+				>
+					🍽️ {item.label}
+				</button>
+			))}
+		</div>
+	</div>
+);
+
 // ── Main Chat ─────────────────────────────────────────────────────────────────
 
 export function Chat({
 	threadId,
 	initialMessages,
 	onTitleUpdate,
+	recipe,
+	onRecipeUpdate,
+	onLoadingChange,
+	registerImprove,
 }: {
 	threadId: string;
 	initialMessages: Message[];
 	onTitleUpdate?: (title: string) => void;
+	recipe: Recipe;
+	onRecipeUpdate: (partial: Partial<Recipe>) => void;
+	onLoadingChange?: (loading: boolean) => void;
+	registerImprove?: (fn: () => void) => void;
 }) {
 	const titleBuf = useRef("");
 	const onTitleRef = useRef(onTitleUpdate);
 	onTitleRef.current = onTitleUpdate;
+
+	useEffect(() => {
+		setRecipeUpdateCallback(onRecipeUpdate);
+		return () => setRecipeUpdateCallback(null);
+	}, [onRecipeUpdate]);
 
 	const transport = useMemo(
 		() =>
@@ -217,18 +267,36 @@ export function Chat({
 		},
 	});
 
+	useEffect(() => {
+		onLoadingChange?.(
+			chat.status === "streaming" || chat.status === "submitted",
+		);
+	}, [chat.status, onLoadingChange]);
+
 	const runtime = useAISDKRuntime(chat);
+
+	useEffect(() => {
+		if (registerImprove) {
+			registerImprove(() => {
+				const recipeCtx = `当前食谱状态：${JSON.stringify(recipe)}`;
+				runtime.thread.append({
+					role: "user",
+					content: [
+						{ type: "text", text: `请优化这个食谱，让它更好。${recipeCtx}` },
+					],
+				});
+			});
+		}
+	}, [registerImprove, recipe, runtime]);
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
 			<div className="flex h-full w-full flex-col relative overflow-hidden font-sans">
-				<div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-				<ThreadPrimitive.Root className="flex flex-col h-full w-full max-w-3xl mx-auto relative z-10">
-					<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 md:px-6 py-8 scroll-smooth">
+				<ThreadPrimitive.Root className="flex flex-col h-full w-full relative z-10">
+					<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-3 py-6 scroll-smooth">
 						<ThreadPrimitive.Empty>
-							<EmptyState
-								onPredefinedClick={(text) =>
+							<RecipeEmptyState
+								onSend={(text) =>
 									runtime.thread.append({
 										role: "user",
 										content: [{ type: "text", text }],
@@ -241,42 +309,29 @@ export function Chat({
 							components={{ UserMessage, AssistantMessage }}
 						/>
 
-						<ThreadPrimitive.ScrollToBottom className="fixed bottom-36 right-1/2 translate-x-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-lg transition-all opacity-0 data-[visible]:opacity-100 z-20 cursor-pointer">
+						<ThreadPrimitive.ScrollToBottom className="fixed bottom-36 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 shadow-lg transition-all opacity-0 data-[visible]:opacity-100 z-20 cursor-pointer">
 							<ChevronDown className="h-4 w-4" />
 						</ThreadPrimitive.ScrollToBottom>
 					</ThreadPrimitive.Viewport>
 
-					<ThreadPrimitive.ViewportFooter className="pb-8 pt-4 px-4 md:px-6 sticky bottom-0 bg-gradient-to-t from-zinc-50 via-zinc-50/95 dark:from-zinc-950 dark:via-zinc-950/95 to-transparent backdrop-blur-sm z-30">
-						<ComposerPrimitive.Root className="flex w-full flex-col gap-3 rounded-3xl bg-white/80 dark:bg-zinc-900/60 p-3 shadow-xl dark:shadow-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-2xl transition-all focus-within:border-blue-500/30 focus-within:bg-white dark:focus-within:bg-zinc-900/80 focus-within:ring-4 focus-within:ring-blue-500/8">
-							<div className="flex flex-wrap gap-3 px-2 pt-2 empty:hidden">
-								<ComposerPrimitive.Attachments
-									components={{ Attachment: ComposerAttachment }}
-								/>
-							</div>
+					<ThreadPrimitive.ViewportFooter className="pb-4 pt-3 px-3 sticky bottom-0 bg-gradient-to-t from-zinc-50 via-zinc-50/95 dark:from-zinc-950 dark:via-zinc-950/95 to-transparent backdrop-blur-sm z-30">
+						<ComposerPrimitive.Root className="flex w-full flex-col gap-2 rounded-2xl bg-white/80 dark:bg-zinc-900/60 p-2 shadow-lg dark:shadow-xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-xl transition-all focus-within:border-blue-500/30 focus-within:ring-2 focus-within:ring-blue-500/8">
 							<div className="flex items-end gap-2">
-								<ComposerPrimitive.AddAttachment
-									className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-zinc-500 dark:text-zinc-400 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 active:scale-95 cursor-pointer"
-									title="上传文件"
-								>
-									<Paperclip className="h-5 w-5" />
-								</ComposerPrimitive.AddAttachment>
-
 								<ComposerPrimitive.Input
-									placeholder="输入想问的问题，或者拖拽文件到这里..."
+									placeholder="输入消息..."
 									rows={1}
-									className="flex-1 max-h-36 resize-none bg-transparent px-2 py-3.5 outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 text-sm leading-relaxed"
+									className="flex-1 max-h-28 resize-none bg-transparent px-2 py-2.5 outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 text-sm leading-relaxed"
 								/>
-
-								<div className="flex items-center gap-1 mb-1 mr-1">
-									<ComposerPrimitive.Cancel className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-red-500 dark:hover:text-red-400 active:scale-95 cursor-pointer">
-										<Trash2 className="h-4 w-4" />
+								<div className="flex items-center gap-1 mb-0.5">
+									<ComposerPrimitive.Cancel className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-red-500 active:scale-95 cursor-pointer">
+										<Trash2 className="h-3.5 w-3.5" />
 									</ComposerPrimitive.Cancel>
 									<ComposerPrimitive.Send asChild>
 										<button
 											type="submit"
-											className="flex h-10 w-12 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
+											className="flex h-8 w-10 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40 cursor-pointer"
 										>
-											<Send className="h-4 w-4 ml-0.5" />
+											<Send className="h-3.5 w-3.5 ml-0.5" />
 										</button>
 									</ComposerPrimitive.Send>
 								</div>
