@@ -33,3 +33,14 @@ export const documents = sqliteTable("documents", {
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),
 });
+
+export const papers = sqliteTable("papers", {
+	id: text("id").primaryKey(),
+	userId: text("user_id").notNull(),
+	title: text("title").notNull(),
+	r2Key: text("r2_key").notNull(),
+	chunks: integer("chunks").notNull().default(0),
+	createdAt: integer("created_at", { mode: "number" })
+		.notNull()
+		.default(sql`(strftime('%s', 'now'))`),
+});

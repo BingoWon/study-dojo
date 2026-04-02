@@ -2,9 +2,10 @@ import { CloudflareVectorizeStore } from "@langchain/cloudflare";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { MarkdownTextSplitter } from "@langchain/textsplitters";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import { extractText } from "unpdf";
 import type { DbClient } from "./db";
-import { documents } from "./schema";
+import { documents, papers } from "./schema";
 
 const DIMENSIONS = 1536;
 const CHUNK_SIZE = 512;
@@ -32,7 +33,7 @@ function createVectorStore(
 	return new CloudflareVectorizeStore(embeddings, { index: vectorize });
 }
 
-// ── Ingest ────────────────────────────────────────────────────────────────────
+// ── Ingest Markdown ──────────────────────────────────────────────────────────
 
 export async function ingestMarkdown(
 	markdown: string,
@@ -77,7 +78,94 @@ export async function ingestMarkdown(
 	return { ids, chunks: chunks.length };
 }
 
-// ── Retrieve ──────────────────────────────────────────────────────────────────
+// ── Ingest PDF ───────────────────────────────────────────────────────────────
+
+export async function ingestPdf(
+	pdfBuffer: ArrayBuffer,
+	opts: {
+		title: string;
+		userId: string;
+		db: DbClient;
+		vectorize: VectorizeIndex;
+		r2: R2Bucket;
+		env: EmbeddingEnv;
+	},
+): Promise<{ paperId: string; chunks: number }> {
+	const paperId = crypto.randomUUID();
+	const r2Key = `papers/${opts.userId}/${paperId}.pdf`;
+	const now = Math.floor(Date.now() / 1000);
+
+	await opts.r2.put(r2Key, pdfBuffer);
+
+	const { text: pages } = await extractText(new Uint8Array(pdfBuffer));
+	const fullText = Array.isArray(pages) ? pages.join("\n\n") : String(pages);
+
+	const result = await ingestMarkdown(fullText, {
+		source: r2Key,
+		db: opts.db,
+		vectorize: opts.vectorize,
+		env: opts.env,
+	});
+
+	await opts.db.insert(papers).values({
+		id: paperId,
+		userId: opts.userId,
+		title: opts.title,
+		r2Key,
+		chunks: result.chunks,
+		createdAt: now,
+	});
+
+	return { paperId, chunks: result.chunks };
+}
+
+// ── Delete Paper ─────────────────────────────────────────────────────────────
+
+export async function deletePaper(
+	paperId: string,
+	opts: { db: DbClient; r2: R2Bucket },
+) {
+	const [paper] = await opts.db
+		.select()
+		.from(papers)
+		.where(eq(papers.id, paperId))
+		.limit(1);
+	if (!paper) return;
+
+	await opts.r2.delete(paper.r2Key);
+
+	const docRows = await opts.db
+		.select({ id: documents.id })
+		.from(documents)
+		.where(eq(documents.source, paper.r2Key));
+
+	if (docRows.length > 0) {
+		await opts.db.delete(documents).where(
+			inArray(
+				documents.id,
+				docRows.map((r) => r.id),
+			),
+		);
+	}
+
+	await opts.db.delete(papers).where(eq(papers.id, paperId));
+}
+
+// ── List Papers ──────────────────────────────────────────────────────────────
+
+export async function listPapers(db: DbClient, userId: string) {
+	return db
+		.select({
+			id: papers.id,
+			title: papers.title,
+			chunks: papers.chunks,
+			createdAt: papers.createdAt,
+		})
+		.from(papers)
+		.where(eq(papers.userId, userId));
+}
+
+// ── Retrieve ─────────────────────────────────────────────────────────────────
 
 export async function retrieveContext(
 	query: string,

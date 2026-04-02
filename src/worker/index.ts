@@ -19,7 +19,13 @@ import {
 } from "./db";
 import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import type { ChatRequestMessage } from "./openrouter";
-import { ingestMarkdown, retrieveContext } from "./rag";
+import {
+	deletePaper,
+	ingestMarkdown,
+	ingestPdf,
+	listPapers,
+	retrieveContext,
+} from "./rag";
 import { tools } from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -78,6 +84,77 @@ app.post("/api/documents", async (c) => {
 		env: c.env,
 	});
 	return c.json(result, 201);
+});
+
+// ── Papers CRUD ──────────────────────────────────────────────────────────────
+
+app.get("/api/papers", async (c) => {
+	const userId = getUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	return c.json(await listPapers(db, userId));
+});
+
+app.post("/api/papers", async (c) => {
+	const userId = getUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const formData = await c.req.formData();
+	const file = formData.get("file") as File | null;
+	const title = (formData.get("title") as string) || file?.name || "未命名论文";
+
+	if (!file?.name.endsWith(".pdf")) {
+		return c.json({ error: "请上传 PDF 文件" }, 400);
+	}
+
+	const db = createDb(c.env.DB);
+	const buffer = await file.arrayBuffer();
+
+	const result = await ingestPdf(buffer, {
+		title,
+		userId,
+		db,
+		vectorize: c.env.VECTORIZE,
+		r2: c.env.R2,
+		env: c.env,
+	});
+
+	return c.json(result, 201);
+});
+
+app.delete("/api/papers/:id", async (c) => {
+	const userId = getUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	await deletePaper(c.req.param("id"), { db, r2: c.env.R2 });
+	return c.json({ ok: true });
+});
+
+app.get("/api/papers/:id/download", async (c) => {
+	const userId = getUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const db = createDb(c.env.DB);
+	const { papers } = await import("./schema");
+	const { eq } = await import("drizzle-orm");
+	const [paper] = await db
+		.select()
+		.from(papers)
+		.where(eq(papers.id, c.req.param("id")))
+		.limit(1);
+
+	if (!paper || paper.userId !== userId)
+		return c.json({ error: "未找到" }, 404);
+
+	const obj = await c.env.R2.get(paper.r2Key);
+	if (!obj) return c.json({ error: "文件不存在" }, 404);
+
+	return new Response(obj.body, {
+		headers: {
+			"Content-Type": "application/pdf",
+			"Content-Disposition": `attachment; filename="${encodeURIComponent(paper.title)}.pdf"`,
+		},
+	});
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────

@@ -2,12 +2,16 @@ import {
 	BookOpen,
 	Brain,
 	Check,
+	FileText,
+	Loader2,
 	MessageSquare,
 	Pencil,
 	Plus,
+	Trash2,
+	Upload,
 	X,
 } from "lucide-react";
-import { type FC, useEffect, useRef, useState } from "react";
+import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import type { Thread } from "../lib/useThreads";
 
 export type SidebarTab = "chat" | "rag" | "memory";
@@ -89,20 +93,7 @@ export const ThreadListSidebar: FC<{
 				</>
 			)}
 
-			{activeTab === "rag" && (
-				<div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-					<BookOpen className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mb-3" />
-					<h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
-						论文 / RAG
-					</h3>
-					<p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
-						上传文档，AI 将基于文档内容进行语义检索和问答
-					</p>
-					<p className="text-[10px] text-zinc-300 dark:text-zinc-600 mt-3">
-						Cloudflare Vectorize
-					</p>
-				</div>
-			)}
+			{activeTab === "rag" && <PapersPanel />}
 
 			{activeTab === "memory" && (
 				<div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
@@ -121,6 +112,139 @@ export const ThreadListSidebar: FC<{
 		</div>
 	);
 };
+
+// ── Papers Panel ──────────────────────────────────────────────────────────────
+
+interface Paper {
+	id: string;
+	title: string;
+	chunks: number;
+	createdAt: number;
+}
+
+const PapersPanel: FC = () => {
+	const [papers, setPapers] = useState<Paper[]>([]);
+	const [uploading, setUploading] = useState(false);
+	const [dragOver, setDragOver] = useState(false);
+	const fileRef = useRef<HTMLInputElement>(null);
+
+	const fetchPapers = useCallback(async () => {
+		try {
+			const res = await fetch("/api/papers");
+			if (res.ok) setPapers(await res.json());
+		} catch {
+			/* ignore */
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchPapers();
+	}, [fetchPapers]);
+
+	const handleUpload = async (file: File) => {
+		if (!file.name.endsWith(".pdf")) return;
+		setUploading(true);
+		try {
+			const form = new FormData();
+			form.append("file", file);
+			form.append("title", file.name.replace(/\.pdf$/i, ""));
+			const res = await fetch("/api/papers", { method: "POST", body: form });
+			if (res.ok) await fetchPapers();
+		} finally {
+			setUploading(false);
+		}
+	};
+
+	const handleDelete = async (id: string) => {
+		await fetch(`/api/papers/${id}`, { method: "DELETE" });
+		setPapers((prev) => prev.filter((p) => p.id !== id));
+	};
+
+	const onDrop = (e: React.DragEvent) => {
+		e.preventDefault();
+		setDragOver(false);
+		const file = e.dataTransfer.files[0];
+		if (file) handleUpload(file);
+	};
+
+	return (
+		<div className="flex-1 flex flex-col overflow-hidden">
+			{/* 上传区域 */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: drop zone */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone */}
+			<div
+				onClick={() => fileRef.current?.click()}
+				onDrop={onDrop}
+				onDragOver={(e) => {
+					e.preventDefault();
+					setDragOver(true);
+				}}
+				onDragLeave={() => setDragOver(false)}
+				className={`m-3 p-4 rounded-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center gap-2 ${
+					dragOver
+						? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
+						: "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600"
+				}`}
+			>
+				{uploading ? (
+					<Loader2 className="w-5 h-5 text-zinc-400 animate-spin" />
+				) : (
+					<Upload className="w-5 h-5 text-zinc-400" />
+				)}
+				<span className="text-xs text-zinc-500 dark:text-zinc-400">
+					{uploading ? "上传中..." : "拖拽或点击上传 PDF"}
+				</span>
+				<input
+					ref={fileRef}
+					type="file"
+					accept=".pdf"
+					className="hidden"
+					onChange={(e) => {
+						const file = e.target.files?.[0];
+						if (file) handleUpload(file);
+						e.target.value = "";
+					}}
+				/>
+			</div>
+
+			{/* 论文列表 */}
+			<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1">
+				{papers.length === 0 && !uploading && (
+					<p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-4">
+						暂无论文
+					</p>
+				)}
+				{papers.map((p) => (
+					<div
+						key={p.id}
+						className="group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
+					>
+						<div className="flex items-center gap-2 overflow-hidden min-w-0">
+							<FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+							<div className="min-w-0">
+								<div className="truncate text-zinc-700 dark:text-zinc-300 font-medium">
+									{p.title}
+								</div>
+								<div className="text-[10px] text-zinc-400 dark:text-zinc-600">
+									{p.chunks} 个片段
+								</div>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={() => handleDelete(p.id)}
+							className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition cursor-pointer"
+						>
+							<Trash2 className="w-3.5 h-3.5" />
+						</button>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+};
+
+// ── Thread List Item ─────────────────────────────────────────────────────────
 
 const ThreadListItem: FC<{
 	title: string;

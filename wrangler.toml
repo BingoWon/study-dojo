@@ -14,6 +14,10 @@ database_id = "a4e119fc-1852-4e94-841a-fa58246fd817"
 binding = "VECTORIZE"
 index_name = "knowledge-index"
 
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "ai-playground-papers"
+
 [placement]
 mode = "smart"
 
