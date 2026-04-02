@@ -102,14 +102,21 @@ export function useThreads() {
 		[fetchThreads],
 	);
 
-	const updateThreadTitle = useCallback((id: string, title: string) => {
+	const setThreadTitle = useCallback((id: string, title: string) => {
 		setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
-		fetch(`/api/threads/${id}`, {
-			method: "PATCH",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ title }),
-		}).catch(() => {});
 	}, []);
+
+	const updateThreadTitle = useCallback(
+		(id: string, title: string) => {
+			setThreadTitle(id, title);
+			fetch(`/api/threads/${id}`, {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title }),
+			}).catch(() => {});
+		},
+		[setThreadTitle],
+	);
 
 	const refreshThreads = useCallback(async () => {
 		const data = await fetchThreads();
@@ -128,6 +135,7 @@ export function useThreads() {
 		setActiveThreadId,
 		createThread,
 		deleteThread,
+		setThreadTitle,
 		updateThreadTitle,
 		refreshThreads,
 		loading,

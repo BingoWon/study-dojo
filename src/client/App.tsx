@@ -14,7 +14,8 @@ function App() {
 		setActiveThreadId,
 		createThread,
 		deleteThread,
-		refreshThreads,
+		setThreadTitle,
+		updateThreadTitle,
 		loading,
 	} = useThreads();
 
@@ -32,11 +33,7 @@ function App() {
 			.then((res) => (res.ok ? res.json() : []))
 			.then((msgs: unknown) => {
 				if (cancelled) return;
-				const parsed = Array.isArray(msgs) ? (msgs as Message[]) : [];
-				console.log(
-					`[App] loaded ${parsed.length} messages for thread ${activeThreadId}`,
-				);
-				setInitialMessages(parsed);
+				setInitialMessages(Array.isArray(msgs) ? (msgs as Message[]) : []);
 				setChatReady(true);
 			})
 			.catch(() => {
@@ -49,9 +46,12 @@ function App() {
 		};
 	}, [activeThreadId]);
 
-	const handleChatFinish = useCallback(() => {
-		setTimeout(() => refreshThreads(), 1500);
-	}, [refreshThreads]);
+	const handleTitleUpdate = useCallback(
+		(title: string) => {
+			if (activeThreadId) setThreadTitle(activeThreadId, title);
+		},
+		[activeThreadId, setThreadTitle],
+	);
 
 	return (
 		<main className="h-screen w-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 flex transition-colors duration-300">
@@ -118,6 +118,7 @@ function App() {
 					onSelect={setActiveThreadId}
 					onCreate={createThread}
 					onDelete={deleteThread}
+					onRename={updateThreadTitle}
 				/>
 				<div className="flex-1 relative h-full">
 					{loading && (
@@ -130,7 +131,7 @@ function App() {
 							key={`${activeThreadId}-${initialMessages.length}`}
 							threadId={activeThreadId}
 							initialMessages={initialMessages}
-							onChatFinish={handleChatFinish}
+							onTitleUpdate={handleTitleUpdate}
 						/>
 					)}
 				</div>

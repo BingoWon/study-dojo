@@ -3,7 +3,6 @@ import {
 	createUIMessageStream,
 	createUIMessageStreamResponse,
 	extractReasoningMiddleware,
-	generateText,
 	stepCountIs,
 	streamText,
 	wrapLanguageModel,
@@ -91,7 +90,7 @@ app.get("/api/threads/:id/messages", async (c) => {
 		parts: r.parts,
 	}));
 	console.log(
-		`[Worker] GET /api/threads/${c.req.param("id")}/messages → ${result.length} msgs`,
+		`[Worker] GET messages thread=${c.req.param("id")} → ${result.length} msgs`,
 	);
 	return c.json(result);
 });
@@ -116,10 +115,6 @@ app.post("/api/chat", async (c) => {
 
 		const db = createDb(c.env.DB);
 		const model = c.env.MODEL;
-
-		console.log(
-			`[Worker] POST /api/chat threadId=${threadId} userId=${userId ? "yes" : "no"} msgs=${messages.length}`,
-		);
 
 		// ── Persist user message ──────────────────────────────────────────────
 		if (threadId && userId) {
@@ -175,7 +170,7 @@ app.post("/api/chat", async (c) => {
 					fetchBody.messages[0]?.content !== "."
 				) {
 					console.warn(
-						"[Worker] Placeholder invariant violated — SDK may have changed internal message format",
+						"[Worker] Placeholder invariant violated",
 						JSON.stringify(fetchBody.messages?.[0]),
 					);
 				}
@@ -193,7 +188,24 @@ app.post("/api/chat", async (c) => {
 			middleware: extractReasoningMiddleware({ tagName: "think" }),
 		});
 
-		// ── Stream with onFinish persistence ─────────────────────────────────
+		// ── Determine if title generation is needed ──────────────────────────
+		const isFirstMessage =
+			messages.filter((m) => m.role === "user").length === 1;
+		const firstUserText = isFirstMessage
+			? messages
+					.filter((m) => m.role === "user")
+					.flatMap((m) =>
+						(m.parts ?? [])
+							.filter(
+								(p): p is { type: "text"; text: string } => p.type === "text",
+							)
+							.map((p) => p.text),
+					)
+					.join(" ")
+					.slice(0, 200)
+			: "";
+
+		// ── Stream with concurrent title generation ──────────────────────────
 		let resolveFinish!: () => void;
 		const finishPromise = new Promise<void>((r) => {
 			resolveFinish = r;
@@ -201,13 +213,49 @@ app.post("/api/chat", async (c) => {
 
 		const uiStream = createUIMessageStream({
 			execute: async ({ writer }) => {
-				const result = streamText({
+				const chatResult = streamText({
 					model: wrappedModel,
 					messages: [{ role: "user" as const, content: "." }],
 					tools,
 					stopWhen: stepCountIs(5),
 				});
-				writer.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+				let titlePromise: Promise<void> | null = null;
+
+				if (firstUserText && threadId && userId) {
+					titlePromise = (async () => {
+						try {
+							const titleProvider = createOpenAI({
+								baseURL: c.env.BASE_URL,
+								apiKey: c.env.API_KEY,
+							});
+							const titleResult = streamText({
+								model: titleProvider.chat(model),
+								prompt: `请为以下用户消息生成一个简洁的中文对话标题（4-8个字，不加标点符号和引号）：\n"${firstUserText}"\n只回复标题本身。`,
+							});
+
+							let fullTitle = "";
+							for await (const chunk of titleResult.textStream) {
+								fullTitle += chunk;
+								writer.write({
+									type: "data-title-delta",
+									data: chunk,
+								});
+							}
+
+							const cleaned = fullTitle.trim().replace(/["""''「」『』]/g, "");
+							if (cleaned) {
+								await dbUpdateThreadTitle(db, threadId, userId, cleaned);
+							}
+						} catch (e) {
+							console.error("[Worker] title stream:", e);
+						}
+					})();
+				}
+
+				writer.merge(chatResult.toUIMessageStream({ sendReasoning: true }));
+
+				if (titlePromise) await titlePromise;
 			},
 			onFinish: async ({ messages: finishedMessages }) => {
 				try {
@@ -228,48 +276,6 @@ app.post("/api/chat", async (c) => {
 								})),
 							);
 							await touchThread(db, threadId);
-							console.log(
-								`[Worker] saved ${assistantMsgs.length} assistant msg(s) for thread ${threadId}`,
-							);
-						}
-
-						// ── AI title generation ──────────────────────────────
-						const thread = await getThread(db, threadId);
-						if (thread?.title === "新对话") {
-							try {
-								const firstUserText = messages
-									.filter((m) => m.role === "user")
-									.flatMap((m) =>
-										(m.parts ?? [])
-											.filter(
-												(p): p is { type: "text"; text: string } =>
-													p.type === "text",
-											)
-											.map((p) => p.text),
-									)
-									.join(" ")
-									.slice(0, 200);
-
-								if (firstUserText) {
-									const titleProvider = createOpenAI({
-										baseURL: c.env.BASE_URL,
-										apiKey: c.env.API_KEY,
-									});
-									const { text: title } = await generateText({
-										model: titleProvider.chat(model),
-										prompt: `请为以下用户消息生成一个简洁的中文对话标题（4-10个字，不加标点符号和引号）：\n"${firstUserText}"\n只回复标题本身。`,
-									});
-									const cleaned = title.trim().replace(/["""'']/g, "");
-									if (cleaned) {
-										await dbUpdateThreadTitle(db, threadId, userId, cleaned);
-										console.log(
-											`[Worker] generated title: "${cleaned}" for thread ${threadId}`,
-										);
-									}
-								}
-							} catch (e) {
-								console.error("[Worker] title generation failed:", e);
-							}
 						}
 					}
 				} catch (e) {

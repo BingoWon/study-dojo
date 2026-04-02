@@ -22,7 +22,7 @@ import {
 	User,
 	X,
 } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useRef } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
@@ -184,20 +184,27 @@ const AssistantMessage: FC = () => (
 export function Chat({
 	threadId,
 	initialMessages,
-	onChatFinish,
+	onTitleUpdate,
 }: {
 	threadId: string;
 	initialMessages: Message[];
-	onChatFinish?: () => void;
+	onTitleUpdate?: (title: string) => void;
 }) {
+	const titleBuf = useRef("");
+	const onTitleRef = useRef(onTitleUpdate);
+	onTitleRef.current = onTitleUpdate;
+
 	const chat = useChat({
 		api: "/api/chat",
 		id: threadId,
 		initialMessages,
 		maxSteps: 5,
 		body: { threadId },
-		onFinish: () => {
-			onChatFinish?.();
+		onData: (part: { type: string; data?: unknown }) => {
+			if (part.type === "data-title-delta" && typeof part.data === "string") {
+				titleBuf.current += part.data;
+				onTitleRef.current?.(titleBuf.current);
+			}
 		},
 	} as Parameters<typeof useChat>[0]);
 
