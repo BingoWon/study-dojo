@@ -20,7 +20,6 @@ import {
 	RefreshCw,
 	Send,
 	Trash2,
-	User,
 } from "lucide-react";
 import { type FC, useEffect, useMemo, useRef } from "react";
 import { ReasoningPart } from "./components/message/ReasoningPart";

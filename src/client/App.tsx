@@ -3,6 +3,8 @@ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./Chat";
+import { CollapsedHandle } from "./components/CollapsedHandle";
+import { Divider } from "./components/Divider";
 import {
 	INITIAL_RECIPE,
 	type Recipe,
@@ -13,6 +15,7 @@ import {
 	type SidebarTab,
 	ThreadListSidebar,
 } from "./components/ThreadListSidebar";
+import { useResizableLayout } from "./hooks/useResizableLayout";
 import { useThreads } from "./lib/useThreads";
 
 function App() {
@@ -34,6 +37,8 @@ function App() {
 	const [isAiLoading, setIsAiLoading] = useState(false);
 	const [sidebarTab, setSidebarTab] = useState<SidebarTab>("chat");
 	const improveRef = useRef<(() => void) | null>(null);
+	const containerRef = useRef<HTMLDivElement>(null);
+	const layout = useResizableLayout(containerRef);
 
 	useEffect(() => {
 		if (!activeThreadId) {
@@ -138,48 +143,73 @@ function App() {
 			</Show>
 
 			<Show when="signed-in">
-				<ThreadListSidebar
-					threads={threads}
-					activeThreadId={activeThreadId}
-					onSelect={setActiveThreadId}
-					onCreate={createThread}
-					onDelete={deleteThread}
-					onRename={updateThreadTitle}
-					activeTab={sidebarTab}
-					onTabChange={setSidebarTab}
-				/>
-
-				{/* 中间食谱面板 3/6 */}
-				<div className="w-3/6 h-full overflow-y-auto flex items-start justify-center py-8 px-4">
-					<RecipePanel
-						recipe={recipe}
-						onUpdate={handleRecipeUpdate}
-						isLoading={isAiLoading}
-						changedKeys={changedKeys}
-						onImprove={handleImprove}
-					/>
-				</div>
-
-				{/* 右侧聊天面板 2/6 */}
-				<div className="w-2/6 h-full border-l border-zinc-200 dark:border-zinc-800 flex-shrink-0">
-					{loading && (
-						<div className="h-full flex items-center justify-center">
-							<Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+				<div ref={containerRef} className="flex-1 flex h-full overflow-hidden">
+					{/* 左栏 */}
+					{layout.leftCollapsed ? (
+						<CollapsedHandle direction="left" onClick={layout.toggleLeft} />
+					) : (
+						<div
+							style={{ width: layout.leftWidth }}
+							className="h-full flex-shrink-0 overflow-hidden"
+						>
+							<ThreadListSidebar
+								threads={threads}
+								activeThreadId={activeThreadId}
+								onSelect={setActiveThreadId}
+								onCreate={createThread}
+								onDelete={deleteThread}
+								onRename={updateThreadTitle}
+								activeTab={sidebarTab}
+								onTabChange={setSidebarTab}
+							/>
 						</div>
 					)}
-					{!loading && activeThreadId && chatReady && (
-						<Chat
-							key={`${activeThreadId}-${initialMessages.length}`}
-							threadId={activeThreadId}
-							initialMessages={initialMessages}
-							onTitleUpdate={handleTitleUpdate}
+
+					{/* 左分割线 */}
+					<Divider {...layout.leftDividerProps} />
+
+					{/* 中间食谱面板 */}
+					<div className="flex-1 h-full overflow-y-auto flex items-start justify-center py-8 px-4 min-w-0">
+						<RecipePanel
 							recipe={recipe}
-							onRecipeUpdate={handleRecipeUpdate}
-							onLoadingChange={setIsAiLoading}
-							registerImprove={(fn) => {
-								improveRef.current = fn;
-							}}
+							onUpdate={handleRecipeUpdate}
+							isLoading={isAiLoading}
+							changedKeys={changedKeys}
+							onImprove={handleImprove}
 						/>
+					</div>
+
+					{/* 右分割线 */}
+					<Divider {...layout.rightDividerProps} />
+
+					{/* 右栏 */}
+					{layout.rightCollapsed ? (
+						<CollapsedHandle direction="right" onClick={layout.toggleRight} />
+					) : (
+						<div
+							style={{ width: layout.rightWidth }}
+							className="h-full flex-shrink-0 overflow-hidden"
+						>
+							{loading && (
+								<div className="h-full flex items-center justify-center">
+									<Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
+								</div>
+							)}
+							{!loading && activeThreadId && chatReady && (
+								<Chat
+									key={`${activeThreadId}-${initialMessages.length}`}
+									threadId={activeThreadId}
+									initialMessages={initialMessages}
+									onTitleUpdate={handleTitleUpdate}
+									recipe={recipe}
+									onRecipeUpdate={handleRecipeUpdate}
+									onLoadingChange={setIsAiLoading}
+									registerImprove={(fn) => {
+										improveRef.current = fn;
+									}}
+								/>
+							)}
+						</div>
 					)}
 				</div>
 			</Show>

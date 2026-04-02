@@ -32,7 +32,7 @@ export const ThreadListSidebar: FC<{
 	onTabChange,
 }) => {
 	return (
-		<div className="w-1/6 min-w-[200px] h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col border-r border-zinc-200 dark:border-white/5 transition-all flex-shrink-0 z-40 relative">
+		<div className="w-full h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col border-r border-zinc-200 dark:border-white/5 transition-all z-40 relative">
 			{/* Tab 切换 */}
 			<div className="flex border-b border-zinc-200 dark:border-zinc-800">
 				{(
