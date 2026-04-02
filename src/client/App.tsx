@@ -1,10 +1,11 @@
 import type { UIMessage as Message } from "@ai-sdk/react";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
-import { Loader2 } from "lucide-react";
+import { BookOpen, ChefHat, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./Chat";
 import { CollapsedHandle } from "./components/CollapsedHandle";
 import { Divider } from "./components/Divider";
+import { PaperViewer } from "./components/PaperViewer";
 import {
 	INITIAL_RECIPE,
 	type Recipe,
@@ -17,6 +18,8 @@ import {
 } from "./components/ThreadListSidebar";
 import { useResizableLayout } from "./hooks/useResizableLayout";
 import { useThreads } from "./lib/useThreads";
+
+type CenterTab = "recipe" | "paper";
 
 function App() {
 	const {
@@ -36,6 +39,11 @@ function App() {
 	const [changedKeys, setChangedKeys] = useState<string[]>([]);
 	const [isAiLoading, setIsAiLoading] = useState(false);
 	const [sidebarTab, setSidebarTab] = useState<SidebarTab>("chat");
+	const [centerTab, setCenterTab] = useState<CenterTab>("recipe");
+	const [selectedPaper, setSelectedPaper] = useState<{
+		id: string;
+		title: string;
+	} | null>(null);
 	const improveRef = useRef<(() => void) | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const layout = useResizableLayout(containerRef);
@@ -83,6 +91,11 @@ function App() {
 
 	const handleImprove = useCallback(() => {
 		improveRef.current?.();
+	}, []);
+
+	const handlePaperSelect = useCallback((paperId: string, title: string) => {
+		setSelectedPaper({ id: paperId, title });
+		setCenterTab("paper");
 	}, []);
 
 	return (
@@ -161,6 +174,7 @@ function App() {
 								onRename={updateThreadTitle}
 								activeTab={sidebarTab}
 								onTabChange={setSidebarTab}
+								onPaperSelect={handlePaperSelect}
 							/>
 						</div>
 					)}
@@ -168,15 +182,56 @@ function App() {
 					{/* 左分割线 */}
 					<Divider {...layout.leftDividerProps} />
 
-					{/* 中间食谱面板 */}
-					<div className="flex-1 h-full overflow-y-auto flex items-start justify-center py-8 px-4 min-w-0">
-						<RecipePanel
-							recipe={recipe}
-							onUpdate={handleRecipeUpdate}
-							isLoading={isAiLoading}
-							changedKeys={changedKeys}
-							onImprove={handleImprove}
-						/>
+					{/* 中间面板（tab 切换） */}
+					<div className="flex-1 h-full flex flex-col min-w-0">
+						{/* iPad 风格 tab bar */}
+						<div className="flex items-center gap-1 px-4 pt-3 pb-2 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex-shrink-0">
+							<button
+								type="button"
+								onClick={() => setCenterTab("recipe")}
+								className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+									centerTab === "recipe"
+										? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
+										: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+								}`}
+							>
+								<ChefHat className="w-3.5 h-3.5" />
+								食谱
+							</button>
+							{selectedPaper && (
+								<button
+									type="button"
+									onClick={() => setCenterTab("paper")}
+									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer max-w-[200px] ${
+										centerTab === "paper"
+											? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
+											: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+									}`}
+								>
+									<BookOpen className="w-3.5 h-3.5 shrink-0" />
+									<span className="truncate">{selectedPaper.title}</span>
+								</button>
+							)}
+						</div>
+
+						{/* 内容区 */}
+						{centerTab === "recipe" && (
+							<div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-4">
+								<RecipePanel
+									recipe={recipe}
+									onUpdate={handleRecipeUpdate}
+									isLoading={isAiLoading}
+									changedKeys={changedKeys}
+									onImprove={handleImprove}
+								/>
+							</div>
+						)}
+						{centerTab === "paper" && selectedPaper && (
+							<PaperViewer
+								paperId={selectedPaper.id}
+								title={selectedPaper.title}
+							/>
+						)}
 					</div>
 
 					{/* 右分割线 */}

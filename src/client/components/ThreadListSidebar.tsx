@@ -25,6 +25,7 @@ export const ThreadListSidebar: FC<{
 	onRename: (id: string, title: string) => void;
 	activeTab: SidebarTab;
 	onTabChange: (tab: SidebarTab) => void;
+	onPaperSelect?: (paperId: string, title: string) => void;
 }> = ({
 	threads,
 	activeThreadId,
@@ -34,6 +35,7 @@ export const ThreadListSidebar: FC<{
 	onRename,
 	activeTab,
 	onTabChange,
+	onPaperSelect,
 }) => {
 	return (
 		<div className="w-full h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col transition-all z-40 relative">
@@ -93,7 +95,7 @@ export const ThreadListSidebar: FC<{
 				</>
 			)}
 
-			{activeTab === "rag" && <PapersPanel />}
+			{activeTab === "rag" && <PapersPanel onPaperSelect={onPaperSelect} />}
 
 			{activeTab === "memory" && (
 				<div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
@@ -122,7 +124,9 @@ interface Paper {
 	createdAt: number;
 }
 
-const PapersPanel: FC = () => {
+const PapersPanel: FC<{
+	onPaperSelect?: (paperId: string, title: string) => void;
+}> = ({ onPaperSelect }) => {
 	const [papers, setPapers] = useState<Paper[]>([]);
 	const [uploading, setUploading] = useState(false);
 	const [dragOver, setDragOver] = useState(false);
@@ -155,7 +159,8 @@ const PapersPanel: FC = () => {
 		}
 	};
 
-	const handleDelete = async (id: string) => {
+	const handleDelete = async (id: string, e: React.MouseEvent) => {
+		e.stopPropagation();
 		await fetch(`/api/papers/${id}`, { method: "DELETE" });
 		setPapers((prev) => prev.filter((p) => p.id !== id));
 	};
@@ -168,22 +173,30 @@ const PapersPanel: FC = () => {
 	};
 
 	return (
-		<div className="flex-1 flex flex-col overflow-hidden">
-			{/* 上传区域 */}
-			{/* biome-ignore lint/a11y/useKeyWithClickEvents: drop zone */}
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone */}
+		// biome-ignore lint/a11y/useKeyWithClickEvents: full area drop zone
+		// biome-ignore lint/a11y/noStaticElementInteractions: full area drop zone
+		<div
+			className={`flex-1 flex flex-col overflow-hidden transition-colors ${
+				dragOver ? "bg-blue-50 dark:bg-blue-900/10" : ""
+			}`}
+			onDrop={onDrop}
+			onDragOver={(e) => {
+				e.preventDefault();
+				setDragOver(true);
+			}}
+			onDragLeave={(e) => {
+				if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+					setDragOver(false);
+				}
+			}}
+			onClick={() => fileRef.current?.click()}
+		>
+			{/* 视觉指引区 */}
 			<div
-				onClick={() => fileRef.current?.click()}
-				onDrop={onDrop}
-				onDragOver={(e) => {
-					e.preventDefault();
-					setDragOver(true);
-				}}
-				onDragLeave={() => setDragOver(false)}
-				className={`m-3 p-4 rounded-xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center gap-2 ${
+				className={`m-3 p-4 rounded-xl border-2 border-dashed transition-all flex flex-col items-center gap-2 pointer-events-none ${
 					dragOver
 						? "border-blue-400 bg-blue-50 dark:bg-blue-900/20"
-						: "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600"
+						: "border-zinc-300 dark:border-zinc-700"
 				}`}
 			>
 				{uploading ? (
@@ -194,30 +207,37 @@ const PapersPanel: FC = () => {
 				<span className="text-xs text-zinc-500 dark:text-zinc-400">
 					{uploading ? "上传中..." : "拖拽或点击上传 PDF"}
 				</span>
-				<input
-					ref={fileRef}
-					type="file"
-					accept=".pdf"
-					className="hidden"
-					onChange={(e) => {
-						const file = e.target.files?.[0];
-						if (file) handleUpload(file);
-						e.target.value = "";
-					}}
-				/>
 			</div>
 
+			<input
+				ref={fileRef}
+				type="file"
+				accept=".pdf"
+				className="hidden"
+				onChange={(e) => {
+					const file = e.target.files?.[0];
+					if (file) handleUpload(file);
+					e.target.value = "";
+				}}
+			/>
+
 			{/* 论文列表 */}
-			<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1">
+			<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1 pointer-events-auto">
 				{papers.length === 0 && !uploading && (
-					<p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-4">
+					<p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-4 pointer-events-none">
 						暂无论文
 					</p>
 				)}
 				{papers.map((p) => (
+					// biome-ignore lint/a11y/useKeyWithClickEvents: paper click
+					// biome-ignore lint/a11y/noStaticElementInteractions: paper click
 					<div
 						key={p.id}
-						className="group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 transition"
+						onClick={(e) => {
+							e.stopPropagation();
+							onPaperSelect?.(p.id, p.title);
+						}}
+						className="group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 transition cursor-pointer"
 					>
 						<div className="flex items-center gap-2 overflow-hidden min-w-0">
 							<FileText className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -232,7 +252,7 @@ const PapersPanel: FC = () => {
 						</div>
 						<button
 							type="button"
-							onClick={() => handleDelete(p.id)}
+							onClick={(e) => handleDelete(p.id, e)}
 							className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition cursor-pointer"
 						>
 							<Trash2 className="w-3.5 h-3.5" />

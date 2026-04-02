@@ -21,6 +21,7 @@ import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import type { ChatRequestMessage } from "./openrouter";
 import {
 	deletePaper,
+	getPaperMarkdown,
 	ingestMarkdown,
 	ingestPdf,
 	listPapers,
@@ -79,6 +80,7 @@ app.post("/api/documents", async (c) => {
 	const db = createDb(c.env.DB);
 	const result = await ingestMarkdown(markdown, {
 		source,
+		userId: userId || undefined,
 		db,
 		vectorize: c.env.VECTORIZE,
 		env: c.env,
@@ -157,6 +159,19 @@ app.get("/api/papers/:id/download", async (c) => {
 	});
 });
 
+app.get("/api/papers/:id/markdown", async (c) => {
+	const userId = getUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	const md = await getPaperMarkdown(c.req.param("id"), {
+		db,
+		r2: c.env.R2,
+		userId,
+	});
+	if (md === null) return c.json({ error: "未找到" }, 404);
+	return c.text(md);
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get("/api/health", (c) => c.json({ status: "ok" }));
@@ -217,6 +232,7 @@ app.post("/api/chat", async (c) => {
 		if (lastUserText && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
 			try {
 				const ragContext = await retrieveContext(lastUserText, {
+					userId: userId || "anonymous",
 					db,
 					vectorize: c.env.VECTORIZE,
 					env: c.env,

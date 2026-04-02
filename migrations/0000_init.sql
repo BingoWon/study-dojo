@@ -19,6 +19,8 @@ CREATE TABLE `documents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`content` text NOT NULL,
 	`source` text,
+	`user_id` text,
+	`paper_id` text,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );
 
@@ -27,6 +29,7 @@ CREATE TABLE `papers` (
 	`user_id` text NOT NULL,
 	`title` text NOT NULL,
 	`r2_key` text NOT NULL,
+	`markdown_r2_key` text,
 	`chunks` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );
@@ -34,3 +37,5 @@ CREATE TABLE `papers` (
 CREATE INDEX `idx_threads_user_id` ON `threads` (`user_id`);
 CREATE INDEX `idx_messages_thread_id` ON `messages` (`thread_id`);
 CREATE INDEX `idx_papers_user_id` ON `papers` (`user_id`);
+CREATE INDEX `idx_documents_user_id` ON `documents` (`user_id`);
+CREATE INDEX `idx_documents_paper_id` ON `documents` (`paper_id`);

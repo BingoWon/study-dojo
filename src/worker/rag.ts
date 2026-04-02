@@ -10,6 +10,7 @@ import { documents, papers } from "./schema";
 const DIMENSIONS = 1536;
 const CHUNK_SIZE = 512;
 const CHUNK_OVERLAP = 64;
+const INSERT_BATCH = 20;
 
 type EmbeddingEnv = {
 	EMBEDDING_BASE_URL: string;
@@ -39,6 +40,8 @@ export async function ingestMarkdown(
 	markdown: string,
 	opts: {
 		source?: string;
+		userId?: string;
+		paperId?: string;
 		db: DbClient;
 		vectorize: VectorizeIndex;
 		env: EmbeddingEnv;
@@ -58,12 +61,13 @@ export async function ingestMarkdown(
 		id: ids[i],
 		content,
 		source: opts.source ?? null,
+		userId: opts.userId ?? null,
+		paperId: opts.paperId ?? null,
 		createdAt: now,
 	}));
 
-	const BATCH = 20;
-	for (let i = 0; i < rows.length; i += BATCH) {
-		await opts.db.insert(documents).values(rows.slice(i, i + BATCH));
+	for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+		await opts.db.insert(documents).values(rows.slice(i, i + INSERT_BATCH));
 	}
 
 	const embeddings = createEmbeddings(opts.env);
@@ -73,7 +77,12 @@ export async function ingestMarkdown(
 		(content, i) =>
 			new Document({
 				pageContent: content,
-				metadata: { id: ids[i], source: opts.source ?? "" },
+				metadata: {
+					id: ids[i],
+					source: opts.source ?? "",
+					userId: opts.userId ?? "",
+					paperId: opts.paperId ?? "",
+				},
 			}),
 	);
 
@@ -104,6 +113,7 @@ export async function ingestPdf(
 ): Promise<{ paperId: string; chunks: number }> {
 	const paperId = crypto.randomUUID();
 	const r2Key = `papers/${opts.userId}/${paperId}.pdf`;
+	const markdownR2Key = `papers/${opts.userId}/${paperId}.md`;
 	const now = Math.floor(Date.now() / 1000);
 
 	await opts.r2.put(r2Key, pdfBuffer);
@@ -111,8 +121,12 @@ export async function ingestPdf(
 	const { text: pages } = await extractText(new Uint8Array(pdfBuffer));
 	const fullText = Array.isArray(pages) ? pages.join("\n\n") : String(pages);
 
+	await opts.r2.put(markdownR2Key, fullText);
+
 	const result = await ingestMarkdown(fullText, {
 		source: r2Key,
+		userId: opts.userId,
+		paperId,
 		db: opts.db,
 		vectorize: opts.vectorize,
 		env: opts.env,
@@ -123,6 +137,7 @@ export async function ingestPdf(
 		userId: opts.userId,
 		title: opts.title,
 		r2Key,
+		markdownR2Key,
 		chunks: result.chunks,
 		createdAt: now,
 	});
@@ -144,19 +159,20 @@ export async function deletePaper(
 	if (!paper) return;
 
 	await opts.r2.delete(paper.r2Key);
+	if (paper.markdownR2Key) await opts.r2.delete(paper.markdownR2Key);
 
 	const docRows = await opts.db
 		.select({ id: documents.id })
 		.from(documents)
-		.where(eq(documents.source, paper.r2Key));
+		.where(eq(documents.paperId, paperId));
 
 	if (docRows.length > 0) {
-		await opts.db.delete(documents).where(
-			inArray(
-				documents.id,
-				docRows.map((r) => r.id),
-			),
-		);
+		const docIds = docRows.map((r) => r.id);
+		for (let i = 0; i < docIds.length; i += INSERT_BATCH) {
+			await opts.db
+				.delete(documents)
+				.where(inArray(documents.id, docIds.slice(i, i + INSERT_BATCH)));
+		}
 	}
 
 	await opts.db.delete(papers).where(eq(papers.id, paperId));
@@ -176,11 +192,32 @@ export async function listPapers(db: DbClient, userId: string) {
 		.where(eq(papers.userId, userId));
 }
 
-// ── Retrieve ─────────────────────────────────────────────────────────────────
+// ── Get Paper Markdown ───────────────────────────────────────────────────────
+
+export async function getPaperMarkdown(
+	paperId: string,
+	opts: { db: DbClient; r2: R2Bucket; userId: string },
+): Promise<string | null> {
+	const [paper] = await opts.db
+		.select()
+		.from(papers)
+		.where(eq(papers.id, paperId))
+		.limit(1);
+	if (!paper || paper.userId !== opts.userId || !paper.markdownR2Key)
+		return null;
+
+	const obj = await opts.r2.get(paper.markdownR2Key);
+	if (!obj) return null;
+	return obj.text();
+}
+
+// ── Retrieve Context (filtered by user + optional papers) ────────────────────
 
 export async function retrieveContext(
 	query: string,
 	opts: {
+		userId: string;
+		paperIds?: string[];
 		topK?: number;
 		db: DbClient;
 		vectorize: VectorizeIndex;
@@ -190,7 +227,23 @@ export async function retrieveContext(
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
-	const results = await store.similaritySearchWithScore(query, opts.topK ?? 5);
+	const filter: Record<string, unknown> = { userId: opts.userId };
+	if (opts.paperIds?.length === 1) {
+		filter.paperId = opts.paperIds[0];
+	} else if (opts.paperIds && opts.paperIds.length > 1) {
+		filter.paperId = { $in: opts.paperIds };
+	}
+
+	let results: [Document, number][];
+	try {
+		results = await store.similaritySearchWithScore(
+			query,
+			opts.topK ?? 5,
+			filter,
+		);
+	} catch {
+		return "";
+	}
 
 	const matchedIds = results
 		.filter(([, score]) => score > 0.4)

@@ -29,6 +29,8 @@ export const documents = sqliteTable("documents", {
 	id: text("id").primaryKey(),
 	content: text("content").notNull(),
 	source: text("source"),
+	userId: text("user_id"),
+	paperId: text("paper_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),
@@ -39,6 +41,7 @@ export const papers = sqliteTable("papers", {
 	userId: text("user_id").notNull(),
 	title: text("title").notNull(),
 	r2Key: text("r2_key").notNull(),
+	markdownR2Key: text("markdown_r2_key"),
 	chunks: integer("chunks").notNull().default(0),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
