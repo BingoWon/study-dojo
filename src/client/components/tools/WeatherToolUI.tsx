@@ -29,7 +29,9 @@ export const WeatherToolUI: FC<ToolCallMessagePartProps> = (props) => {
 				</div>
 			)}
 
-			<div className={`transition-opacity ${isRunning ? "opacity-30" : "opacity-100"}`}>
+			<div
+				className={`transition-opacity ${isRunning ? "opacity-30" : "opacity-100"}`}
+			>
 				<div className="flex items-center justify-between mb-4">
 					<div className="flex items-center gap-1.5 text-blue-800 dark:text-blue-200">
 						<MapPin className="w-4 h-4" />

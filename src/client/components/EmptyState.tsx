@@ -1,4 +1,4 @@
-import { Bot, CloudRain, ChevronRight, Search } from "lucide-react";
+import { Bot, ChevronRight, CloudRain, Search } from "lucide-react";
 import type { FC } from "react";
 
 export const EmptyState: FC<{
@@ -20,21 +20,24 @@ export const EmptyState: FC<{
 			{[
 				{
 					label: "生成式组件 (天气卡片)",
-					prompt: "旧金山今天天气怎么样？",
+					prompt: "北京今天天气怎么样？",
 					icon: CloudRain,
-					color: "text-blue-500 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
+					color:
+						"text-blue-500 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
 				},
 				{
 					label: "工具调用流式执行",
-					prompt: "帮我搜索 SpaceX 的最新资讯",
+					prompt: "帮我搜索关于新能源汽车的最新大事件",
 					icon: Search,
-					color: "text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+					color:
+						"text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
 				},
 				{
 					label: "思维逻辑链 (CoT)",
 					prompt: "strawberry 里面有几个 r？请一步步思考。",
 					icon: Bot,
-					color: "text-violet-500 dark:text-violet-400 bg-violet-500/10 border-violet-500/20",
+					color:
+						"text-violet-500 dark:text-violet-400 bg-violet-500/10 border-violet-500/20",
 				},
 			].map((item) => (
 				<button

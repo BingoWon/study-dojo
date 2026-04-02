@@ -173,3 +173,4 @@ tsconfig.tsbuildinfo
 # Internal — never expose on GitHub
 docs/
 scripts/
+references/

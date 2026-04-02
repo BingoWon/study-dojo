@@ -1,4 +1,4 @@
-import { useChat } from "@ai-sdk/react";
+import { type UIMessage as Message, useChat } from "@ai-sdk/react";
 import {
 	ActionBarPrimitive,
 	AssistantRuntimeProvider,
@@ -22,7 +22,7 @@ import {
 	User,
 	X,
 } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useEffect, useRef } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
@@ -58,7 +58,7 @@ const AssistantActionBar: FC = () => (
 			<button
 				type="button"
 				className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-				title="Copy"
+				title="复制"
 			>
 				<Copy className="h-3 w-3" />
 			</button>
@@ -67,7 +67,7 @@ const AssistantActionBar: FC = () => (
 			<button
 				type="button"
 				className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-				title="Regenerate"
+				title="重新生成"
 			>
 				<RefreshCw className="h-3 w-3" />
 			</button>
@@ -123,7 +123,6 @@ const UserMessage: FC = () => (
 				<MessagePrimitive.Parts />
 			</div>
 		</div>
-		{/* User action bar */}
 		<ActionBarPrimitive.Root
 			hideWhenRunning
 			autohide="not-last"
@@ -143,11 +142,9 @@ const UserMessage: FC = () => (
 
 const AssistantMessage: FC = () => (
 	<MessagePrimitive.Root className="mr-auto flex max-w-[85%] flex-col items-start mb-6 group">
-		{/* Avatar + name */}
 		<div className="flex items-center gap-2 mb-2">
 			<div className="relative h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-white/10 flex items-center justify-center text-zinc-600 dark:text-zinc-300 shadow-md dark:shadow-lg">
 				<Bot className="w-3.5 h-3.5" />
-				{/* Live indicator — visible when this message is last & thread is running */}
 				<MessagePrimitive.If last>
 					<ThreadPrimitive.If running>
 						<span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
@@ -162,7 +159,6 @@ const AssistantMessage: FC = () => (
 			</span>
 		</div>
 
-		{/* All parts: reasoning → tool calls → text */}
 		<div className="w-full flex flex-col">
 			<MessagePrimitive.Parts
 				components={{
@@ -179,31 +175,53 @@ const AssistantMessage: FC = () => (
 			/>
 		</div>
 
-		{/* Action bar + branch picker */}
 		<AssistantActionBar />
 	</MessagePrimitive.Root>
 );
 
 // ── Main Chat ─────────────────────────────────────────────────────────────────
 
-export function Chat() {
+export function Chat({
+	threadId,
+	initialMessages,
+	onTitleGenerated,
+}: {
+	threadId: string;
+	initialMessages: Message[];
+	onTitleGenerated?: (title: string) => void;
+}) {
 	const chat = useChat({
-		onError: (err: unknown) => {
-			console.error("[Chat] Error:", err);
-		},
-	});
+		api: "/api/chat",
+		id: threadId,
+		initialMessages,
+		maxSteps: 5,
+		body: { threadId },
+	} as any);
+
+	// Auto-generate title from first user message (new threads only)
+	const titleDone = useRef(initialMessages.length > 0);
+	useEffect(() => {
+		if (titleDone.current || !onTitleGenerated) return;
+		const firstUser = chat.messages.find((m) => m.role === "user");
+		if (!firstUser) return;
+		let text = "";
+		const tp = firstUser.parts.find((p) => p.type === "text");
+		if (tp && "text" in tp) text = tp.text;
+		if (text) {
+			onTitleGenerated(text.slice(0, 20) + (text.length > 20 ? "..." : ""));
+			titleDone.current = true;
+		}
+	}, [chat.messages, onTitleGenerated]);
+
 	const runtime = useAISDKRuntime(chat);
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
 			<div className="flex h-full w-full flex-col relative overflow-hidden font-sans">
-				{/* Ambient glow */}
 				<div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-96 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
 				<ThreadPrimitive.Root className="flex flex-col h-full w-full max-w-3xl mx-auto relative z-10">
-					{/* Messages viewport */}
 					<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-4 md:px-6 py-8 scroll-smooth">
-						{/* Empty state */}
 						<ThreadPrimitive.Empty>
 							<EmptyState
 								onPredefinedClick={(text) =>
@@ -219,16 +237,13 @@ export function Chat() {
 							components={{ UserMessage, AssistantMessage }}
 						/>
 
-						{/* Scroll anchor */}
 						<ThreadPrimitive.ScrollToBottom className="fixed bottom-36 right-1/2 translate-x-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 shadow-lg transition-all opacity-0 data-[visible]:opacity-100 z-20 cursor-pointer">
 							<ChevronDown className="h-4 w-4" />
 						</ThreadPrimitive.ScrollToBottom>
 					</ThreadPrimitive.Viewport>
 
-					{/* Composer */}
 					<ThreadPrimitive.ViewportFooter className="pb-8 pt-4 px-4 md:px-6 sticky bottom-0 bg-gradient-to-t from-zinc-50 via-zinc-50/95 dark:from-zinc-950 dark:via-zinc-950/95 to-transparent backdrop-blur-sm z-30">
 						<ComposerPrimitive.Root className="flex w-full flex-col gap-3 rounded-3xl bg-white/80 dark:bg-zinc-900/60 p-3 shadow-xl dark:shadow-2xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-2xl transition-all focus-within:border-blue-500/30 focus-within:bg-white dark:focus-within:bg-zinc-900/80 focus-within:ring-4 focus-within:ring-blue-500/8">
-							{/* Attachment previews */}
 							<div className="flex flex-wrap gap-3 px-2 pt-2 empty:hidden">
 								<ComposerPrimitive.Attachments
 									components={{ Attachment: ComposerAttachment }}
