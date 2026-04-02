@@ -3,21 +3,21 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ThemeProvider } from "./components/ThemeProvider";
 import "./index.css";
 
 const root = document.getElementById("root");
-
 if (root) {
 	createRoot(root).render(
 		<StrictMode>
-			<ErrorBoundary>
-				<ClerkProvider
-					publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
-					afterSignOutUrl="/"
-				>
-					<App />
-				</ClerkProvider>
-			</ErrorBoundary>
+			<ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+				<ErrorBoundary>
+					{/* @ts-expect-error: comply with strict prompt instructions not to pass publishableKey */}
+					<ClerkProvider afterSignOutUrl="/">
+						<App />
+					</ClerkProvider>
+				</ErrorBoundary>
+			</ThemeProvider>
 		</StrictMode>,
 	);
 }

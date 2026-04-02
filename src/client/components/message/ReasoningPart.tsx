@@ -52,10 +52,10 @@ export const ReasoningPart: FC = () => {
 	if (!reasoning?.text) return null;
 
 	const headerLabel = isStreaming
-		? "Thinking…"
+		? "深度思考中…"
 		: duration !== undefined
-			? `Thought for ${duration}s`
-			: "Reasoning";
+			? `深度思考耗时 ${duration} 秒`
+			: "推理过程";
 
 	const handleCopy = () => {
 		navigator.clipboard.writeText(reasoning.text ?? "");
@@ -64,11 +64,11 @@ export const ReasoningPart: FC = () => {
 	};
 
 	return (
-		<div className="mb-2 rounded-2xl border border-violet-500/15 bg-violet-950/20 overflow-hidden transition-all duration-300">
+		<div className="mb-2 rounded-2xl border border-violet-500/15 bg-violet-50 dark:bg-violet-950/20 overflow-hidden transition-all duration-300">
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left hover:bg-violet-500/5 transition-colors group"
+				className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left hover:bg-violet-500/5 transition-colors group cursor-pointer"
 			>
 				<span className="relative flex h-2.5 w-2.5 shrink-0">
 					{isStreaming ? (
@@ -80,11 +80,11 @@ export const ReasoningPart: FC = () => {
 						<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-violet-500/50" />
 					)}
 				</span>
-				<span className="text-[11px] font-semibold text-violet-400/80 tracking-widest uppercase select-none">
+				<span className="text-[11px] font-semibold text-violet-600/80 dark:text-violet-400/80 tracking-widest uppercase select-none">
 					{headerLabel}
 				</span>
 				{!isStreaming && !open && reasoning.text && (
-					<span className="ml-1 text-[10px] text-violet-500/40 truncate max-w-[200px] hidden sm:block">
+					<span className="ml-1 text-[10px] text-violet-500/60 dark:text-violet-500/40 truncate max-w-[200px] hidden sm:block">
 						{reasoning.text.slice(0, 60).replace(/\n/g, " ")}…
 					</span>
 				)}
@@ -102,7 +102,7 @@ export const ReasoningPart: FC = () => {
 							if (el && isStreaming) el.scrollTop = el.scrollHeight;
 						}}
 					>
-						<p className="text-[11px] leading-relaxed text-violet-300/60 font-mono whitespace-pre-wrap">
+						<p className="text-[11px] leading-relaxed text-violet-800/70 dark:text-violet-300/60 font-mono whitespace-pre-wrap">
 							{reasoning.text}
 						</p>
 					</div>
@@ -110,14 +110,14 @@ export const ReasoningPart: FC = () => {
 						<button
 							type="button"
 							onClick={handleCopy}
-							className="flex items-center gap-1.5 text-[10px] text-violet-500/50 hover:text-violet-400/80 transition-colors"
+							className="flex items-center gap-1.5 text-[10px] text-violet-600/60 dark:text-violet-500/50 hover:text-violet-600 dark:hover:text-violet-400/80 transition-colors cursor-pointer"
 						>
 							{copied ? (
-								<Check className="h-3 w-3 text-green-400" />
+								<Check className="h-3 w-3 text-green-500 dark:text-green-400" />
 							) : (
 								<Copy className="h-3 w-3" />
 							)}
-							{copied ? "Copied" : "Copy"}
+							{copied ? "已复制" : "复制该步骤"}
 						</button>
 					</div>
 				</div>
