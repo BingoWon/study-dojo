@@ -2,7 +2,6 @@ import {
 	type RefObject,
 	useCallback,
 	useEffect,
-	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
@@ -20,47 +19,49 @@ interface DividerProps {
 export function useResizableLayout(
 	containerRef: RefObject<HTMLElement | null>,
 ) {
-	const [leftWidth, setLeftWidth] = useState(0);
-	const [rightWidth, setRightWidth] = useState(0);
+	const getContainerWidth = useCallback(
+		() => containerRef.current?.offsetWidth || window.innerWidth,
+		[containerRef],
+	);
+
+	const calcDefaults = useCallback(
+		(w: number) => ({
+			left: Math.round(w / 6),
+			right: Math.round((w * 2) / 6),
+		}),
+		[],
+	);
+
+	const initW = typeof window !== "undefined" ? window.innerWidth : 1200;
+	const initDefaults = calcDefaults(initW);
+
+	const [leftWidth, setLeftWidth] = useState(initDefaults.left);
+	const [rightWidth, setRightWidth] = useState(initDefaults.right);
 	const [leftCollapsed, setLeftCollapsed] = useState(false);
 	const [rightCollapsed, setRightCollapsed] = useState(false);
 	const [dragging, setDragging] = useState<"left" | "right" | null>(null);
 
-	const defaultsRef = useRef({ left: 0, right: 0 });
+	const defaultsRef = useRef(initDefaults);
 	const startRef = useRef({ x: 0, leftW: 0, rightW: 0 });
 
-	const computeDefaults = useCallback(() => {
-		const w = containerRef.current?.offsetWidth ?? 1200;
-		return { left: Math.round(w / 6), right: Math.round((w * 2) / 6) };
-	}, [containerRef]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: measure on mount only
-	useLayoutEffect(() => {
-		const el = containerRef.current;
-		if (!el) return;
-		const measure = () => {
-			const d = computeDefaults();
-			defaultsRef.current = d;
-			setLeftWidth(d.left);
-			setRightWidth(d.right);
-		};
-		if (el.offsetWidth > 0) {
-			measure();
-		} else {
-			requestAnimationFrame(measure);
-		}
-	}, [computeDefaults]);
+	useEffect(() => {
+		const w = getContainerWidth();
+		const d = calcDefaults(w);
+		defaultsRef.current = d;
+		setLeftWidth(d.left);
+		setRightWidth(d.right);
+	}, [getContainerWidth, calcDefaults]);
 
 	useEffect(() => {
 		const onResize = () => {
-			const d = computeDefaults();
+			const d = calcDefaults(getContainerWidth());
 			defaultsRef.current = d;
 			if (!leftCollapsed) setLeftWidth((prev) => Math.min(prev, d.left * 2));
 			if (!rightCollapsed) setRightWidth((prev) => Math.min(prev, d.right * 2));
 		};
 		window.addEventListener("resize", onResize);
 		return () => window.removeEventListener("resize", onResize);
-	}, [computeDefaults, leftCollapsed, rightCollapsed]);
+	}, [calcDefaults, getContainerWidth, leftCollapsed, rightCollapsed]);
 
 	const onMouseDown = useCallback(
 		(side: "left" | "right", e: React.MouseEvent) => {
@@ -74,7 +75,7 @@ export function useResizableLayout(
 
 			const onMove = (ev: MouseEvent) => {
 				const delta = ev.clientX - startRef.current.x;
-				const containerW = containerRef.current?.offsetWidth ?? 1200;
+				const containerW = getContainerWidth();
 
 				if (side === "left") {
 					const newLeft = Math.max(0, startRef.current.leftW + delta);
@@ -118,7 +119,7 @@ export function useResizableLayout(
 			document.addEventListener("mousemove", onMove);
 			document.addEventListener("mouseup", onUp);
 		},
-		[leftWidth, rightWidth, containerRef],
+		[leftWidth, rightWidth, getContainerWidth],
 	);
 
 	const toggleLeft = useCallback(() => {

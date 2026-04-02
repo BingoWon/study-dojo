@@ -76,7 +76,15 @@ export async function ingestMarkdown(
 				metadata: { id: ids[i], source: opts.source ?? "" },
 			}),
 	);
-	await store.addDocuments(docs, { ids });
+
+	try {
+		await store.addDocuments(docs, { ids });
+	} catch (e) {
+		console.warn(
+			"[RAG] Vectorize indexing skipped (local dev):",
+			(e as Error).message,
+		);
+	}
 
 	return { ids, chunks: chunks.length };
 }
