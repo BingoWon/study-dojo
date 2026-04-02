@@ -3,7 +3,8 @@
 
 BASE_URL=https://openrouter.ai/api/v1
 API_KEY=your-api-key-here
-MODEL=xiaomi/mimo-v2-omni
-SITE_URL=https://roast-prof.workers.dev
-SITE_NAME=Roast Prof
-SITE_CATEGORIES=entertainment,education
+MODEL=google/gemini-2.5-flash
+SYSTEM_PROMPT=You are a helpful and clear AI assistant.
+SITE_URL=
+SITE_NAME=
+SITE_CATEGORIES=

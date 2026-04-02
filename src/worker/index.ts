@@ -156,8 +156,7 @@ function transformReasoningSSE(response: Response): Response {
 							) {
 								// End of reasoning segment
 								choice.delta = choice.delta || {};
-								choice.delta.content =
-									"</think>" + (choice.delta.content || "");
+								choice.delta.content = `</think>${choice.delta.content || ""}`;
 								inReasoning = false;
 								modified = true;
 							}
@@ -196,7 +195,7 @@ function transformReasoningSSE(response: Response): Response {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-app.get("/api/health", (c) => c.json({ status: "ok", name: "roast-prof" }));
+app.get("/api/health", (c) => c.json({ status: "ok" }));
 
 app.post("/api/chat", async (c) => {
 	try {
@@ -205,7 +204,8 @@ app.post("/api/chat", async (c) => {
 		if (!c.env.API_KEY) return c.json({ error: "Missing API_KEY secret" }, 500);
 		if (!c.env.MODEL) return c.json({ error: "Missing MODEL env var" }, 500);
 
-		const systemPrompt = "You are a helpful and clear AI assistant.";
+		const systemPrompt =
+			c.env.SYSTEM_PROMPT || "You are a helpful and clear AI assistant.";
 
 		const openRouterMessages = buildOpenRouterMessages(messages, systemPrompt);
 		const model = c.env.MODEL;

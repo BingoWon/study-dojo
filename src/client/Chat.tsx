@@ -7,6 +7,7 @@ import {
 	ComposerPrimitive,
 	MessagePrimitive,
 	ThreadPrimitive,
+	type ToolCallMessagePartProps,
 	useMessagePartReasoning,
 	useMessagePartText,
 } from "@assistant-ui/react";
@@ -64,7 +65,7 @@ const ReasoningPart: FC = () => {
 					)}
 				</span>
 				<span className="text-[11px] font-semibold text-violet-400/80 tracking-widest uppercase select-none">
-					{isStreaming ? "正在思考…" : "推理过程"}
+					{isStreaming ? "Thinking…" : "Reasoning"}
 				</span>
 				{!isStreaming && reasoning.text && (
 					<span className="ml-1 text-[10px] text-violet-500/40 truncate max-w-[200px] hidden sm:block">
@@ -94,7 +95,7 @@ const ReasoningPart: FC = () => {
 							) : (
 								<Copy className="h-3 w-3" />
 							)}
-							{copied ? "已复制" : "复制推理"}
+							{copied ? "Copied" : "Copy"}
 						</button>
 					</div>
 				</div>
@@ -109,7 +110,7 @@ const TextPart: FC = () => {
 	const { text } = useMessagePartText();
 	if (!text) return null;
 	return (
-		<div className="relative rounded-3xl rounded-tl-sm bg-zinc-900/80 px-6 py-4 text-zinc-200 shadow-xl border border-red-500/10 backdrop-blur-xl transition-all hover:border-red-500/20">
+		<div className="relative rounded-3xl rounded-tl-sm bg-zinc-900/80 px-6 py-4 text-zinc-200 shadow-xl border border-white/5 backdrop-blur-xl transition-all hover:border-white/10">
 			<p className="leading-relaxed whitespace-pre-wrap text-sm">{text}</p>
 		</div>
 	);
@@ -117,8 +118,6 @@ const TextPart: FC = () => {
 
 // ── Tool Call Part ────────────────────────────────────────────────────────────
 // Registered as tools.Fallback — receives ToolCallMessagePartProps directly as FC props
-
-import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 
 const ToolCallPart: FC<ToolCallMessagePartProps> = ({
 	toolName,
@@ -149,13 +148,13 @@ const ToolCallPart: FC<ToolCallMessagePartProps> = ({
 				<span className="text-[11px] font-semibold tracking-wider uppercase select-none">
 					{toolName}
 				</span>
-				{isError && <span className="ml-1 text-[10px] opacity-60">出错</span>}
+				{isError && <span className="ml-1 text-[10px] opacity-60">Error</span>}
 				{hasResult && !isError && (
-					<span className="ml-1 text-[10px] opacity-50">完成</span>
+					<span className="ml-1 text-[10px] opacity-50">Done</span>
 				)}
 				{!hasResult && !isError && (
 					<span className="ml-1 flex items-center gap-1 text-[10px] opacity-60">
-						<span className="animate-pulse">运行中</span>
+						<span className="animate-pulse">Running</span>
 						<Zap className="h-2.5 w-2.5 animate-pulse" />
 					</span>
 				)}
@@ -169,7 +168,7 @@ const ToolCallPart: FC<ToolCallMessagePartProps> = ({
 					{(args || argsText) && (
 						<div className="px-4 py-3">
 							<div className="text-[10px] opacity-50 uppercase tracking-widest mb-1.5">
-								参数
+								Args
 							</div>
 							<pre className="text-[11px] opacity-70 font-mono whitespace-pre-wrap break-all">
 								{argsText || JSON.stringify(args, null, 2)}
@@ -179,7 +178,7 @@ const ToolCallPart: FC<ToolCallMessagePartProps> = ({
 					{result !== undefined && (
 						<div className="px-4 py-3">
 							<div className="text-[10px] opacity-50 uppercase tracking-widest mb-1.5">
-								结果
+								Result
 							</div>
 							<pre className="text-[11px] opacity-70 font-mono whitespace-pre-wrap break-all">
 								{typeof result === "string"
@@ -222,7 +221,7 @@ const AssistantActionBar: FC = () => (
 			<button
 				type="button"
 				className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-				title="复制"
+				title="Copy"
 			>
 				<Copy className="h-3 w-3" />
 			</button>
@@ -231,7 +230,7 @@ const AssistantActionBar: FC = () => (
 			<button
 				type="button"
 				className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-				title="重新生成"
+				title="Regenerate"
 			>
 				<RefreshCw className="h-3 w-3" />
 			</button>
@@ -272,7 +271,7 @@ const ComposerAttachment: FC = () => (
 const UserMessage: FC = () => (
 	<MessagePrimitive.Root className="ml-auto flex max-w-[85%] flex-col items-end mb-6 group">
 		<div className="flex items-center gap-2 mb-2">
-			<span className="text-xs font-medium text-zinc-500">你</span>
+			<span className="text-xs font-medium text-zinc-500">You</span>
 			<div className="h-6 w-6 rounded-full bg-gradient-to-tr from-orange-400 to-amber-600 flex items-center justify-center text-white shadow-lg">
 				<User className="w-3.5 h-3.5" />
 			</div>
@@ -298,7 +297,7 @@ const UserMessage: FC = () => (
 					type="button"
 					className="inline-flex items-center gap-1 px-2 h-6 rounded text-[10px] text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
 				>
-					编辑
+					Edit
 				</button>
 			</ActionBarPrimitive.Edit>
 		</ActionBarPrimitive.Root>
@@ -360,23 +359,23 @@ const EmptyState: FC = () => (
 		<div className="flex flex-wrap items-center justify-center gap-2 max-w-xs">
 			{[
 				{
-					label: "推理可视",
+					label: "Reasoning",
 					color: "bg-violet-500/10 text-violet-400 border-violet-500/20",
 				},
 				{
-					label: "多模态",
+					label: "Multimodal",
 					color: "bg-blue-500/10 text-blue-400 border-blue-500/20",
 				},
 				{
-					label: "图片识别",
+					label: "Vision",
 					color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
 				},
 				{
-					label: "工具调用",
+					label: "Tool Use",
 					color: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 				},
 				{
-					label: "分支对比",
+					label: "Branching",
 					color: "bg-green-500/10 text-green-400 border-green-500/20",
 				},
 			].map((f) => (
@@ -430,7 +429,7 @@ export function Chat() {
 
 					{/* Composer */}
 					<ThreadPrimitive.ViewportFooter className="pb-8 pt-4 px-4 md:px-6 sticky bottom-0 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent backdrop-blur-sm">
-						<ComposerPrimitive.Root className="flex w-full flex-col gap-3 rounded-3xl bg-zinc-900/60 p-3 shadow-2xl border border-zinc-800 backdrop-blur-2xl transition-all focus-within:border-orange-500/40 focus-within:bg-zinc-900/80 focus-within:ring-4 focus-within:ring-orange-500/8">
+						<ComposerPrimitive.Root className="flex w-full flex-col gap-3 rounded-3xl bg-zinc-900/60 p-3 shadow-2xl border border-zinc-800 backdrop-blur-2xl transition-all focus-within:border-blue-500/30 focus-within:bg-zinc-900/80 focus-within:ring-4 focus-within:ring-blue-500/8">
 							{/* Attachment previews */}
 							<div className="flex flex-wrap gap-3 px-2 pt-2 empty:hidden">
 								<ComposerPrimitive.Attachments
@@ -440,13 +439,13 @@ export function Chat() {
 							<div className="flex items-end gap-2">
 								<ComposerPrimitive.AddAttachment
 									className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-all hover:bg-zinc-800 hover:text-zinc-100 active:scale-95"
-									title="附加文件"
+									title="Attach file"
 								>
 									<Paperclip className="h-5 w-5" />
 								</ComposerPrimitive.AddAttachment>
 
 								<ComposerPrimitive.Input
-									placeholder="输入指令，或拖拽图片、文档、音频、视频…"
+									placeholder="Type a message, or drag & drop files…"
 									rows={1}
 									className="flex-1 max-h-36 resize-none bg-transparent px-2 py-3.5 outline-none text-zinc-100 placeholder-zinc-600 text-sm leading-relaxed"
 								/>

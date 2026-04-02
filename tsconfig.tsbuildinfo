@@ -1,1 +1,0 @@
-{"root":["./worker-configuration.d.ts","./src/vite-env.d.ts","./src/worker/index.ts","./src/client/app.tsx","./src/client/chat.tsx","./src/client/main.tsx"],"version":"6.0.2"}

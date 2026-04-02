@@ -166,6 +166,10 @@ dist
 !.env.example
 .wrangler/
 
+# Auto-generated — regenerate locally via `pnpm cf-typegen`
+worker-configuration.d.ts
+tsconfig.tsbuildinfo
+
 # Internal — never expose on GitHub
 docs/
 scripts/
