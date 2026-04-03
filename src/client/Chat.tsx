@@ -90,15 +90,17 @@ const AssistantActionBar: FC = () => (
 				<Copy className="h-3 w-3" />
 			</button>
 		</ActionBarPrimitive.Copy>
-		<ActionBarPrimitive.Reload asChild>
-			<button
-				type="button"
-				className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-				title="重新生成"
-			>
-				<RefreshCw className="h-3 w-3" />
-			</button>
-		</ActionBarPrimitive.Reload>
+		<MessagePrimitive.If last>
+			<ActionBarPrimitive.Reload asChild>
+				<button
+					type="button"
+					className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-all"
+					title="重新生成"
+				>
+					<RefreshCw className="h-3 w-3" />
+				</button>
+			</ActionBarPrimitive.Reload>
+		</MessagePrimitive.If>
 		<AssistantBranchPicker />
 	</ActionBarPrimitive.Root>
 );
