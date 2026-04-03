@@ -31,7 +31,7 @@ CREATE TABLE `papers` (
 CREATE TABLE `user_papers` (
 	`user_id` text NOT NULL,
 	`paper_id` text NOT NULL REFERENCES `papers`(`id`),
-	`title` text DEFAULT '新论文' NOT NULL,
+	`title` text DEFAULT '新资料' NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL,
 	PRIMARY KEY (`user_id`, `paper_id`)
 );

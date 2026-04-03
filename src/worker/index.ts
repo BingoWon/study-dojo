@@ -2,6 +2,7 @@ import {
 	convertToModelMessages,
 	createUIMessageStream,
 	createUIMessageStreamResponse,
+	hasToolCall,
 	stepCountIs,
 	streamText,
 } from "ai";
@@ -395,7 +396,8 @@ app.post("/api/chat", async (c) => {
 					system: systemPrompt,
 					messages: modelMessages,
 					tools: { ...staticTools, ...ragTools },
-					stopWhen: stepCountIs(5),
+					stopWhen: (event) =>
+						hasToolCall("rag_suggest")(event) || stepCountIs(5)(event),
 				});
 
 				let titlePromise: Promise<void> | null = null;
