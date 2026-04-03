@@ -33,11 +33,6 @@ export function createProvider(env: Env) {
 	return createOpenAI({
 		baseURL: env.BASE_URL,
 		apiKey: env.API_KEY,
-		headers: {
-			"HTTP-Referer": env.SITE_URL,
-			"X-OpenRouter-Title": env.SITE_NAME,
-			"X-OpenRouter-Categories": env.SITE_CATEGORIES,
-		},
 		fetch: async (url, options) => {
 			const raw = await fetch(url as string, options as RequestInit);
 			return transformReasoningSSE(raw);

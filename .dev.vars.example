@@ -1,13 +1,24 @@
 # Copy this file to .dev.vars and fill in your credentials.
 # .dev.vars is git-ignored — NEVER commit real secrets.
+# Production secrets are managed via `wrangler secret put <KEY>`.
 
+# ── LLM (OpenRouter) ────────────────────────────────────────────────────────
+# OpenRouter API endpoint and key for chat + title generation
 BASE_URL=https://openrouter.ai/api/v1
-API_KEY=your-api-key-here
-MODEL=google/gemini-2.5-flash
-SYSTEM_PROMPT=You are a helpful and clear AI assistant.
-SITE_URL=
-SITE_NAME=
-SITE_CATEGORIES=
+API_KEY=your-openrouter-api-key
+MODEL=xiaomi/mimo-v2-omni
 
-# Clerk Auth
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+# ── Embedding (for RAG vector search) ───────────────────────────────────────
+# Used by LangChain OpenAIEmbeddings to generate document chunk embeddings
+EMBEDDING_BASE_URL=https://openrouter.ai/api/v1
+EMBEDDING_API_KEY=your-embedding-api-key
+EMBEDDING_MODEL=qwen/qwen3-embedding-4b
+
+# ── PaddleOCR (PDF parsing) ─────────────────────────────────────────────────
+# Sync layout-parsing API for extracting markdown from uploaded PDFs
+PADDLE_OCR_TOKEN=your-paddleocr-token
+
+# ── Tencent TMT (translation) ───────────────────────────────────────────────
+# Machine translation for English papers → Chinese
+TMT_SECRET_ID=your-tencent-secret-id
+TMT_SECRET_KEY=your-tencent-secret-key
