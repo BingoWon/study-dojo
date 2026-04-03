@@ -211,11 +211,13 @@ app.get("/api/papers/:id/download", async (c) => {
 app.get("/api/papers/:id/markdown", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
+	const lang = (c.req.query("lang") as "original" | "zh") || "original";
 	const db = createDb(c.env.DB);
 	const md = await getPaperMarkdown(c.req.param("id"), {
 		db,
 		r2: c.env.R2,
 		userId,
+		lang,
 	});
 	if (md === null) return c.json({ error: "未找到" }, 404);
 	return c.text(md);

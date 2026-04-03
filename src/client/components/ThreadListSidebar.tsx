@@ -23,7 +23,11 @@ export const ThreadListSidebar: FC<{
 	onRename: (id: string, title: string) => void;
 	activeTab: SidebarTab;
 	onTabChange: (tab: SidebarTab) => void;
-	onPaperSelect?: (paperId: string, title: string) => void;
+	onPaperSelect?: (
+		paperId: string,
+		title: string,
+		lang?: string | null,
+	) => void;
 }> = ({
 	threads,
 	activeThreadId,
@@ -115,13 +119,18 @@ interface Paper {
 	title: string;
 	chunks: number;
 	status: string;
+	lang?: string | null;
 	createdAt: number;
 }
 
 const PLACEHOLDER_TITLE = "等待解析后自动生成标题…";
 
 const PapersPanel: FC<{
-	onPaperSelect?: (paperId: string, title: string) => void;
+	onPaperSelect?: (
+		paperId: string,
+		title: string,
+		lang?: string | null,
+	) => void;
 }> = ({ onPaperSelect }) => {
 	const [papers, setPapers] = useState<Paper[]>([]);
 	const [dragOver, setDragOver] = useState(false);
@@ -222,6 +231,7 @@ const PapersPanel: FC<{
 							status: string;
 							paperId?: string;
 							chunks?: number;
+							lang?: string;
 							duplicate?: boolean;
 						};
 
@@ -244,6 +254,7 @@ const PapersPanel: FC<{
 
 						updatePaperStatus(realPaperId, data.status, {
 							chunks: data.chunks ?? 0,
+							lang: data.lang,
 						});
 
 						// Generate title when ready
@@ -354,7 +365,7 @@ const PapersPanel: FC<{
 						key={p.id}
 						paper={p}
 						onClick={() => {
-							if (p.status === "ready") onPaperSelect?.(p.id, p.title);
+							if (p.status === "ready") onPaperSelect?.(p.id, p.title, p.lang);
 						}}
 						onUnlink={(e) => handleUnlink(p.id, e)}
 						onRename={(title) => handleRename(p.id, title)}
@@ -365,55 +376,61 @@ const PapersPanel: FC<{
 	);
 };
 
-// ── Progress Dots ────────────────────────────────────────────────────────────
+// ── Progress Bar ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ["上传", "解析", "分块", "嵌入"];
+const STEPS_ZH = ["上传", "解析", "分块", "嵌入"];
+const STEPS_EN = ["上传", "解析", "翻译", "分块", "嵌入"];
 
-function stepIndex(status: string): number {
-	if (status === "uploading") return 0;
-	if (status === "parsing") return 1;
-	if (status === "chunking") return 2;
-	if (status === "embedding") return 3;
-	return -1;
+function getSteps(lang?: string | null): string[] {
+	return lang === "en" ? STEPS_EN : STEPS_ZH;
 }
 
-const ProgressDots: FC<{ status: string }> = ({ status }) => {
-	const active = stepIndex(status);
+function stepIndex(status: string, lang?: string | null): number {
+	const map: Record<string, number> = {
+		uploading: 0,
+		parsing: 1,
+	};
+	if (lang === "en") {
+		map.translating = 2;
+		map.chunking = 3;
+		map.embedding = 4;
+	} else {
+		map.chunking = 2;
+		map.embedding = 3;
+	}
+	return map[status] ?? -1;
+}
+
+const ProgressBar: FC<{ status: string; lang?: string | null }> = ({
+	status,
+	lang,
+}) => {
+	const steps = getSteps(lang);
+	const active = stepIndex(status, lang);
 
 	return (
-		<div className="flex items-center mt-1">
-			{STEP_LABELS.map((label, i) => {
+		<div className="flex items-center gap-1 mt-1 w-full">
+			{steps.map((label, i) => {
 				const done = i < active;
 				const current = i === active;
 				return (
-					<div key={label} className="flex items-center">
+					<div key={label} className="flex items-center gap-1 flex-1 min-w-0">
 						{i > 0 && (
 							<div
-								className={`w-4 h-px mx-0.5 ${done || current ? "bg-blue-400" : "bg-zinc-300 dark:bg-zinc-700"}`}
+								className={`h-px flex-1 ${done ? "bg-blue-400" : "bg-zinc-200 dark:bg-zinc-800"}`}
 							/>
 						)}
-						<div className="flex flex-col items-center">
-							<div
-								className={`w-1.5 h-1.5 rounded-full transition-colors ${
-									done
-										? "bg-blue-400"
-										: current
-											? "bg-blue-400 animate-pulse"
-											: "bg-zinc-300 dark:bg-zinc-700"
-								}`}
-							/>
-							<span
-								className={`text-[8px] leading-tight mt-0.5 ${
-									current
-										? "text-blue-400 font-medium"
-										: done
-											? "text-blue-400/60"
-											: "text-zinc-400 dark:text-zinc-600"
-								}`}
-							>
-								{label}
-							</span>
-						</div>
+						<span
+							className={`text-[10px] whitespace-nowrap transition-colors ${
+								current
+									? "text-blue-500 dark:text-blue-400 font-semibold"
+									: done
+										? "text-emerald-500 dark:text-emerald-400"
+										: "text-zinc-400 dark:text-zinc-600"
+							}`}
+						>
+							{done ? "✓" : current ? "●" : "○"} {label}
+						</span>
 					</div>
 				);
 			})}
@@ -562,7 +579,7 @@ const PaperListItem: FC<{
 					) : p.status === "failed" ? (
 						<div className="text-[10px] text-red-400">解析失败</div>
 					) : (
-						<ProgressDots status={p.status} />
+						<ProgressBar status={p.status} lang={p.lang} />
 					)}
 				</div>
 			</div>

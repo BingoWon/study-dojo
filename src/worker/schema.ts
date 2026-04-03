@@ -36,6 +36,8 @@ export const papers = sqliteTable("papers", {
 	hash: text("hash").notNull().unique(),
 	r2Key: text("r2_key").notNull(),
 	markdownR2Key: text("markdown_r2_key"),
+	translatedR2Key: text("translated_r2_key"),
+	lang: text("lang"),
 	chunks: integer("chunks").notNull().default(0),
 	status: text("status").notNull().default("uploading"),
 	createdAt: integer("created_at", { mode: "number" })

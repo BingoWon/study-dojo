@@ -44,6 +44,7 @@ function App() {
 	const [selectedPaper, setSelectedPaper] = useState<{
 		id: string;
 		title: string;
+		lang?: string | null;
 	} | null>(null);
 	const improveRef = useRef<(() => void) | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -94,10 +95,13 @@ function App() {
 		improveRef.current?.();
 	}, []);
 
-	const handlePaperSelect = useCallback((paperId: string, title: string) => {
-		setSelectedPaper({ id: paperId, title });
-		setCenterTab("paper");
-	}, []);
+	const handlePaperSelect = useCallback(
+		(paperId: string, title: string, lang?: string | null) => {
+			setSelectedPaper({ id: paperId, title, lang });
+			setCenterTab("paper");
+		},
+		[],
+	);
 
 	return (
 		<main className="h-screen w-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 flex transition-colors duration-300">
@@ -228,7 +232,10 @@ function App() {
 							</div>
 						)}
 						{centerTab === "paper" && selectedPaper && (
-							<PaperViewer paperId={selectedPaper.id} />
+							<PaperViewer
+								paperId={selectedPaper.id}
+								lang={selectedPaper.lang}
+							/>
 						)}
 					</div>
 

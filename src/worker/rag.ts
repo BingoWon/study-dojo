@@ -5,6 +5,7 @@ import { MarkdownTextSplitter } from "@langchain/textsplitters";
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbClient } from "./db";
 import { documents, papers, userPapers } from "./schema";
+import { isChinese, translateMarkdown } from "./translate";
 
 const CHUNK_SIZE = 512;
 const CHUNK_OVERLAP = 64;
@@ -112,6 +113,12 @@ export async function checkPaperByHash(
 
 type StatusCallback = (status: string, data?: Record<string, unknown>) => void;
 
+type IngestEnv = EmbeddingEnv & {
+	PADDLE_OCR_TOKEN: string;
+	TMT_SECRET_ID?: string;
+	TMT_SECRET_KEY?: string;
+};
+
 export async function ingestPdf(
 	pdfBuffer: ArrayBuffer,
 	opts: {
@@ -119,7 +126,7 @@ export async function ingestPdf(
 		db: DbClient;
 		r2: R2Bucket;
 		vectorize: VectorizeIndex;
-		env: EmbeddingEnv & { PADDLE_OCR_TOKEN: string };
+		env: IngestEnv;
 		onStatus: StatusCallback;
 	},
 ): Promise<{ paperId: string; chunks: number }> {
@@ -129,7 +136,7 @@ export async function ingestPdf(
 
 	// Dedup check
 	const [existing] = await db
-		.select({ id: papers.id, status: papers.status })
+		.select({ id: papers.id, status: papers.status, lang: papers.lang })
 		.from(papers)
 		.where(eq(papers.hash, hash))
 		.limit(1);
@@ -143,6 +150,7 @@ export async function ingestPdf(
 			paperId: existing.id,
 			duplicate: true,
 			status: existing.status,
+			lang: existing.lang,
 		});
 		return { paperId: existing.id, chunks: 0 };
 	}
@@ -179,8 +187,32 @@ export async function ingestPdf(
 	await opts.r2.put(markdownR2Key, markdown);
 	await db.update(papers).set({ markdownR2Key }).where(eq(papers.id, paperId));
 
-	// Step 3: Chunking
-	onStatus("chunking", { paperId });
+	// Detect language
+	const lang = isChinese(markdown) ? "zh" : "en";
+	await db.update(papers).set({ lang }).where(eq(papers.id, paperId));
+
+	// Step 3 (conditional): Translate if English
+	if (lang === "en" && opts.env.TMT_SECRET_ID && opts.env.TMT_SECRET_KEY) {
+		onStatus("translating", { paperId, lang });
+		await setStatus("translating");
+		try {
+			const translated = await translateMarkdown(markdown, {
+				TMT_SECRET_ID: opts.env.TMT_SECRET_ID,
+				TMT_SECRET_KEY: opts.env.TMT_SECRET_KEY,
+			});
+			const translatedR2Key = `papers/${hash}.zh.md`;
+			await opts.r2.put(translatedR2Key, translated);
+			await db
+				.update(papers)
+				.set({ translatedR2Key })
+				.where(eq(papers.id, paperId));
+		} catch (e) {
+			console.warn("[Translate] Failed, skipping:", (e as Error).message);
+		}
+	}
+
+	// Step 4: Chunking (always on original language markdown)
+	onStatus("chunking", { paperId, lang });
 	await setStatus("chunking");
 	const splitter = new MarkdownTextSplitter({
 		chunkSize: CHUNK_SIZE,
@@ -193,7 +225,7 @@ export async function ingestPdf(
 			.update(papers)
 			.set({ status: "ready", chunks: 0 })
 			.where(eq(papers.id, paperId));
-		onStatus("ready", { paperId, chunks: 0 });
+		onStatus("ready", { paperId, chunks: 0, lang });
 		return { paperId, chunks: 0 };
 	}
 
@@ -209,8 +241,8 @@ export async function ingestPdf(
 		await db.insert(documents).values(rows.slice(i, i + INSERT_BATCH));
 	}
 
-	// Step 4: Embedding
-	onStatus("embedding", { paperId });
+	// Step 5: Embedding
+	onStatus("embedding", { paperId, lang });
 	await setStatus("embedding");
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
@@ -234,7 +266,7 @@ export async function ingestPdf(
 		.update(papers)
 		.set({ status: "ready", chunks: chunks.length })
 		.where(eq(papers.id, paperId));
-	onStatus("ready", { paperId, chunks: chunks.length });
+	onStatus("ready", { paperId, chunks: chunks.length, lang });
 
 	return { paperId, chunks: chunks.length };
 }
@@ -248,6 +280,7 @@ export async function listUserPapers(db: DbClient, userId: string) {
 			title: userPapers.title,
 			chunks: papers.chunks,
 			status: papers.status,
+			lang: papers.lang,
 			createdAt: userPapers.createdAt,
 		})
 		.from(userPapers)
@@ -292,7 +325,12 @@ export async function isUserLinked(
 
 export async function getPaperMarkdown(
 	paperId: string,
-	opts: { db: DbClient; r2: R2Bucket; userId: string },
+	opts: {
+		db: DbClient;
+		r2: R2Bucket;
+		userId: string;
+		lang?: "original" | "zh";
+	},
 ): Promise<string | null> {
 	if (!(await isUserLinked(opts.db, opts.userId, paperId))) return null;
 
@@ -303,7 +341,13 @@ export async function getPaperMarkdown(
 		.limit(1);
 	if (!paper?.markdownR2Key) return null;
 
-	const obj = await opts.r2.get(paper.markdownR2Key);
+	// If requesting Chinese translation and it exists, use it
+	const r2Key =
+		opts.lang === "zh" && paper.translatedR2Key
+			? paper.translatedR2Key
+			: paper.markdownR2Key;
+
+	const obj = await opts.r2.get(r2Key);
 	if (!obj) return null;
 	return obj.text();
 }

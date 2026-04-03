@@ -20,6 +20,8 @@ CREATE TABLE `papers` (
 	`hash` text NOT NULL UNIQUE,
 	`r2_key` text NOT NULL,
 	`markdown_r2_key` text,
+	`translated_r2_key` text,
+	`lang` text,
 	`chunks` integer DEFAULT 0 NOT NULL,
 	`status` text DEFAULT 'uploading' NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
