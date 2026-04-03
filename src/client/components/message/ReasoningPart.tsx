@@ -55,7 +55,7 @@ export const ReasoningPart: FC = () => {
 		? "深度思考中…"
 		: duration !== undefined
 			? `深度思考耗时 ${duration} 秒`
-			: "推理过程";
+			: "深度思考";
 
 	const handleCopy = () => {
 		navigator.clipboard.writeText(reasoning.text ?? "");
