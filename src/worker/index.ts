@@ -9,14 +9,14 @@ import { Hono } from "hono";
 import { getUserId } from "./auth";
 import {
 	createDb,
-	deleteThread as dbDeleteThread,
-	updateThreadTitle as dbUpdateThreadTitle,
+	deleteThread,
 	ensureThread,
 	getMessagesByThreadId,
 	getThread,
 	getThreadsByUserId,
 	saveMessages,
 	touchThread,
+	updateThreadTitle,
 } from "./db";
 import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import type { ChatMessagePart, ChatRequestMessage } from "./openrouter";
@@ -60,7 +60,7 @@ app.patch("/api/threads/:id", async (c) => {
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const { title } = await c.req.json<{ title: string }>();
 	const db = createDb(c.env.DB);
-	await dbUpdateThreadTitle(db, c.req.param("id"), userId, title);
+	await updateThreadTitle(db, c.req.param("id"), userId, title);
 	return c.json({ ok: true });
 });
 
@@ -68,7 +68,7 @@ app.delete("/api/threads/:id", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	await dbDeleteThread(db, c.req.param("id"), userId);
+	await deleteThread(db, c.req.param("id"), userId);
 	return c.json({ ok: true });
 });
 
@@ -241,27 +241,21 @@ app.get("/api/papers/:id/download", async (c) => {
 	const db = createDb(c.env.DB);
 	const paperId = c.req.param("id");
 
-	if (!(await isUserLinked(db, userId, paperId)))
-		return c.json({ error: "未找到" }, 404);
-
-	const [paper] = await db
-		.select()
-		.from(papers)
-		.where(eq(papers.id, paperId))
-		.limit(1);
-	if (!paper) return c.json({ error: "未找到" }, 404);
-
-	const obj = await c.env.R2.get(paper.r2Key);
-	if (!obj) return c.json({ error: "文件不存在" }, 404);
-
-	// Use user's custom title for download filename
-	const [link] = await db
-		.select({ title: userPapers.title })
+	const [row] = await db
+		.select({
+			r2Key: papers.r2Key,
+			title: userPapers.title,
+		})
 		.from(userPapers)
+		.innerJoin(papers, eq(papers.id, userPapers.paperId))
 		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
 		.limit(1);
-	const filename = encodeURIComponent(link?.title ?? "document");
+	if (!row) return c.json({ error: "未找到" }, 404);
 
+	const obj = await c.env.R2.get(row.r2Key);
+	if (!obj) return c.json({ error: "文件不存在" }, 404);
+
+	const filename = encodeURIComponent(row.title);
 	return new Response(obj.body, {
 		headers: {
 			"Content-Type": "application/pdf",
@@ -336,40 +330,34 @@ function extractLastUserText(messages: ChatRequestMessage[]): string {
 	);
 }
 
+function partsToText(parts: ChatMessagePart[], fallback?: string): string {
+	return (
+		parts
+			.filter(
+				(p): p is Extract<ChatMessagePart, { type: "text" }> =>
+					p.type === "text",
+			)
+			.map((p) => p.text)
+			.join("") ||
+		fallback ||
+		""
+	);
+}
+
 function toAIMessages(msgs: ChatRequestMessage[]) {
 	return msgs.map((m) => {
 		const role = m.role as "user" | "assistant" | "system";
 		const parts = m.parts ?? [];
 
 		if (role !== "user") {
-			const text =
-				parts
-					.filter(
-						(p): p is Extract<ChatMessagePart, { type: "text" }> =>
-							p.type === "text",
-					)
-					.map((p) => p.text)
-					.join("") ||
-				m.content ||
-				"";
-			return { role, content: text };
+			return { role, content: partsToText(parts, m.content) };
 		}
 
 		const hasMedia = parts.some(
 			(p) => p.type === "image" || p.type === "image_url",
 		);
 		if (!hasMedia) {
-			const text =
-				parts
-					.filter(
-						(p): p is Extract<ChatMessagePart, { type: "text" }> =>
-							p.type === "text",
-					)
-					.map((p) => p.text)
-					.join("") ||
-				m.content ||
-				"";
-			return { role, content: text };
+			return { role, content: partsToText(parts, m.content) };
 		}
 
 		const content: Array<
@@ -506,7 +494,7 @@ app.post("/api/chat", async (c) => {
 								.trim()
 								.replace(/["""''「」『』。，！？、：；]/g, "");
 							if (cleaned) {
-								await dbUpdateThreadTitle(db, threadId, userId, cleaned);
+								await updateThreadTitle(db, threadId, userId, cleaned);
 							}
 						} catch (e) {
 							console.error("[Worker] title stream:", e);

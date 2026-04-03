@@ -121,13 +121,17 @@ export async function fetchOcrMarkdown(jsonlUrl: string): Promise<string> {
 
 	for (const line of lines) {
 		if (!line.trim()) continue;
-		const { result } = JSON.parse(line) as {
-			result: {
-				layoutParsingResults: Array<{ markdown: { text: string } }>;
+		try {
+			const { result } = JSON.parse(line) as {
+				result: {
+					layoutParsingResults: Array<{ markdown: { text: string } }>;
+				};
 			};
-		};
-		for (const page of result.layoutParsingResults) {
-			parts.push(page.markdown.text);
+			for (const page of result.layoutParsingResults) {
+				parts.push(page.markdown.text);
+			}
+		} catch {
+			console.warn("[RAG] Skipping malformed JSONL line");
 		}
 	}
 
@@ -257,7 +261,6 @@ export async function finalizePaper(
 	const rows = chunks.map((content, i) => ({
 		id: ids[i],
 		content,
-		source: paper.r2Key,
 		paperId,
 		createdAt: now,
 	}));

@@ -37,7 +37,6 @@ CREATE TABLE `user_papers` (
 CREATE TABLE `documents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`content` text NOT NULL,
-	`source` text,
 	`paper_id` text,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );

@@ -64,7 +64,6 @@ export const userPapers = sqliteTable(
 export const documents = sqliteTable("documents", {
 	id: text("id").primaryKey(),
 	content: text("content").notNull(),
-	source: text("source"),
 	paperId: text("paper_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
