@@ -122,6 +122,7 @@ type IngestEnv = EmbeddingEnv & {
 export async function ingestPdf(
 	pdfBuffer: ArrayBuffer,
 	opts: {
+		fileName?: string;
 		userId: string;
 		db: DbClient;
 		r2: R2Bucket;
@@ -226,7 +227,7 @@ export async function ingestPdf(
 			.update(papers)
 			.set({ status: "ready", chunks: 0 })
 			.where(eq(papers.id, paperId));
-		onStatus("ready", { paperId, chunks: 0, lang });
+		onStatus("ready", { paperId, chunks: 0, lang, fileName: opts.fileName });
 		return { paperId, chunks: 0 };
 	}
 
@@ -267,7 +268,12 @@ export async function ingestPdf(
 		.update(papers)
 		.set({ status: "ready", chunks: chunks.length })
 		.where(eq(papers.id, paperId));
-	onStatus("ready", { paperId, chunks: chunks.length, lang });
+	onStatus("ready", {
+		paperId,
+		chunks: chunks.length,
+		lang,
+		fileName: opts.fileName,
+	});
 
 	return { paperId, chunks: chunks.length };
 }

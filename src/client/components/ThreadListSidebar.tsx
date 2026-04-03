@@ -247,6 +247,7 @@ const PapersPanel: FC<{
 							paperId?: string;
 							chunks?: number;
 							lang?: string;
+							fileName?: string;
 							duplicate?: boolean;
 						};
 
@@ -277,7 +278,11 @@ const PapersPanel: FC<{
 							try {
 								const titleRes = await fetch(
 									`/api/papers/${realPaperId}/generate-title`,
-									{ method: "POST" },
+									{
+										method: "POST",
+										headers: { "Content-Type": "application/json" },
+										body: JSON.stringify({ fileName: data.fileName }),
+									},
 								);
 								if (titleRes.ok) {
 									const { title } = (await titleRes.json()) as {

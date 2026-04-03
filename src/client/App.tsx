@@ -268,7 +268,7 @@ function App() {
 										}`}
 									>
 										<Languages className="w-3 h-3" />
-										中文
+										中文翻译
 									</button>
 									<button
 										type="button"
@@ -280,7 +280,7 @@ function App() {
 										}`}
 									>
 										<Globe className="w-3 h-3" />
-										EN
+										英文原文
 									</button>
 								</div>
 							)}

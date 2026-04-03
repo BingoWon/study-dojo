@@ -134,6 +134,7 @@ app.post("/api/papers", async (c) => {
 
 			try {
 				await ingestPdf(buffer, {
+					fileName: file.name.replace(/\.pdf$/i, ""),
 					userId,
 					db,
 					r2: c.env.R2,
@@ -228,6 +229,9 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 
 	const db = createDb(c.env.DB);
 	const paperId = c.req.param("id");
+	const { fileName } = await c.req
+		.json<{ fileName?: string }>()
+		.catch(() => ({ fileName: undefined }));
 
 	const md = await getPaperMarkdown(paperId, {
 		db,
@@ -237,10 +241,11 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 	if (!md) return c.json({ error: "未找到" }, 404);
 
 	const excerpt = md.slice(0, 500);
+	const hint = fileName ? `\n文件名参考：${fileName}` : "";
 	const titleModel = createTitleModel(c.env);
 	const result = streamText({
 		model: titleModel,
-		prompt: `根据以下论文内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：\n${excerpt}`,
+		prompt: `根据以下论文内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hint}\n${excerpt}`,
 	});
 
 	let title = "";

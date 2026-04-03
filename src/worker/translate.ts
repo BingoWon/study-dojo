@@ -101,6 +101,7 @@ async function translateText(text: string, env: TmtEnv): Promise<string> {
 			"X-TC-Action": "TextTranslate",
 			"X-TC-Version": TMT_VERSION,
 			"X-TC-Timestamp": String(timestamp),
+			"X-TC-Region": "ap-guangzhou",
 		},
 		body: payload,
 	});
