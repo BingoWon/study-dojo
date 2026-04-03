@@ -335,8 +335,8 @@ export function Chat({
 							</ThreadPrimitive.ScrollToBottom>
 						</ThreadPrimitive.Viewport>
 
-						<ThreadPrimitive.ViewportFooter className="pb-4 pt-3 px-3 sticky bottom-0 bg-gradient-to-t from-zinc-50 via-zinc-50/95 dark:from-zinc-950 dark:via-zinc-950/95 to-transparent backdrop-blur-sm z-30">
-							<ComposerPrimitive.Root className="flex w-full flex-col gap-2 rounded-2xl bg-white/80 dark:bg-zinc-900/60 p-2 shadow-lg dark:shadow-xl border border-zinc-200 dark:border-zinc-800 backdrop-blur-xl transition-all focus-within:border-blue-500/30 focus-within:ring-2 focus-within:ring-blue-500/8">
+						<ThreadPrimitive.ViewportFooter className="pb-4 pt-3 px-3 sticky bottom-0 bg-gradient-to-t from-white/50 via-white/40 dark:from-zinc-900/50 dark:via-zinc-900/40 to-transparent backdrop-blur-sm z-30">
+							<ComposerPrimitive.Root className="flex w-full flex-col gap-2 rounded-2xl bg-white/70 dark:bg-zinc-800/70 p-2 shadow-sm border border-white/60 dark:border-zinc-700/50 backdrop-blur-xl transition-all focus-within:border-blue-400/40 focus-within:ring-2 focus-within:ring-blue-400/10">
 								<div className="flex items-end gap-2">
 									<ComposerPrimitive.Input
 										placeholder="输入消息..."

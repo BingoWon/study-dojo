@@ -27,26 +27,17 @@ export const Divider: FC<{
 				onMouseEnter={() => setHovered(true)}
 				onMouseLeave={() => setHovered(false)}
 				onMouseMove={onMouseMove}
-				className="absolute top-0 bottom-0 -left-[6px] w-[12px] z-20 cursor-col-resize select-none"
+				className="absolute top-0 bottom-0 -left-[8px] w-[16px] z-20 cursor-col-resize select-none"
 			>
-				{/* 竖线 */}
+				{/* Floating handle that follows mouse */}
 				<div
-					className={`absolute top-0 bottom-0 left-1/2 -translate-x-1/2 rounded-full transition-all duration-100 ${
-						active
-							? "w-[3px] bg-zinc-400 dark:bg-zinc-500"
-							: "w-[1px] bg-zinc-200 dark:bg-zinc-800"
+					className={`absolute left-1/2 -translate-x-1/2 pointer-events-none transition-opacity duration-150 ${
+						active ? "opacity-100" : "opacity-0"
 					}`}
-				/>
-
-				{/* 鼠标跟随把手 */}
-				{active && (
-					<div
-						className="absolute left-1/2 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-75"
-						style={{ top: mouseY - 20 }}
-					>
-						<div className="w-[6px] h-[40px] rounded-full bg-zinc-400 dark:bg-zinc-500 shadow-sm" />
-					</div>
-				)}
+					style={{ top: Math.max(0, mouseY - 24) }}
+				>
+					<div className="w-[5px] h-[48px] rounded-full bg-zinc-400/80 dark:bg-zinc-500/80 shadow-sm backdrop-blur-sm" />
+				</div>
 			</div>
 		</div>
 	);

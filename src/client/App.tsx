@@ -106,7 +106,36 @@ function App() {
 	);
 
 	return (
-		<main className="h-screen w-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 flex transition-colors duration-300">
+		<main className="h-screen w-screen bg-[#dedee9] dark:bg-[#1a1a2e] text-zinc-900 dark:text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30 flex transition-colors duration-300 relative">
+			{/* Dojo-style gradient background circles */}
+			<div
+				className="absolute w-[446px] h-[446px] left-[65%] top-[1%] rounded-full z-0"
+				style={{ background: "rgba(255, 172, 77, 0.2)", filter: "blur(103px)" }}
+			/>
+			<div
+				className="absolute w-[609px] h-[609px] left-[85%] top-[60%] rounded-full z-0"
+				style={{ background: "#C9C9DA", filter: "blur(103px)" }}
+			/>
+			<div
+				className="absolute w-[609px] h-[609px] left-[40%] top-[-30%] rounded-full z-0"
+				style={{ background: "#C9C9DA", filter: "blur(103px)" }}
+			/>
+			<div
+				className="absolute w-[609px] h-[609px] left-[30%] top-[70%] rounded-full z-0"
+				style={{ background: "#F3F3FC", filter: "blur(103px)" }}
+			/>
+			<div
+				className="absolute w-[446px] h-[446px] left-[8%] top-[30%] rounded-full z-0"
+				style={{
+					background: "rgba(255, 243, 136, 0.3)",
+					filter: "blur(103px)",
+				}}
+			/>
+			<div
+				className="absolute w-[446px] h-[446px] left-[-10%] top-[80%] rounded-full z-0"
+				style={{ background: "rgba(255, 172, 77, 0.2)", filter: "blur(103px)" }}
+			/>
+
 			<header className="absolute top-0 right-0 p-4 z-50 flex items-center justify-end gap-3">
 				<ThemeToggle />
 				<Show when="signed-in">
@@ -115,7 +144,7 @@ function App() {
 			</header>
 
 			<Show when="signed-out">
-				<div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full w-full">
+				<div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full w-full z-10">
 					<div className="max-w-md w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 						<div className="w-20 h-20 bg-blue-500/10 dark:bg-blue-500/20 text-blue-500 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ring-1 ring-blue-500/20">
 							<svg
@@ -163,14 +192,17 @@ function App() {
 			</Show>
 
 			<Show when="signed-in">
-				<div ref={containerRef} className="flex-1 flex h-full overflow-hidden">
+				<div
+					ref={containerRef}
+					className="flex-1 flex h-full overflow-hidden p-2 gap-2 z-10"
+				>
 					{/* 左栏 */}
 					{layout.leftCollapsed ? (
 						<CollapsedHandle direction="left" onClick={layout.toggleLeft} />
 					) : (
 						<div
 							style={{ width: layout.leftWidth }}
-							className="h-full flex-shrink-0 overflow-hidden"
+							className="h-full flex-shrink-0 overflow-hidden rounded-xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
 						>
 							<ThreadListSidebar
 								threads={threads}
@@ -191,9 +223,9 @@ function App() {
 					<Divider {...layout.leftDividerProps} />
 
 					{/* 中间面板（tab 切换） */}
-					<div className="flex-1 h-full flex flex-col min-w-0">
+					<div className="flex-1 h-full flex flex-col min-w-0 rounded-xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50 overflow-hidden">
 						{/* Tab bar */}
-						<div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm flex-shrink-0">
+						<div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-zinc-200/50 dark:border-zinc-700/50 flex-shrink-0">
 							<div className="flex items-center gap-1">
 								<button
 									type="button"
@@ -283,7 +315,7 @@ function App() {
 					) : (
 						<div
 							style={{ width: layout.rightWidth }}
-							className="h-full flex-shrink-0 overflow-hidden"
+							className="h-full flex-shrink-0 overflow-hidden rounded-xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
 						>
 							{loading && (
 								<div className="h-full flex items-center justify-center">

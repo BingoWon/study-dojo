@@ -49,9 +49,9 @@ export const ThreadListSidebar: FC<{
 	onPaperSelect,
 }) => {
 	return (
-		<div className="w-full h-full bg-zinc-50 dark:bg-zinc-950 flex flex-col transition-all z-40 relative">
+		<div className="w-full h-full flex flex-col transition-all z-40 relative">
 			{/* Tab 切换 */}
-			<div className="flex border-b border-zinc-200 dark:border-zinc-800">
+			<div className="flex border-b border-zinc-200/50 dark:border-zinc-700/50">
 				{(
 					[
 						{ id: "chat", label: "对话", icon: MessageSquare },
