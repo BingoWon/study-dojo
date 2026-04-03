@@ -52,10 +52,10 @@ export const ReasoningPart: FC = () => {
 	if (!reasoning?.text) return null;
 
 	const headerLabel = isStreaming
-		? "深度思考中…"
+		? "思考中…"
 		: duration !== undefined
-			? `深度思考耗时 ${duration} 秒`
-			: "深度思考";
+			? `思考耗时 ${duration} 秒`
+			: "思考";
 
 	const handleCopy = () => {
 		navigator.clipboard.writeText(reasoning.text ?? "");

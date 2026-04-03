@@ -413,12 +413,30 @@ app.post("/api/chat", async (c) => {
 					// biome-ignore lint/suspicious/noExplicitAny: wire format → UIMessage
 					resolveDataUrls(messages) as any,
 				);
+
+				// Detect HITL continuation: last model message is a tool-result
+				// → this is a resumed run after addToolResult, disable reasoning
+				// to avoid duplicating the thinking block from the first run
+				const lastModelMsg = modelMessages[modelMessages.length - 1];
+				const isHitlContinuation =
+					lastModelMsg?.role === "tool" ||
+					(lastModelMsg?.role === "assistant" &&
+						Array.isArray(lastModelMsg.content) &&
+						lastModelMsg.content.some(
+							(p: { type: string }) => p.type === "tool-result",
+						));
+
 				const chatResult = streamText({
 					model: wrappedModel,
 					system: systemPrompt,
 					messages: modelMessages,
 					tools: { ...staticTools, ...ragTools },
 					stopWhen: stepCountIs(5),
+					...(isHitlContinuation && {
+						providerOptions: {
+							openrouter: { reasoning: { effort: "none" } },
+						},
+					}),
 				});
 
 				let titlePromise: Promise<void> | null = null;
