@@ -2,7 +2,7 @@ import { CloudflareVectorizeStore } from "@langchain/cloudflare";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { MarkdownTextSplitter } from "@langchain/textsplitters";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import mammoth from "mammoth";
 import type { DbClient } from "./db";
 import { documents, papers, userPapers } from "./schema";
@@ -62,25 +62,49 @@ async function parseWithPaddleOCR(
 	}
 	const fileB64 = btoa(binary);
 
-	const res = await fetch(PADDLE_SYNC_URL, {
-		method: "POST",
-		headers: {
-			Authorization: `token ${token}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			file: fileB64,
-			fileType,
-			useDocOrientationClassify: true,
-			useDocUnwarping: true,
-			useLayoutDetection: true,
-			useChartRecognition: true,
-		}),
-	});
+	const OCR_ERRORS: Record<number, string> = {
+		403: "OCR 认证失败，请检查 Token",
+		413: "文件过大，请减少页数或压缩文件",
+		422: "参数无效",
+		429: "今日解析额度已用完，请明天再试",
+		500: "OCR 服务内部错误，请稍后重试",
+		503: "OCR 服务繁忙，请稍后重试",
+		504: "OCR 服务超时，请稍后重试",
+	};
+
+	let res: Response;
+	try {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 120_000);
+		res = await fetch(PADDLE_SYNC_URL, {
+			method: "POST",
+			headers: {
+				Authorization: `token ${token}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				file: fileB64,
+				fileType,
+				useDocOrientationClassify: true,
+				useDocUnwarping: true,
+				useLayoutDetection: true,
+				useChartRecognition: true,
+			}),
+			signal: controller.signal,
+		});
+		clearTimeout(timeout);
+	} catch (e) {
+		const msg =
+			e instanceof Error && e.name === "AbortError"
+				? "OCR 解析超时（120s），请尝试更小的文件"
+				: `OCR 网络错误: ${(e as Error).message}`;
+		throw new Error(msg);
+	}
 
 	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(`PaddleOCR failed (${res.status}): ${text}`);
+		const hint = OCR_ERRORS[res.status];
+		const detail = await res.text().catch(() => "");
+		throw new Error(hint ?? `OCR 失败 (${res.status}): ${detail}`);
 	}
 
 	const data = (await res.json()) as {
@@ -344,7 +368,8 @@ export async function listUserPapers(db: DbClient, userId: string) {
 		})
 		.from(userPapers)
 		.innerJoin(papers, eq(papers.id, userPapers.paperId))
-		.where(eq(userPapers.userId, userId));
+		.where(eq(userPapers.userId, userId))
+		.orderBy(desc(userPapers.createdAt));
 }
 
 export async function renameUserPaper(

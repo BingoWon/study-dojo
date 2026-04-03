@@ -44,6 +44,7 @@ export const ThreadListSidebar: FC<{
 		paperId: string,
 		title: string,
 		lang?: string | null,
+		fileExt?: string | null,
 	) => void;
 }> = ({
 	threads,
@@ -172,6 +173,7 @@ const PapersPanel: FC<{
 		paperId: string,
 		title: string,
 		lang?: string | null,
+		fileExt?: string | null,
 	) => void;
 }> = ({ activePaperId, onPaperSelect }) => {
 	const [papers, setPapers] = useState<Paper[]>([]);
@@ -446,7 +448,8 @@ const PapersPanel: FC<{
 						paper={p}
 						isActive={p.id === activePaperId}
 						onClick={() => {
-							if (p.status === "ready") onPaperSelect?.(p.id, p.title, p.lang);
+							if (p.status === "ready")
+								onPaperSelect?.(p.id, p.title, p.lang, p.fileExt);
 						}}
 						onUnlink={(e) => handleUnlink(p.id, e)}
 						onRename={(title) => handleRename(p.id, title)}
@@ -627,7 +630,7 @@ const PaperListItem: FC<{
 	const FileIcon = getFileIcon(p.fileExt);
 	const icon =
 		p.status === "ready" ? (
-			<FileIcon className="w-4 h-4" />
+			<FileIcon className="w-5 h-5" />
 		) : p.status === "failed" ? (
 			<FileIcon className="w-4 h-4 text-red-400" />
 		) : (

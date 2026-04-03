@@ -130,6 +130,7 @@ app.post("/api/papers", async (c) => {
 				);
 			};
 
+			let ingestPaperId: string | undefined;
 			try {
 				const fileExt = file.name.split(".").pop()?.toLowerCase();
 				await ingestFile(buffer, {
@@ -142,11 +143,22 @@ app.post("/api/papers", async (c) => {
 					r2: c.env.R2,
 					vectorize: c.env.VECTORIZE,
 					env: c.env,
-					onStatus: (status, data) => send("status", { status, ...data }),
+					onStatus: (status, data) => {
+						if (data?.paperId) ingestPaperId = data.paperId as string;
+						send("status", { status, ...data });
+					},
 				});
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "处理失败";
 				console.error("[Worker] ingest paper:", msg);
+				// Mark paper as failed in DB so it doesn't stay stuck
+				if (ingestPaperId) {
+					await db
+						.update(papers)
+						.set({ status: "failed" })
+						.where(eq(papers.id, ingestPaperId))
+						.catch(() => {});
+				}
 				send("status", { status: "failed", error: msg });
 			} finally {
 				controller.close();

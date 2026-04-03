@@ -1,7 +1,14 @@
 import type { UIMessage as Message } from "@ai-sdk/react";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import {
+	IconFileTypeDocx,
+	IconFileTypeJpg,
+	IconFileTypePdf,
+	IconFileTypePng,
+	IconFileTypeTxt,
+} from "@tabler/icons-react";
 import { ChefHat, FileText, Globe, Languages, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./Chat";
 import { CollapsedHandle } from "./components/CollapsedHandle";
 import { Divider } from "./components/Divider";
@@ -21,6 +28,16 @@ import { useResizableLayout } from "./hooks/useResizableLayout";
 import { useThreads } from "./lib/useThreads";
 
 type CenterTab = "recipe" | "paper";
+
+const FILE_TAB_ICONS: Record<string, FC<{ className?: string }>> = {
+	pdf: IconFileTypePdf,
+	png: IconFileTypePng,
+	jpg: IconFileTypeJpg,
+	jpeg: IconFileTypeJpg,
+	docx: IconFileTypeDocx,
+	txt: IconFileTypeTxt,
+	md: IconFileTypeTxt,
+};
 
 function App() {
 	const {
@@ -45,6 +62,7 @@ function App() {
 		id: string;
 		title: string;
 		lang?: string | null;
+		fileExt?: string | null;
 	} | null>(null);
 	const [viewLang, setViewLang] = useState<"original" | "zh">("zh");
 	const improveRef = useRef<(() => void) | null>(null);
@@ -97,8 +115,13 @@ function App() {
 	}, []);
 
 	const handlePaperSelect = useCallback(
-		(paperId: string, title: string, lang?: string | null) => {
-			setSelectedPaper({ id: paperId, title, lang });
+		(
+			paperId: string,
+			title: string,
+			lang?: string | null,
+			fileExt?: string | null,
+		) => {
+			setSelectedPaper({ id: paperId, title, lang, fileExt });
 			setViewLang(lang === "en" ? "zh" : "original");
 			setCenterTab("paper");
 		},
@@ -249,7 +272,11 @@ function App() {
 												: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
 										}`}
 									>
-										<FileText className="w-3.5 h-3.5 shrink-0" />
+										{(() => {
+											const Icon =
+												FILE_TAB_ICONS[selectedPaper.fileExt ?? ""] ?? FileText;
+											return <Icon className="w-3.5 h-3.5 shrink-0" />;
+										})()}
 										<span className="truncate">{selectedPaper.title}</span>
 									</button>
 								)}
