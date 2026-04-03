@@ -99,6 +99,7 @@ function App() {
 	const handlePaperSelect = useCallback(
 		(paperId: string, title: string, lang?: string | null) => {
 			setSelectedPaper({ id: paperId, title, lang });
+			setViewLang(lang === "en" ? "zh" : "original");
 			setCenterTab("paper");
 		},
 		[],
@@ -224,28 +225,32 @@ function App() {
 
 							{/* Language toggle (English papers only) */}
 							{centerTab === "paper" && selectedPaper?.lang === "en" && (
-								<button
-									type="button"
-									onClick={() =>
-										setViewLang((v) => (v === "zh" ? "original" : "zh"))
-									}
-									className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
-									title={
-										viewLang === "zh" ? "切换到英文原版" : "切换到中文翻译"
-									}
-								>
-									{viewLang === "zh" ? (
-										<>
-											<Languages className="w-3.5 h-3.5" />
-											中文
-										</>
-									) : (
-										<>
-											<Globe className="w-3.5 h-3.5" />
-											EN
-										</>
-									)}
-								</button>
+								<div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+									<button
+										type="button"
+										onClick={() => setViewLang("zh")}
+										className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
+											viewLang === "zh"
+												? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+												: "text-zinc-500 dark:text-zinc-400"
+										}`}
+									>
+										<Languages className="w-3 h-3" />
+										中文
+									</button>
+									<button
+										type="button"
+										onClick={() => setViewLang("original")}
+										className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
+											viewLang === "original"
+												? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+												: "text-zinc-500 dark:text-zinc-400"
+										}`}
+									>
+										<Globe className="w-3 h-3" />
+										EN
+									</button>
+								</div>
 							)}
 						</div>
 

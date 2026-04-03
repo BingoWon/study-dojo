@@ -406,34 +406,34 @@ const STATUS_TO_STEP: Record<string, number> = {
 const ProgressBar: FC<{ status: string }> = ({ status }) => {
 	const active = STATUS_TO_STEP[status] ?? -1;
 
-	return (
-		<div className="flex items-center mt-1 w-full">
-			{STEPS.map((label, i) => {
-				const done = i < active;
-				const current = i === active;
-				return (
-					<div key={label} className="flex items-center flex-1 min-w-0">
-						{i > 0 && (
-							<div
-								className={`h-px flex-1 mx-1 ${done ? "bg-emerald-400" : current ? "bg-blue-400" : "bg-zinc-200 dark:bg-zinc-800"}`}
-							/>
-						)}
-						<span
-							className={`text-[10px] whitespace-nowrap ${
-								done
-									? "text-emerald-500 dark:text-emerald-400"
-									: current
-										? "text-blue-500 dark:text-blue-400 font-semibold"
-										: "text-zinc-300 dark:text-zinc-700"
-							}`}
-						>
-							{done ? "✓" : current ? "●" : "○"} {label}
-						</span>
-					</div>
-				);
-			})}
-		</div>
-	);
+	const items = STEPS.flatMap((label, i) => {
+		const done = i < active;
+		const current = i === active;
+		const stepEl = (
+			<span
+				key={label}
+				className={`text-[10px] whitespace-nowrap ${
+					done
+						? "text-emerald-500 dark:text-emerald-400"
+						: current
+							? "text-blue-500 dark:text-blue-400 font-semibold"
+							: "text-zinc-300 dark:text-zinc-700"
+				}`}
+			>
+				{done ? "✓" : current ? "●" : "○"} {label}
+			</span>
+		);
+		if (i === 0) return [stepEl];
+		return [
+			<div
+				key={`line-${label}`}
+				className={`flex-1 h-px mx-1 ${done ? "bg-emerald-400" : "bg-zinc-200 dark:bg-zinc-800"}`}
+			/>,
+			stepEl,
+		];
+	});
+
+	return <div className="flex items-center mt-1 w-full">{items}</div>;
 };
 
 // ── Shared Inline Edit ──────────────────────────────────────────────────────
