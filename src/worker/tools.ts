@@ -1,7 +1,17 @@
 import { tool, zodSchema } from "ai";
 import { z } from "zod";
+import type { DbClient } from "./db";
+import { retrieveContext } from "./rag";
 
-export const tools = {
+type RagEnv = {
+	EMBEDDING_BASE_URL: string;
+	EMBEDDING_API_KEY: string;
+	EMBEDDING_MODEL: string;
+	EMBEDDING_DIMENSIONS?: string;
+};
+
+/** Static tools available without request context. */
+export const staticTools = {
 	get_current_time: tool({
 		description:
 			"获取当前日期和时间。当用户询问现在几点或今天日期时调用此工具。",
@@ -113,3 +123,38 @@ export const tools = {
 		execute: async (input) => input,
 	}),
 };
+
+/** Create RAG search tool with request-scoped context. */
+export function createRagTool(opts: {
+	paperIds: string[];
+	db: DbClient;
+	vectorize: VectorizeIndex;
+	env: RagEnv;
+}) {
+	return {
+		search_papers: tool({
+			description:
+				"在用户上传的论文中检索相关内容。当用户提问与论文相关的问题时调用此工具。传入用户问题的关键词或完整问题作为查询。",
+			inputSchema: zodSchema(
+				z.object({
+					query: z.string().describe("检索查询，用于在论文中搜索相关内容"),
+				}),
+			),
+			execute: async ({ query }) => {
+				if (opts.paperIds.length === 0) {
+					return { context: "", message: "用户尚未上传任何论文" };
+				}
+				const context = await retrieveContext(query, {
+					paperIds: opts.paperIds,
+					db: opts.db,
+					vectorize: opts.vectorize,
+					env: opts.env,
+				});
+				return {
+					context: context || "未找到相关内容",
+					papers: opts.paperIds.length,
+				};
+			},
+		}),
+	};
+}

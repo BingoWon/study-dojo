@@ -32,6 +32,7 @@ import {
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
 import type { Recipe } from "./components/RecipePanel";
+import { PaperSearchToolUI } from "./components/tools/PaperSearchToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { WeatherToolUI } from "./components/tools/WeatherToolUI";
@@ -143,6 +144,7 @@ const AssistantMessage: FC = () => (
 						by_name: {
 							get_weather: WeatherToolUI,
 							search_web: SearchToolUI,
+							search_papers: PaperSearchToolUI,
 							update_recipe: RecipeToolUI,
 						},
 					},

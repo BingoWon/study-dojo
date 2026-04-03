@@ -26,11 +26,10 @@ import {
 	ingestPdf,
 	listUserPapers,
 	renameUserPaper,
-	retrieveContext,
 	unlinkUserPaper,
 } from "./rag";
 import { papers, userPapers } from "./schema";
-import { tools } from "./tools";
+import { createRagTool, staticTools } from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -363,30 +362,23 @@ app.post("/api/chat", async (c) => {
 			}
 		}
 
-		// ── RAG: retrieve relevant context ───────────────────────────────────
-		const lastUserText = extractLastUserText(messages);
+		// ── Build tools (static + RAG if available) ─────────────────────────
+		const systemPrompt = c.env.SYSTEM_PROMPT || SYSTEM_PROMPT;
 
-		let systemPrompt = c.env.SYSTEM_PROMPT || SYSTEM_PROMPT;
-		if (lastUserText && userId && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
+		// biome-ignore lint/suspicious/noExplicitAny: tool generics incompatible with Record
+		let ragTools: Record<string, any> = {};
+		if (userId && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
 			try {
-				// Get all user's paper IDs for RAG
 				const userLinks = await db
 					.select({ paperId: userPapers.paperId })
 					.from(userPapers)
 					.where(eq(userPapers.userId, userId));
-				const paperIds = userLinks.map((l) => l.paperId);
-
-				if (paperIds.length > 0) {
-					const ragContext = await retrieveContext(lastUserText, {
-						paperIds,
-						db,
-						vectorize: c.env.VECTORIZE,
-						env: c.env,
-					});
-					if (ragContext) {
-						systemPrompt += `\n\n以下是与用户问题相关的参考资料，请结合这些内容回答：\n\n${ragContext}`;
-					}
-				}
+				ragTools = createRagTool({
+					paperIds: userLinks.map((l) => l.paperId),
+					db,
+					vectorize: c.env.VECTORIZE,
+					env: c.env,
+				});
 			} catch {
 				// Vectorize only works remotely; silently skip in local dev
 			}
@@ -413,7 +405,7 @@ app.post("/api/chat", async (c) => {
 					model: wrappedModel,
 					system: systemPrompt,
 					messages: toAIMessages(messages),
-					tools,
+					tools: { ...staticTools, ...ragTools },
 					stopWhen: stepCountIs(5),
 				});
 
