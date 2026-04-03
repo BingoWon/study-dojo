@@ -9,7 +9,10 @@ import {
 	ThreadPrimitive,
 } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
-import { DefaultChatTransport } from "ai";
+import {
+	DefaultChatTransport,
+	lastAssistantMessageIsCompleteWithToolCalls,
+} from "ai";
 import {
 	Bot,
 	Check,
@@ -265,6 +268,7 @@ export function Chat({
 		id: threadId,
 		transport,
 		messages: initialMessages,
+		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 		onData: (part) => {
 			const p = part as { type: string; data?: unknown };
 			if (p.type === "data-title-delta" && typeof p.data === "string") {
