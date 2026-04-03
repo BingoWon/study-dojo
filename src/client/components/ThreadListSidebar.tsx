@@ -1,4 +1,13 @@
 import {
+	IconFileTypeBmp,
+	IconFileTypeDoc,
+	IconFileTypeDocx,
+	IconFileTypeJpg,
+	IconFileTypePdf,
+	IconFileTypePng,
+	IconFileTypeTxt,
+} from "@tabler/icons-react";
+import {
 	BookOpen,
 	Check,
 	FileText,
@@ -134,10 +143,28 @@ interface Paper {
 	chunks: number;
 	status: string;
 	lang?: string | null;
+	fileExt?: string | null;
 	createdAt: number;
 }
 
 const PLACEHOLDER_TITLE = "等待解析后自动生成标题…";
+
+const FILE_ICONS: Record<string, FC<{ className?: string }>> = {
+	pdf: IconFileTypePdf,
+	png: IconFileTypePng,
+	jpg: IconFileTypeJpg,
+	jpeg: IconFileTypeJpg,
+	bmp: IconFileTypeBmp,
+	doc: IconFileTypeDoc,
+	docx: IconFileTypeDocx,
+	txt: IconFileTypeTxt,
+	md: IconFileTypeTxt,
+	markdown: IconFileTypeTxt,
+};
+
+function getFileIcon(ext?: string | null): FC<{ className?: string }> {
+	return FILE_ICONS[ext ?? ""] ?? FileText;
+}
 
 const PapersPanel: FC<{
 	activePaperId: string | null;
@@ -220,6 +247,7 @@ const PapersPanel: FC<{
 				title: PLACEHOLDER_TITLE,
 				chunks: 0,
 				status: "uploading",
+				fileExt: file.name.split(".").pop()?.toLowerCase(),
 				createdAt: Math.floor(Date.now() / 1000),
 			},
 			...prev,
@@ -574,11 +602,12 @@ const PaperListItem: FC<{
 }> = ({ paper: p, isActive, onClick, onUnlink, onRename }) => {
 	const [editing, setEditing] = useState(false);
 
+	const FileIcon = getFileIcon(p.fileExt);
 	const icon =
 		p.status === "ready" ? (
-			<FileText className="w-4 h-4" />
+			<FileIcon className="w-4 h-4" />
 		) : p.status === "failed" ? (
-			<FileText className="w-4 h-4 text-red-400" />
+			<FileIcon className="w-4 h-4 text-red-400" />
 		) : (
 			<Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
 		);

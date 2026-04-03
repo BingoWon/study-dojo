@@ -166,6 +166,7 @@ export async function ingestFile(
 	fileBuffer: ArrayBuffer,
 	opts: {
 		fileName?: string;
+		fileExt?: string;
 		category: FileCategory;
 		ocrType?: 0 | 1;
 		userId: string;
@@ -215,6 +216,7 @@ export async function ingestFile(
 		id: paperId,
 		hash,
 		r2Key,
+		fileExt: opts.fileExt ?? ext,
 		chunks: 0,
 		status: "uploading",
 		createdAt: now,
@@ -337,6 +339,7 @@ export async function listUserPapers(db: DbClient, userId: string) {
 			chunks: papers.chunks,
 			status: papers.status,
 			lang: papers.lang,
+			fileExt: papers.fileExt,
 			createdAt: userPapers.createdAt,
 		})
 		.from(userPapers)

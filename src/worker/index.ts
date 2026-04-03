@@ -131,8 +131,10 @@ app.post("/api/papers", async (c) => {
 			};
 
 			try {
+				const fileExt = file.name.split(".").pop()?.toLowerCase();
 				await ingestFile(buffer, {
 					fileName: file.name.replace(/\.[^.]+$/, ""),
+					fileExt,
 					category: classified.category,
 					ocrType: classified.ocrType,
 					userId,

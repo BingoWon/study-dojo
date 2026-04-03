@@ -19,6 +19,7 @@ CREATE TABLE `papers` (
 	`id` text PRIMARY KEY NOT NULL,
 	`hash` text NOT NULL UNIQUE,
 	`r2_key` text NOT NULL,
+	`file_ext` text,
 	`markdown_r2_key` text,
 	`translated_r2_key` text,
 	`lang` text,

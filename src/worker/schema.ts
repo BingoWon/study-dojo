@@ -35,6 +35,7 @@ export const papers = sqliteTable("papers", {
 	id: text("id").primaryKey(),
 	hash: text("hash").notNull().unique(),
 	r2Key: text("r2_key").notNull(),
+	fileExt: text("file_ext"),
 	markdownR2Key: text("markdown_r2_key"),
 	translatedR2Key: text("translated_r2_key"),
 	lang: text("lang"),
