@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+	integer,
+	primaryKey,
+	sqliteTable,
+	text,
+} from "drizzle-orm/sqlite-core";
 
 export const threads = sqliteTable("threads", {
 	id: text("id").primaryKey(),
@@ -25,26 +30,42 @@ export const messages = sqliteTable("messages", {
 		.default(sql`(strftime('%s', 'now'))`),
 });
 
-export const documents = sqliteTable("documents", {
+/** Global shared papers, deduplicated by content hash. Never deleted. */
+export const papers = sqliteTable("papers", {
 	id: text("id").primaryKey(),
-	content: text("content").notNull(),
-	source: text("source"),
-	userId: text("user_id"),
-	paperId: text("paper_id"),
+	hash: text("hash").notNull().unique(),
+	r2Key: text("r2_key").notNull(),
+	markdownR2Key: text("markdown_r2_key"),
+	chunks: integer("chunks").notNull().default(0),
+	status: text("status").notNull().default("processing"),
+	jobId: text("job_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),
 });
 
-export const papers = sqliteTable("papers", {
+/** Per-user paper links with independent titles. */
+export const userPapers = sqliteTable(
+	"user_papers",
+	{
+		userId: text("user_id").notNull(),
+		paperId: text("paper_id")
+			.notNull()
+			.references(() => papers.id),
+		title: text("title").notNull().default("新论文"),
+		createdAt: integer("created_at", { mode: "number" })
+			.notNull()
+			.default(sql`(strftime('%s', 'now'))`),
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.paperId] })],
+);
+
+/** RAG chunks belonging to a paper (no user_id). */
+export const documents = sqliteTable("documents", {
 	id: text("id").primaryKey(),
-	userId: text("user_id").notNull(),
-	title: text("title").notNull(),
-	r2Key: text("r2_key").notNull(),
-	markdownR2Key: text("markdown_r2_key"),
-	chunks: integer("chunks").notNull().default(0),
-	status: text("status").notNull().default("ready"),
-	jobId: text("job_id"),
+	content: text("content").notNull(),
+	source: text("source"),
+	paperId: text("paper_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),

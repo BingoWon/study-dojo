@@ -2,9 +2,9 @@ import { CloudflareVectorizeStore } from "@langchain/cloudflare";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { MarkdownTextSplitter } from "@langchain/textsplitters";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { DbClient } from "./db";
-import { documents, papers } from "./schema";
+import { documents, papers, userPapers } from "./schema";
 
 const CHUNK_SIZE = 512;
 const CHUNK_OVERLAP = 64;
@@ -37,9 +37,17 @@ function createVectorStore(
 	return new CloudflareVectorizeStore(embeddings, { index: vectorize });
 }
 
+// ── Hashing ─────────────────────────────────────────────────────────────────
+
+export async function hashBuffer(buffer: ArrayBuffer): Promise<string> {
+	const digest = await crypto.subtle.digest("SHA-256", buffer);
+	return [...new Uint8Array(digest)]
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
+}
+
 // ── PaddleOCR Async API ─────────────────────────────────────────────────────
 
-/** Submit a PDF to PaddleOCR for async processing. Returns jobId. */
 export async function submitOcrJob(
 	pdfBuffer: ArrayBuffer,
 	token: string,
@@ -73,7 +81,6 @@ export async function submitOcrJob(
 	return json.data.jobId;
 }
 
-/** Check PaddleOCR job status. */
 export async function checkOcrJob(
 	jobId: string,
 	token: string,
@@ -105,7 +112,6 @@ export async function checkOcrJob(
 	};
 }
 
-/** Fetch JSONL result from PaddleOCR and extract concatenated markdown. */
 export async function fetchOcrMarkdown(jsonlUrl: string): Promise<string> {
 	const res = await fetch(jsonlUrl);
 	if (!res.ok) throw new Error(`Failed to fetch OCR result: ${res.status}`);
@@ -128,25 +134,24 @@ export async function fetchOcrMarkdown(jsonlUrl: string): Promise<string> {
 	return parts.join("\n\n");
 }
 
-// ── Ingest Markdown ──────────────────────────────────────────────────────────
+// ── Ingest Markdown (chunks + vectorize for a paper) ────────────────────────
 
-export async function ingestMarkdown(
+async function ingestMarkdown(
 	markdown: string,
 	opts: {
 		source?: string;
-		userId?: string;
-		paperId?: string;
+		paperId: string;
 		db: DbClient;
 		vectorize: VectorizeIndex;
 		env: EmbeddingEnv;
 	},
-): Promise<{ ids: string[]; chunks: number }> {
+): Promise<{ chunks: number }> {
 	const splitter = new MarkdownTextSplitter({
 		chunkSize: CHUNK_SIZE,
 		chunkOverlap: CHUNK_OVERLAP,
 	});
 	const chunks = await splitter.splitText(markdown);
-	if (chunks.length === 0) return { ids: [], chunks: 0 };
+	if (chunks.length === 0) return { chunks: 0 };
 
 	const ids = chunks.map(() => crypto.randomUUID());
 	const now = Math.floor(Date.now() / 1000);
@@ -155,8 +160,7 @@ export async function ingestMarkdown(
 		id: ids[i],
 		content,
 		source: opts.source ?? null,
-		userId: opts.userId ?? null,
-		paperId: opts.paperId ?? null,
+		paperId: opts.paperId,
 		createdAt: now,
 	}));
 
@@ -173,9 +177,7 @@ export async function ingestMarkdown(
 				pageContent: content,
 				metadata: {
 					id: ids[i],
-					source: opts.source ?? "",
-					userId: opts.userId ?? "",
-					paperId: opts.paperId ?? "",
+					paperId: opts.paperId,
 				},
 			}),
 	);
@@ -189,34 +191,53 @@ export async function ingestMarkdown(
 		);
 	}
 
-	return { ids, chunks: chunks.length };
+	return { chunks: chunks.length };
 }
 
-// ── Ingest PDF (PaddleOCR async) ────────────────────────────────────────────
+// ── Upload PDF: dedup by hash, link to user ─────────────────────────────────
 
-/** Store PDF in R2, submit to PaddleOCR, create paper record with "processing" status. */
-export async function startPdfIngestion(
+/**
+ * Upload a PDF: compute hash, dedup against existing papers, link to user.
+ * Returns the paperId and whether OCR was triggered (isNew).
+ */
+export async function uploadPdf(
 	pdfBuffer: ArrayBuffer,
 	opts: {
-		title: string;
 		userId: string;
 		db: DbClient;
 		r2: R2Bucket;
 		ocrToken: string;
 	},
-): Promise<{ paperId: string; jobId: string }> {
-	const paperId = crypto.randomUUID();
-	const r2Key = `papers/${opts.userId}/${paperId}.pdf`;
+): Promise<{ paperId: string; isNew: boolean }> {
+	const hash = await hashBuffer(pdfBuffer);
 	const now = Math.floor(Date.now() / 1000);
 
-	await opts.r2.put(r2Key, pdfBuffer);
+	// Check if paper with this hash already exists
+	const [existing] = await opts.db
+		.select({ id: papers.id })
+		.from(papers)
+		.where(eq(papers.hash, hash))
+		.limit(1);
 
+	if (existing) {
+		// Paper exists — just link user (ignore if already linked)
+		await opts.db
+			.insert(userPapers)
+			.values({ userId: opts.userId, paperId: existing.id, createdAt: now })
+			.onConflictDoNothing();
+		return { paperId: existing.id, isNew: false };
+	}
+
+	// New paper — store PDF, submit OCR, insert record
+	const paperId = crypto.randomUUID();
+	const r2Key = `papers/${hash}.pdf`;
+
+	await opts.r2.put(r2Key, pdfBuffer);
 	const jobId = await submitOcrJob(pdfBuffer, opts.ocrToken);
 
 	await opts.db.insert(papers).values({
 		id: paperId,
-		userId: opts.userId,
-		title: opts.title,
+		hash,
 		r2Key,
 		chunks: 0,
 		status: "processing",
@@ -224,10 +245,17 @@ export async function startPdfIngestion(
 		createdAt: now,
 	});
 
-	return { paperId, jobId };
+	// Link user
+	await opts.db
+		.insert(userPapers)
+		.values({ userId: opts.userId, paperId, createdAt: now })
+		.onConflictDoNothing();
+
+	return { paperId, isNew: true };
 }
 
-/** Called when PaddleOCR job is done: fetch markdown, store in R2, chunk + vectorize. */
+// ── Finalize Paper (OCR done → markdown + chunks) ───────────────────────────
+
 export async function finalizePaper(
 	paperId: string,
 	jsonlUrl: string,
@@ -236,7 +264,6 @@ export async function finalizePaper(
 		r2: R2Bucket;
 		vectorize: VectorizeIndex;
 		env: EmbeddingEnv;
-		userId: string;
 	},
 ): Promise<{ chunks: number }> {
 	const [paper] = await opts.db
@@ -247,12 +274,11 @@ export async function finalizePaper(
 	if (!paper) throw new Error("Paper not found");
 
 	const markdown = await fetchOcrMarkdown(jsonlUrl);
-	const markdownR2Key = `papers/${opts.userId}/${paperId}.md`;
+	const markdownR2Key = `papers/${paper.hash}.md`;
 	await opts.r2.put(markdownR2Key, markdown);
 
 	const result = await ingestMarkdown(markdown, {
 		source: paper.r2Key,
-		userId: opts.userId,
 		paperId,
 		db: opts.db,
 		vectorize: opts.vectorize,
@@ -261,105 +287,102 @@ export async function finalizePaper(
 
 	await opts.db
 		.update(papers)
-		.set({
-			status: "ready",
-			markdownR2Key,
-			chunks: result.chunks,
-		})
+		.set({ status: "ready", markdownR2Key, chunks: result.chunks })
 		.where(eq(papers.id, paperId));
 
 	return { chunks: result.chunks };
 }
 
-// ── Delete Paper ─────────────────────────────────────────────────────────────
+// ── User Paper Operations ───────────────────────────────────────────────────
 
-export async function deletePaper(
-	paperId: string,
-	opts: { db: DbClient; r2: R2Bucket; userId: string },
-) {
-	const [paper] = await opts.db
-		.select()
-		.from(papers)
-		.where(eq(papers.id, paperId))
-		.limit(1);
-	if (!paper || paper.userId !== opts.userId) return;
-
-	await opts.r2.delete(paper.r2Key);
-	if (paper.markdownR2Key) await opts.r2.delete(paper.markdownR2Key);
-
-	const docRows = await opts.db
-		.select({ id: documents.id })
-		.from(documents)
-		.where(eq(documents.paperId, paperId));
-
-	if (docRows.length > 0) {
-		const docIds = docRows.map((r) => r.id);
-		for (let i = 0; i < docIds.length; i += INSERT_BATCH) {
-			await opts.db
-				.delete(documents)
-				.where(inArray(documents.id, docIds.slice(i, i + INSERT_BATCH)));
-		}
-	}
-
-	await opts.db.delete(papers).where(eq(papers.id, paperId));
-}
-
-// ── List Papers ──────────────────────────────────────────────────────────────
-
-export async function listPapers(db: DbClient, userId: string) {
+export async function listUserPapers(db: DbClient, userId: string) {
 	return db
 		.select({
 			id: papers.id,
-			title: papers.title,
+			title: userPapers.title,
 			chunks: papers.chunks,
 			status: papers.status,
-			createdAt: papers.createdAt,
+			createdAt: userPapers.createdAt,
 		})
-		.from(papers)
-		.where(eq(papers.userId, userId));
+		.from(userPapers)
+		.innerJoin(papers, eq(papers.id, userPapers.paperId))
+		.where(eq(userPapers.userId, userId));
 }
 
-// ── Get Paper Markdown ───────────────────────────────────────────────────────
+export async function renameUserPaper(
+	db: DbClient,
+	userId: string,
+	paperId: string,
+	title: string,
+) {
+	await db
+		.update(userPapers)
+		.set({ title })
+		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)));
+}
+
+export async function unlinkUserPaper(
+	db: DbClient,
+	userId: string,
+	paperId: string,
+) {
+	await db
+		.delete(userPapers)
+		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)));
+}
+
+export async function isUserLinked(
+	db: DbClient,
+	userId: string,
+	paperId: string,
+): Promise<boolean> {
+	const [row] = await db
+		.select({ paperId: userPapers.paperId })
+		.from(userPapers)
+		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
+		.limit(1);
+	return !!row;
+}
 
 export async function getPaperMarkdown(
 	paperId: string,
 	opts: { db: DbClient; r2: R2Bucket; userId: string },
 ): Promise<string | null> {
+	if (!(await isUserLinked(opts.db, opts.userId, paperId))) return null;
+
 	const [paper] = await opts.db
 		.select()
 		.from(papers)
 		.where(eq(papers.id, paperId))
 		.limit(1);
-	if (!paper || paper.userId !== opts.userId || !paper.markdownR2Key)
-		return null;
+	if (!paper?.markdownR2Key) return null;
 
 	const obj = await opts.r2.get(paper.markdownR2Key);
 	if (!obj) return null;
 	return obj.text();
 }
 
-// ── Retrieve Context (filtered by user + optional papers) ────────────────────
+// ── Retrieve Context (filtered by paperIds only) ────────────────────────────
 
 export async function retrieveContext(
 	query: string,
 	opts: {
-		userId: string;
-		paperIds?: string[];
+		paperIds: string[];
 		topK?: number;
 		db: DbClient;
 		vectorize: VectorizeIndex;
 		env: EmbeddingEnv;
 	},
 ): Promise<string> {
+	if (opts.paperIds.length === 0) return "";
+
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
-	const filter: Record<string, unknown> = { userId: opts.userId };
-	if (opts.paperIds?.length === 1) {
-		filter.paperId = opts.paperIds[0];
-	} else if (opts.paperIds && opts.paperIds.length > 1) {
-		filter.paperId = { $in: opts.paperIds };
-	}
+	const filter: Record<string, unknown> =
+		opts.paperIds.length === 1
+			? { paperId: opts.paperIds[0] }
+			: { paperId: { $in: opts.paperIds } };
 
 	let results: [Document, number][];
 	try {

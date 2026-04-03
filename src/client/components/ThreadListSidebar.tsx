@@ -6,7 +6,6 @@ import {
 	MessageSquare,
 	Pencil,
 	Plus,
-	Trash2,
 	Upload,
 	X,
 } from "lucide-react";
@@ -140,7 +139,7 @@ const PapersPanel: FC<{
 		fetchPapers();
 	}, [fetchPapers]);
 
-	// Poll processing papers until ready/failed
+	// Poll processing papers; trigger LLM title generation when ready
 	useEffect(() => {
 		const processing = papers.filter((p) => p.status === "processing");
 		if (processing.length === 0) return;
@@ -155,7 +154,28 @@ const PapersPanel: FC<{
 						status: string;
 						chunks?: number;
 					};
-					if (data.status !== "processing") {
+					if (data.status === "ready") {
+						changed = true;
+						// Generate LLM title for newly ready paper
+						try {
+							const titleRes = await fetch(
+								`/api/papers/${p.id}/generate-title`,
+								{ method: "POST" },
+							);
+							if (titleRes.ok) {
+								const { title } = (await titleRes.json()) as {
+									title: string;
+								};
+								if (title) {
+									setPapers((prev) =>
+										prev.map((pp) => (pp.id === p.id ? { ...pp, title } : pp)),
+									);
+								}
+							}
+						} catch {
+							/* title generation is best-effort */
+						}
+					} else if (data.status === "failed") {
 						changed = true;
 					}
 				} catch {
@@ -174,7 +194,6 @@ const PapersPanel: FC<{
 		try {
 			const form = new FormData();
 			form.append("file", file);
-			form.append("title", file.name.replace(/\.pdf$/i, ""));
 			const res = await fetch("/api/papers", { method: "POST", body: form });
 			if (res.ok) await fetchPapers();
 		} finally {
@@ -182,10 +201,19 @@ const PapersPanel: FC<{
 		}
 	};
 
-	const handleDelete = async (id: string, e: React.MouseEvent) => {
+	const handleUnlink = async (id: string, e: React.MouseEvent) => {
 		e.stopPropagation();
 		await fetch(`/api/papers/${id}`, { method: "DELETE" });
 		setPapers((prev) => prev.filter((p) => p.id !== id));
+	};
+
+	const handleRename = async (id: string, title: string) => {
+		setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, title } : p)));
+		await fetch(`/api/papers/${id}`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ title }),
+		});
 	};
 
 	const onDrop = (e: React.DragEvent) => {
@@ -252,51 +280,159 @@ const PapersPanel: FC<{
 					</p>
 				)}
 				{papers.map((p) => (
-					// biome-ignore lint/a11y/useKeyWithClickEvents: paper click
-					// biome-ignore lint/a11y/noStaticElementInteractions: paper click
-					<div
+					<PaperListItem
 						key={p.id}
-						onClick={(e) => {
-							e.stopPropagation();
+						paper={p}
+						onClick={() => {
 							if (p.status === "ready") onPaperSelect?.(p.id, p.title);
 						}}
-						className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm transition ${
-							p.status === "ready"
-								? "hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer"
-								: "opacity-60"
-						}`}
-					>
-						<div className="flex items-center gap-2 overflow-hidden min-w-0">
-							{p.status === "processing" ? (
-								<Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
-							) : (
-								<FileText className="w-4 h-4 text-zinc-400 shrink-0" />
-							)}
-							<div className="min-w-0 flex-1">
-								<div className="truncate text-zinc-700 dark:text-zinc-300 font-medium">
-									{p.title}
-								</div>
-								<div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600">
-									{p.status === "processing" ? (
-										<span className="text-blue-400">OCR 解析中...</span>
-									) : p.status === "failed" ? (
-										<span className="text-red-400">解析失败</span>
-									) : (
-										<span>{p.chunks} 个片段</span>
-									)}
-									<span>{timeAgo(p.createdAt)}</span>
-								</div>
-							</div>
-						</div>
-						<button
-							type="button"
-							onClick={(e) => handleDelete(p.id, e)}
-							className="p-1 opacity-0 group-hover:opacity-100 hover:text-red-500 transition cursor-pointer"
-						>
-							<Trash2 className="w-3.5 h-3.5" />
-						</button>
-					</div>
+						onUnlink={(e) => handleUnlink(p.id, e)}
+						onRename={(title) => handleRename(p.id, title)}
+					/>
 				))}
+			</div>
+		</div>
+	);
+};
+
+// ── Paper List Item ──────────────────────────────────────────────────────────
+
+const PaperListItem: FC<{
+	paper: Paper;
+	onClick: () => void;
+	onUnlink: (e: React.MouseEvent) => void;
+	onRename: (title: string) => void;
+}> = ({ paper: p, onClick, onUnlink, onRename }) => {
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(p.title);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (!editing) setDraft(p.title);
+	}, [p.title, editing]);
+
+	useEffect(() => {
+		if (editing) {
+			inputRef.current?.focus();
+			inputRef.current?.select();
+		}
+	}, [editing]);
+
+	const save = () => {
+		const trimmed = draft.trim();
+		if (trimmed && trimmed !== p.title) onRename(trimmed);
+		setEditing(false);
+	};
+
+	if (editing) {
+		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: editing stop propagation
+			// biome-ignore lint/a11y/useKeyWithClickEvents: editing stop propagation
+			<div
+				className="flex items-center gap-1 rounded-lg px-2 py-1.5 bg-zinc-200 dark:bg-zinc-800"
+				onClick={(e) => e.stopPropagation()}
+			>
+				<input
+					ref={inputRef}
+					value={draft}
+					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") save();
+						if (e.key === "Escape") setEditing(false);
+					}}
+					onBlur={save}
+					className="flex-1 bg-transparent text-sm outline-none text-zinc-900 dark:text-zinc-100 min-w-0"
+				/>
+				<button
+					type="button"
+					onMouseDown={(e) => {
+						e.preventDefault();
+						save();
+					}}
+					className="p-1 text-emerald-500 hover:text-emerald-400 transition cursor-pointer"
+				>
+					<Check className="w-3.5 h-3.5" />
+				</button>
+				<button
+					type="button"
+					onMouseDown={(e) => {
+						e.preventDefault();
+						setEditing(false);
+					}}
+					className="p-1 text-zinc-400 hover:text-zinc-300 transition cursor-pointer"
+				>
+					<X className="w-3.5 h-3.5" />
+				</button>
+			</div>
+		);
+	}
+
+	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: paper click
+		// biome-ignore lint/a11y/noStaticElementInteractions: paper click
+		<div
+			onClick={(e) => {
+				e.stopPropagation();
+				onClick();
+			}}
+			onDoubleClick={() => p.status === "ready" && setEditing(true)}
+			className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm transition ${
+				p.status === "ready"
+					? "hover:bg-zinc-100 dark:hover:bg-zinc-900 cursor-pointer"
+					: "opacity-60"
+			}`}
+		>
+			<div className="flex items-center gap-2 overflow-hidden min-w-0">
+				{p.status === "processing" ? (
+					<Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
+				) : (
+					<FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+				)}
+				<div className="min-w-0 flex-1">
+					<div className="truncate text-zinc-700 dark:text-zinc-300 font-medium">
+						{p.title}
+					</div>
+					<div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600">
+						{p.status === "processing" ? (
+							<span className="text-blue-400">OCR 解析中...</span>
+						) : p.status === "failed" ? (
+							<span className="text-red-400">解析失败</span>
+						) : (
+							<span>{p.chunks} 个片段</span>
+						)}
+						<span>{timeAgo(p.createdAt)}</span>
+					</div>
+				</div>
+			</div>
+			<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+				{p.status === "ready" && (
+					// biome-ignore lint/a11y/useSemanticElements: nested interactive
+					<span
+						role="button"
+						tabIndex={-1}
+						onClick={(e) => {
+							e.stopPropagation();
+							setEditing(true);
+						}}
+						onKeyDown={() => {}}
+						className="p-1 hover:text-blue-500 transition cursor-pointer"
+					>
+						<Pencil className="w-3 h-3" />
+					</span>
+				)}
+				{/* biome-ignore lint/a11y/useSemanticElements: nested interactive */}
+				<span
+					role="button"
+					tabIndex={-1}
+					onClick={(e) => {
+						e.stopPropagation();
+						onUnlink(e);
+					}}
+					onKeyDown={() => {}}
+					className="p-1 hover:text-red-500 transition cursor-pointer"
+				>
+					<X className="w-3.5 h-3.5" />
+				</span>
 			</div>
 		</div>
 	);

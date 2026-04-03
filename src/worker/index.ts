@@ -4,7 +4,7 @@ import {
 	stepCountIs,
 	streamText,
 } from "ai";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getUserId } from "./auth";
 import {
@@ -22,15 +22,16 @@ import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import type { ChatMessagePart, ChatRequestMessage } from "./openrouter";
 import {
 	checkOcrJob,
-	deletePaper,
 	finalizePaper,
 	getPaperMarkdown,
-	ingestMarkdown,
-	listPapers,
+	isUserLinked,
+	listUserPapers,
+	renameUserPaper,
 	retrieveContext,
-	startPdfIngestion,
+	unlinkUserPaper,
+	uploadPdf,
 } from "./rag";
-import { papers } from "./schema";
+import { papers, userPapers } from "./schema";
 import { tools } from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -80,34 +81,13 @@ app.get("/api/threads/:id/messages", async (c) => {
 	return c.json(rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts })));
 });
 
-// ── RAG: Document Ingest ─────────────────────────────────────────────────────
-
-app.post("/api/documents", async (c) => {
-	const userId = await requireUserId(c);
-	if (!userId) return c.json({ error: "未授权" }, 401);
-	const { markdown, source } = await c.req.json<{
-		markdown: string;
-		source?: string;
-	}>();
-	if (!markdown) return c.json({ error: "缺少 markdown" }, 400);
-	const db = createDb(c.env.DB);
-	const result = await ingestMarkdown(markdown, {
-		source,
-		userId: userId || undefined,
-		db,
-		vectorize: c.env.VECTORIZE,
-		env: c.env,
-	});
-	return c.json(result, 201);
-});
-
-// ── Papers CRUD ──────────────────────────────────────────────────────────────
+// ── Papers ───────────────────────────────────────────────────────────────────
 
 app.get("/api/papers", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	return c.json(await listPapers(db, userId));
+	return c.json(await listUserPapers(db, userId));
 });
 
 app.post("/api/papers", async (c) => {
@@ -118,7 +98,6 @@ app.post("/api/papers", async (c) => {
 
 	const formData = await c.req.formData();
 	const file = formData.get("file") as File | null;
-	const title = (formData.get("title") as string) || file?.name || "未命名论文";
 
 	if (!file?.name.endsWith(".pdf")) {
 		return c.json({ error: "请上传 PDF 文件" }, 400);
@@ -127,8 +106,7 @@ app.post("/api/papers", async (c) => {
 	const db = createDb(c.env.DB);
 	const buffer = await file.arrayBuffer();
 
-	const result = await startPdfIngestion(buffer, {
-		title,
+	const result = await uploadPdf(buffer, {
 		userId,
 		db,
 		r2: c.env.R2,
@@ -138,6 +116,23 @@ app.post("/api/papers", async (c) => {
 	return c.json(result, 201);
 });
 
+app.patch("/api/papers/:id", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const { title } = await c.req.json<{ title: string }>();
+	const db = createDb(c.env.DB);
+	await renameUserPaper(db, userId, c.req.param("id"), title);
+	return c.json({ ok: true });
+});
+
+app.delete("/api/papers/:id", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	await unlinkUserPaper(db, userId, c.req.param("id"));
+	return c.json({ ok: true });
+});
+
 app.get("/api/papers/:id/status", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
@@ -145,14 +140,17 @@ app.get("/api/papers/:id/status", async (c) => {
 		return c.json({ error: "缺少 PADDLE_OCR_TOKEN 配置" }, 500);
 
 	const db = createDb(c.env.DB);
+	const paperId = c.req.param("id");
+
+	if (!(await isUserLinked(db, userId, paperId)))
+		return c.json({ error: "未找到" }, 404);
+
 	const [paper] = await db
 		.select()
 		.from(papers)
-		.where(eq(papers.id, c.req.param("id")))
+		.where(eq(papers.id, paperId))
 		.limit(1);
-
-	if (!paper || paper.userId !== userId)
-		return c.json({ error: "未找到" }, 404);
+	if (!paper) return c.json({ error: "未找到" }, 404);
 
 	if (paper.status !== "processing" || !paper.jobId) {
 		return c.json({ status: paper.status, chunks: paper.chunks });
@@ -164,7 +162,7 @@ app.get("/api/papers/:id/status", async (c) => {
 		await db
 			.update(papers)
 			.set({ status: "failed" })
-			.where(eq(papers.id, paper.id));
+			.where(eq(papers.id, paperId));
 		return c.json({ status: "failed", error: job.error });
 	}
 
@@ -177,12 +175,11 @@ app.get("/api/papers/:id/status", async (c) => {
 	}
 
 	try {
-		const result = await finalizePaper(paper.id, job.jsonUrl, {
+		const result = await finalizePaper(paperId, job.jsonUrl, {
 			db,
 			r2: c.env.R2,
 			vectorize: c.env.VECTORIZE,
 			env: c.env,
-			userId,
 		});
 		return c.json({ status: "ready", chunks: result.chunks });
 	} catch (e) {
@@ -190,7 +187,7 @@ app.get("/api/papers/:id/status", async (c) => {
 		await db
 			.update(papers)
 			.set({ status: "failed" })
-			.where(eq(papers.id, paper.id));
+			.where(eq(papers.id, paperId));
 		return c.json({
 			status: "failed",
 			error: e instanceof Error ? e.message : "处理失败",
@@ -198,36 +195,38 @@ app.get("/api/papers/:id/status", async (c) => {
 	}
 });
 
-app.delete("/api/papers/:id", async (c) => {
-	const userId = await requireUserId(c);
-	if (!userId) return c.json({ error: "未授权" }, 401);
-	const db = createDb(c.env.DB);
-	await deletePaper(c.req.param("id"), { db, r2: c.env.R2, userId });
-	return c.json({ ok: true });
-});
-
 app.get("/api/papers/:id/download", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 
 	const db = createDb(c.env.DB);
+	const paperId = c.req.param("id");
+
+	if (!(await isUserLinked(db, userId, paperId)))
+		return c.json({ error: "未找到" }, 404);
+
 	const [paper] = await db
 		.select()
 		.from(papers)
-		.where(eq(papers.id, c.req.param("id")))
+		.where(eq(papers.id, paperId))
 		.limit(1);
-
-	if (!paper || paper.userId !== userId)
-		return c.json({ error: "未找到" }, 404);
+	if (!paper) return c.json({ error: "未找到" }, 404);
 
 	const obj = await c.env.R2.get(paper.r2Key);
 	if (!obj) return c.json({ error: "文件不存在" }, 404);
 
-	const encoded = encodeURIComponent(paper.title);
+	// Use user's custom title for download filename
+	const [link] = await db
+		.select({ title: userPapers.title })
+		.from(userPapers)
+		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
+		.limit(1);
+	const filename = encodeURIComponent(link?.title ?? "document");
+
 	return new Response(obj.body, {
 		headers: {
 			"Content-Type": "application/pdf",
-			"Content-Disposition": `attachment; filename="${encoded}.pdf"; filename*=UTF-8''${encoded}.pdf`,
+			"Content-Disposition": `attachment; filename="${filename}.pdf"; filename*=UTF-8''${filename}.pdf`,
 		},
 	});
 });
@@ -243,6 +242,40 @@ app.get("/api/papers/:id/markdown", async (c) => {
 	});
 	if (md === null) return c.json({ error: "未找到" }, 404);
 	return c.text(md);
+});
+
+app.post("/api/papers/:id/generate-title", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const db = createDb(c.env.DB);
+	const paperId = c.req.param("id");
+
+	const md = await getPaperMarkdown(paperId, {
+		db,
+		r2: c.env.R2,
+		userId,
+	});
+	if (!md) return c.json({ error: "未找到" }, 404);
+
+	const excerpt = md.slice(0, 500);
+	const titleModel = createTitleModel(c.env);
+	const result = streamText({
+		model: titleModel,
+		prompt: `根据以下论文内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：\n${excerpt}`,
+	});
+
+	let title = "";
+	for await (const chunk of result.textStream) {
+		title += chunk;
+	}
+	title = title.trim().replace(/["""''「」『』。，！？、：；]/g, "");
+
+	if (title) {
+		await renameUserPaper(db, userId, paperId, title);
+	}
+
+	return c.json({ title });
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -264,13 +297,11 @@ function extractLastUserText(messages: ChatRequestMessage[]): string {
 	);
 }
 
-/** Map wire-format messages to AI SDK CoreMessage format, preserving multimodal parts. */
 function toAIMessages(msgs: ChatRequestMessage[]) {
 	return msgs.map((m) => {
 		const role = m.role as "user" | "assistant" | "system";
 		const parts = m.parts ?? [];
 
-		// Non-user roles: text-only
 		if (role !== "user") {
 			const text =
 				parts
@@ -285,7 +316,6 @@ function toAIMessages(msgs: ChatRequestMessage[]) {
 			return { role, content: text };
 		}
 
-		// User messages: preserve multimodal content
 		const hasMedia = parts.some(
 			(p) => p.type === "image" || p.type === "image_url",
 		);
@@ -364,16 +394,25 @@ app.post("/api/chat", async (c) => {
 		const lastUserText = extractLastUserText(messages);
 
 		let systemPrompt = c.env.SYSTEM_PROMPT || SYSTEM_PROMPT;
-		if (lastUserText && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
+		if (lastUserText && userId && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
 			try {
-				const ragContext = await retrieveContext(lastUserText, {
-					userId: userId || "anonymous",
-					db,
-					vectorize: c.env.VECTORIZE,
-					env: c.env,
-				});
-				if (ragContext) {
-					systemPrompt += `\n\n以下是与用户问题相关的参考资料，请结合这些内容回答：\n\n${ragContext}`;
+				// Get all user's paper IDs for RAG
+				const userLinks = await db
+					.select({ paperId: userPapers.paperId })
+					.from(userPapers)
+					.where(eq(userPapers.userId, userId));
+				const paperIds = userLinks.map((l) => l.paperId);
+
+				if (paperIds.length > 0) {
+					const ragContext = await retrieveContext(lastUserText, {
+						paperIds,
+						db,
+						vectorize: c.env.VECTORIZE,
+						env: c.env,
+					});
+					if (ragContext) {
+						systemPrompt += `\n\n以下是与用户问题相关的参考资料，请结合这些内容回答：\n\n${ragContext}`;
+					}
 				}
 			} catch {
 				// Vectorize only works remotely; silently skip in local dev
