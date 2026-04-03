@@ -29,7 +29,7 @@ import {
 	unlinkUserPaper,
 } from "./rag";
 import { papers, userPapers } from "./schema";
-import { createRagTool, staticTools } from "./tools";
+import { createRagTools, staticTools } from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -373,7 +373,7 @@ app.post("/api/chat", async (c) => {
 					.select({ paperId: userPapers.paperId })
 					.from(userPapers)
 					.where(eq(userPapers.userId, userId));
-				ragTools = createRagTool({
+				ragTools = createRagTools({
 					paperIds: userLinks.map((l) => l.paperId),
 					db,
 					vectorize: c.env.VECTORIZE,

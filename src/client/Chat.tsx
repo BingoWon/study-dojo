@@ -32,7 +32,10 @@ import {
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
 import type { Recipe } from "./components/RecipePanel";
-import { PaperSearchToolUI } from "./components/tools/PaperSearchToolUI";
+import {
+	PaperSearchToolUI,
+	SuggestSearchToolUI,
+} from "./components/tools/PaperSearchToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { WeatherToolUI } from "./components/tools/WeatherToolUI";
@@ -144,6 +147,7 @@ const AssistantMessage: FC = () => (
 						by_name: {
 							get_weather: WeatherToolUI,
 							search_web: SearchToolUI,
+							suggest_paper_search: SuggestSearchToolUI,
 							search_papers: PaperSearchToolUI,
 							update_recipe: RecipeToolUI,
 						},
@@ -283,6 +287,27 @@ export function Chat({
 			});
 		}
 	}, [registerImprove, recipe, runtime]);
+
+	// Listen for human-in-the-loop search confirmation
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { query, topK } = (e as CustomEvent).detail as {
+				query: string;
+				topK: number;
+			};
+			runtime.thread.append({
+				role: "user",
+				content: [
+					{
+						type: "text",
+						text: `请使用以下参数检索论文：查询="${query}"，结果数量=${topK}`,
+					},
+				],
+			});
+		};
+		window.addEventListener("paper-search-confirm", handler);
+		return () => window.removeEventListener("paper-search-confirm", handler);
+	}, [runtime]);
 
 	return (
 		<RecipeUpdateCtx value={onRecipeUpdate}>

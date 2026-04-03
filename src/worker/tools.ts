@@ -124,28 +124,54 @@ export const staticTools = {
 	}),
 };
 
-/** Create RAG search tool with request-scoped context. */
-export function createRagTool(opts: {
+/** Create RAG tools with request-scoped context. */
+export function createRagTools(opts: {
 	paperIds: string[];
 	db: DbClient;
 	vectorize: VectorizeIndex;
 	env: RagEnv;
 }) {
 	return {
-		search_papers: tool({
+		suggest_paper_search: tool({
 			description:
-				"在用户上传的论文中检索相关内容。当用户提问与论文相关的问题时调用此工具。传入用户问题的关键词或完整问题作为查询。",
+				"当用户提问与论文相关的问题时，先调用此工具生成 3 个候选检索查询供用户选择。生成的查询应从不同角度覆盖用户的问题。",
 			inputSchema: zodSchema(
 				z.object({
-					query: z.string().describe("检索查询，用于在论文中搜索相关内容"),
+					queries: z
+						.array(z.string())
+						.length(3)
+						.describe("3 个候选检索查询，从不同角度覆盖用户问题"),
+					defaultTopK: z
+						.number()
+						.min(1)
+						.max(20)
+						.default(5)
+						.describe("推荐的检索结果数量"),
 				}),
 			),
-			execute: async ({ query }) => {
+			execute: async (input) => ({
+				...input,
+				papers: opts.paperIds.length,
+				needsConfirmation: true,
+			}),
+		}),
+
+		search_papers: tool({
+			description:
+				"在用户上传的论文中执行检索。仅在用户确认检索参数后调用，或用户明确要求直接搜索时调用。",
+			inputSchema: zodSchema(
+				z.object({
+					query: z.string().describe("检索查询"),
+					topK: z.number().min(1).max(20).default(5).describe("检索结果数量"),
+				}),
+			),
+			execute: async ({ query, topK }) => {
 				if (opts.paperIds.length === 0) {
 					return { context: "", message: "用户尚未上传任何论文" };
 				}
 				const context = await retrieveContext(query, {
 					paperIds: opts.paperIds,
+					topK,
 					db: opts.db,
 					vectorize: opts.vectorize,
 					env: opts.env,
