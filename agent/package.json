@@ -1,0 +1,11 @@
+{
+	"name": "roast-prof-agent",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@langchain/core": "^1.1.38",
+		"@langchain/langgraph": "^1.2.6",
+		"@langchain/openai": "^1.4.1",
+		"@langchain/textsplitters": "^1.0.1"
+	}
+}

@@ -174,3 +174,5 @@ tsconfig.tsbuildinfo
 docs/
 scripts/
 references/
+# clerk configuration (can include secrets)
+/.clerk/

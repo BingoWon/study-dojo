@@ -1,0 +1,27 @@
+{
+  "name": "demo-copilotkit-hitl",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "agent": "npx @langchain/langgraph-cli@latest dev --host localhost --port 8123"
+  },
+  "dependencies": {
+    "@copilotkit/react-core": "latest",
+    "@copilotkit/react-ui": "latest",
+    "@copilotkit/runtime": "latest",
+    "@copilotkit/shared": "latest",
+    "@langchain/core": "^1.1.38",
+    "@langchain/langgraph": "^1.2.6",
+    "@langchain/openai": "^1.4.1",
+    "hono": "^4.12.9",
+    "next": "^15.3.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.0"
+  }
+}

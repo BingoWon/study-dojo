@@ -1,33 +1,31 @@
 {
-	"name": "ai-playground",
-	"version": "0.1.0",
+	"name": "roast-prof",
+	"version": "0.2.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
-		"build": "vite build",
-		"deploy": "pnpm build && wrangler deploy",
-		"start": "wrangler dev",
+		"dev": "next dev",
+		"build": "next build",
+		"start": "next start",
+		"agent": "cd agent && npx @langchain/langgraph-cli@latest dev --host 0.0.0.0 --port 8123 --no-browser",
 		"lint": "biome check --write .",
 		"typecheck": "tsc -b",
-		"check": "pnpm lint && pnpm typecheck",
-		"cf-typegen": "wrangler types"
+		"check": "pnpm lint && pnpm typecheck"
 	},
 	"dependencies": {
-		"@clerk/clerk-js": "^6.4.0",
-		"@clerk/react": "^6.1.4",
-		"@langchain/cloudflare": "^1.0.4",
+		"@clerk/nextjs": "^6.17.0",
+		"@copilotkit/react-core": "latest",
+		"@copilotkit/react-ui": "latest",
+		"@copilotkit/runtime": "latest",
+		"@copilotkit/shared": "latest",
 		"@langchain/core": "^1.1.38",
-		"@langchain/langgraph": "^1.2.6",
-		"@langchain/langgraph-checkpoint": "^1.0.1",
-		"@langchain/openai": "^1.4.1",
 		"@langchain/textsplitters": "^1.0.1",
 		"@tabler/icons-react": "^3.41.1",
 		"@tailwindcss/typography": "^0.5.19",
 		"drizzle-orm": "^0.45.2",
-		"hono": "^4.12.9",
 		"lucide-react": "^1.7.0",
 		"mammoth": "^1.12.0",
+		"next": "^15.3.2",
 		"react": "^19.2.4",
 		"react-dom": "^19.2.4",
 		"react-markdown": "^10.1.0",
@@ -36,26 +34,11 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.10",
-		"@cloudflare/vite-plugin": "^1.30.3",
-		"@cloudflare/vitest-pool-workers": "^0.14.0",
-		"@tailwindcss/vite": "^4.2.2",
-		"@types/node": "^25.5.0",
+		"@tailwindcss/postcss": "^4.2.2",
+		"@types/node": "^22.0.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "^6.0.1",
-		"drizzle-kit": "^0.31.10",
-		"puppeteer": "^24.40.0",
 		"tailwindcss": "^4.2.2",
-		"typescript": "^6.0.2",
-		"vite": "^8.0.3",
-		"vitest": "^4.1.2",
-		"wrangler": "^4.79.0"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild",
-			"sharp",
-			"workerd"
-		]
+		"typescript": "^5.8.0"
 	}
 }
