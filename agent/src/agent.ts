@@ -4,7 +4,7 @@
 
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { ChatOpenAI } from "@langchain/openai";
+import { NativeChatModel } from "./llm.js";
 import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
@@ -185,11 +185,10 @@ async function chatNode(state: State, config?: RunnableConfig): Promise<Command>
 	const recipeJson = state.recipe ? JSON.stringify(state.recipe, null, 2) : "暂无食谱";
 	const fullPrompt = `${SYSTEM_PROMPT}\n\n当前食谱状态：\n${recipeJson}`;
 
-	// Use env vars for model config — ChatOpenAI reads OPENAI_API_KEY and OPENAI_BASE_URL automatically
-	const model = new ChatOpenAI({
-		model: env("MODEL", "gpt-4o-mini"),
-		apiKey: env("OPENAI_API_KEY"),
-		configuration: { baseURL: env("OPENAI_BASE_URL", "https://api.openai.com/v1") },
+	const model = new NativeChatModel({
+		baseURL: env("BASE_URL", env("OPENAI_BASE_URL")),
+		apiKey: env("API_KEY", env("OPENAI_API_KEY")),
+		model: env("MODEL"),
 	});
 
 	if (!config) config = { recursionLimit: 25 };
