@@ -1,24 +1,23 @@
 /**
  * Provider-agnostic ChatModel using native fetch.
  * Works with any OpenAI-compatible API (OpenRouter, Ollama, vLLM, etc.)
- * without depending on the `openai` npm package.
  */
 
 import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import {
-	BaseChatModel,
-	type BaseChatModelCallOptions,
-} from "@langchain/core/language_models/chat_models";
+import { BaseChatModel, type BaseChatModelCallOptions } from "@langchain/core/language_models/chat_models";
 import { AIMessage, AIMessageChunk, type BaseMessage } from "@langchain/core/messages";
 import { ChatGenerationChunk } from "@langchain/core/outputs";
 
-interface ChatModelParams {
+interface NativeChatModelParams {
 	baseURL: string;
 	apiKey: string;
 	model: string;
+	// biome-ignore lint/suspicious/noExplicitAny: tool definitions
+	tools?: any[];
+	parallelToolCalls?: boolean;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: flexible wire format
+// biome-ignore lint/suspicious/noExplicitAny: wire format
 function toWire(msgs: BaseMessage[]): any[] {
 	// biome-ignore lint/suspicious/noExplicitAny: wire
 	const result: any[] = [];
@@ -33,8 +32,7 @@ function toWire(msgs: BaseMessage[]): any[] {
 			const w: any = { role: "assistant", content: ai.content ?? "" };
 			if (ai.tool_calls?.length) {
 				w.tool_calls = ai.tool_calls.map((tc: { id: string; name: string; args: unknown }) => ({
-					id: tc.id, type: "function",
-					function: { name: tc.name, arguments: JSON.stringify(tc.args) },
+					id: tc.id, type: "function", function: { name: tc.name, arguments: JSON.stringify(tc.args) },
 				}));
 			}
 			result.push(w);
@@ -51,53 +49,61 @@ export class NativeChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 	private baseURL: string;
 	private apiKey: string;
 	private modelName: string;
-	// biome-ignore lint/suspicious/noExplicitAny: tool defs
-	_boundTools: any[] = [];
-	_parallelToolCalls = false;
+	// biome-ignore lint/suspicious/noExplicitAny: tool definitions
+	private tools: any[];
+	private parallelToolCalls: boolean;
 
-	constructor(params: ChatModelParams) {
+	constructor(params: NativeChatModelParams) {
 		super({});
 		this.baseURL = params.baseURL;
 		this.apiKey = params.apiKey;
 		this.modelName = params.model;
+		this.tools = params.tools ?? [];
+		this.parallelToolCalls = params.parallelToolCalls ?? false;
 	}
 
 	_llmType() { return "native-chat"; }
 
+	/** Returns a NEW instance with tools bound (preserves streaming capability) */
 	bindTools(
 		// biome-ignore lint/suspicious/noExplicitAny: tool defs
 		tools: any[],
 		// biome-ignore lint/suspicious/noExplicitAny: options
 		kwargs?: any,
 	) {
-		const copy = new NativeChatModel({ baseURL: this.baseURL, apiKey: this.apiKey, model: this.modelName });
-		copy._boundTools = tools;
-		copy._parallelToolCalls = kwargs?.parallel_tool_calls ?? false;
-		return copy;
+		return new NativeChatModel({
+			baseURL: this.baseURL,
+			apiKey: this.apiKey,
+			model: this.modelName,
+			tools,
+			parallelToolCalls: kwargs?.parallel_tool_calls ?? false,
+		});
+	}
+
+	// biome-ignore lint/suspicious/noExplicitAny: API body
+	private buildBody(messages: BaseMessage[], stream = false): Record<string, any> {
+		// biome-ignore lint/suspicious/noExplicitAny: body
+		const body: Record<string, any> = { model: this.modelName, messages: toWire(messages) };
+		if (stream) body.stream = true;
+		if (this.tools.length) {
+			body.tools = this.tools;
+			body.parallel_tool_calls = this.parallelToolCalls;
+		}
+		return body;
 	}
 
 	async _generate(messages: BaseMessage[], _options: this["ParsedCallOptions"]) {
-		// biome-ignore lint/suspicious/noExplicitAny: API body
-		const body: Record<string, any> = { model: this.modelName, messages: toWire(messages) };
-		if (this._boundTools.length) {
-			body.tools = this._boundTools;
-			body.parallel_tool_calls = this._parallelToolCalls;
-		}
-
+		const body = this.buildBody(messages);
 		const res = await fetch(`${this.baseURL}/chat/completions`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
 			body: JSON.stringify(body),
 		});
-		if (!res.ok) {
-			const text = await res.text().catch(() => "");
-			throw new Error(`LLM API error ${res.status}: ${text}`);
-		}
+		if (!res.ok) throw new Error(`LLM API error ${res.status}: ${await res.text().catch(() => "")}`);
 		// biome-ignore lint/suspicious/noExplicitAny: API response
 		const data = (await res.json()) as any;
 		const msg = data.choices?.[0]?.message;
 		if (!msg) throw new Error("No choices in LLM response");
-
 		const toolCalls = msg.tool_calls?.map(
 			(tc: { id: string; function: { name: string; arguments: string } }) => ({
 				id: tc.id, name: tc.function.name, args: JSON.parse(tc.function.arguments),
@@ -111,13 +117,7 @@ export class NativeChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 		_options: this["ParsedCallOptions"],
 		_runManager?: CallbackManagerForLLMRun,
 	): AsyncGenerator<ChatGenerationChunk> {
-		// biome-ignore lint/suspicious/noExplicitAny: API body
-		const body: Record<string, any> = { model: this.modelName, messages: toWire(messages), stream: true };
-		if (this._boundTools.length) {
-			body.tools = this._boundTools;
-			body.parallel_tool_calls = this._parallelToolCalls;
-		}
-
+		const body = this.buildBody(messages, true);
 		const res = await fetch(`${this.baseURL}/chat/completions`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
@@ -138,10 +138,10 @@ export class NativeChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 
 			for (const line of lines) {
 				if (!line.startsWith("data: ")) continue;
-				const data = line.slice(6).trim();
-				if (data === "[DONE]") return;
+				const raw = line.slice(6).trim();
+				if (raw === "[DONE]") return;
 				try {
-					const json = JSON.parse(data);
+					const json = JSON.parse(raw);
 					const delta = json.choices?.[0]?.delta;
 					if (!delta) continue;
 					const content = delta.content ?? "";
@@ -155,7 +155,7 @@ export class NativeChatModel extends BaseChatModel<BaseChatModelCallOptions> {
 					const chunk = new AIMessageChunk({ content, tool_call_chunks: toolCallChunks });
 					yield new ChatGenerationChunk({ message: chunk, text: content });
 					await _runManager?.handleLLMNewToken(content);
-				} catch { /* skip */ }
+				} catch { /* skip unparseable */ }
 			}
 		}
 	}
