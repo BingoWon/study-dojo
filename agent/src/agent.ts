@@ -1,42 +1,29 @@
 /**
  * Roast-Prof LangGraph agent — recipe assistant with shared state + HITL RAG.
- *
- * Features:
- * - recipe as shared state (bidirectional sync with CopilotKit frontend)
- * - predict_state for streaming recipe tool args in real-time
- * - interrupt() for RAG search confirmation (HITL)
- * - dispatchCustomEvent for explicit state pushes
  */
 
+import { createClient } from "@supabase/supabase-js";
 import { ChatOpenAI } from "@langchain/openai";
-import {
-	AIMessage,
-	SystemMessage,
-	ToolMessage,
-} from "@langchain/core/messages";
+import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
-import {
-	Annotation,
-	Command,
-	END,
-	MessagesAnnotation,
-	START,
-	StateGraph,
-	interrupt,
-} from "@langchain/langgraph";
+import { Annotation, Command, END, MessagesAnnotation, START, StateGraph, interrupt } from "@langchain/langgraph";
 
-// ── State (recipe is shared with CopilotKit frontend) ───────────────────────
+// ── Env helpers (langgraph-cli loads .env automatically) ─────────────────────
+
+const env = (key: string, fallback?: string) => process.env[key] || fallback || "";
+
+// ── State ────────────────────────────────────────────────────────────────────
 
 // biome-ignore lint/suspicious/noExplicitAny: flexible recipe shape
-type Recipe = any;
+type Recipe = Record<string, any>;
 
 export const AgentState = Annotation.Root({
 	recipe: Annotation<Recipe | undefined>({
 		reducer: (_x, y) => y ?? _x,
 		default: () => undefined,
 	}),
-	// biome-ignore lint/suspicious/noExplicitAny: CopilotKit injects frontend tools
+	// biome-ignore lint/suspicious/noExplicitAny: CopilotKit frontend tools
 	tools: Annotation<any[]>({
 		reducer: (_x, y) => y ?? _x,
 		default: () => [],
@@ -46,14 +33,13 @@ export const AgentState = Annotation.Root({
 
 type State = typeof AgentState.State;
 
-// ── Tool definitions ─────────────────────────────────────────────���───────────
+// ── Tool definitions ─────────────────────────────────────────────────────────
 
 const UPDATE_RECIPE_TOOL = {
 	type: "function" as const,
 	function: {
 		name: "update_recipe",
-		description:
-			"更新食谱卡片。当你创建或修改食谱时必须调用此工具。将完整食谱数据放在 recipe 参数中传入，前端会实时流式渲染。ALWAYS provide the entire recipe, not just the changes.",
+		description: "更新食谱卡片。必须将完整食谱数据放在 recipe 参数中。ALWAYS provide the entire recipe.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -63,16 +49,13 @@ const UPDATE_RECIPE_TOOL = {
 					properties: {
 						title: { type: "string" },
 						skill_level: { type: "string", enum: ["初级", "中级", "高级"] },
-						cooking_time: {
-							type: "string",
-							enum: ["5分钟", "15分钟", "30分钟", "45分钟", "60+分钟"],
-						},
+						cooking_time: { type: "string", enum: ["5分钟", "15分钟", "30分钟", "45分钟", "60+分钟"] },
 						ingredients: {
 							type: "array",
 							items: {
 								type: "object",
 								properties: {
-									icon: { type: "string", description: "食材 emoji，如 🥕" },
+									icon: { type: "string", description: "食材 emoji" },
 									name: { type: "string" },
 									amount: { type: "string" },
 								},
@@ -90,365 +73,176 @@ const UPDATE_RECIPE_TOOL = {
 };
 
 const STATIC_TOOLS = [
-	{
-		type: "function" as const,
-		function: {
-			name: "get_current_time",
-			description: "获取当前日期和时间",
-			parameters: {
-				type: "object",
-				properties: {
-					timezone: { type: "string", description: "IANA 时区标识符" },
-				},
-			},
-		},
-	},
-	{
-		type: "function" as const,
-		function: {
-			name: "get_weather",
-			description: "获取指定城市的当前天气信息",
-			parameters: {
-				type: "object",
-				properties: {
-					location: { type: "string", description: "城市名称" },
-					unit: { type: "string", enum: ["celsius", "fahrenheit"] },
-				},
-				required: ["location"],
-			},
-		},
-	},
-	{
-		type: "function" as const,
-		function: {
-			name: "search_web",
-			description: "搜索网络信息",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string", description: "搜索关键词" },
-				},
-				required: ["query"],
-			},
-		},
-	},
+	{ type: "function" as const, function: { name: "get_current_time", description: "获取当前日期和时间", parameters: { type: "object", properties: { timezone: { type: "string" } } } } },
+	{ type: "function" as const, function: { name: "get_weather", description: "获取指定城市天气", parameters: { type: "object", properties: { location: { type: "string" }, unit: { type: "string", enum: ["celsius", "fahrenheit"] } }, required: ["location"] } } },
+	{ type: "function" as const, function: { name: "search_web", description: "搜索网络信息", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
 ];
 
 const RAG_TOOLS = [
-	{
-		type: "function" as const,
-		function: {
-			name: "rag_suggest",
-			description:
-				"资料 RAG 检索建议。当用户明确要求 RAG 搜索或资料库检索时，调用此工具生成 3 个候选查询供用户选择。此工具会暂停等待用户确认。",
-			parameters: {
-				type: "object",
-				properties: {
-					queries: {
-						type: "array",
-						items: { type: "string" },
-						description: "3 个候选检索查询",
-					},
-					defaultTopK: { type: "number", description: "推荐检索数量" },
-				},
-				required: ["queries", "defaultTopK"],
-			},
-		},
-	},
-	{
-		type: "function" as const,
-		function: {
-			name: "rag_search",
-			description: "资料 RAG 检索执行。在用户确认检索参数后调用。",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string" },
-					topK: { type: "number" },
-				},
-				required: ["query"],
-			},
-		},
-	},
+	{ type: "function" as const, function: { name: "rag_suggest", description: "资料 RAG 检索建议。生成 3 个候选查询供用户选择，会暂停等待确认。", parameters: { type: "object", properties: { queries: { type: "array", items: { type: "string" } }, defaultTopK: { type: "number" } }, required: ["queries", "defaultTopK"] } } },
+	{ type: "function" as const, function: { name: "rag_search", description: "资料 RAG 检索执行。", parameters: { type: "object", properties: { query: { type: "string" }, topK: { type: "number" } }, required: ["query"] } } },
 ];
 
-// ── Tool handlers ──────────────────────────────────────────────────────���─────
+// ── Tool handlers ────────────────────────────────────────────────────────────
+
+function createSupabaseClient() {
+	const url = env("SUPABASE_URL");
+	const key = env("SUPABASE_SERVICE_ROLE_KEY");
+	if (!url || !key) return null;
+	return createClient(url, key);
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: tool handler args
 type Handler = (args: any) => Promise<string>;
 
 const handlers: Record<string, Handler> = {
-	get_current_time: async ({ timezone = "Asia/Shanghai" }) => {
-		const now = new Date();
-		return JSON.stringify({
-			utc: now.toISOString(),
-			local: now.toLocaleString("zh-CN", { timeZone: timezone }),
-			timezone,
-		});
-	},
-	get_weather: async ({ location, unit = "celsius" }) =>
-		JSON.stringify({
-			location,
-			temperature:
-				Math.floor(Math.random() * 15) + (unit === "celsius" ? 10 : 50),
-			condition: ["多云", "晴天", "小雨", "雷阵雨"][
-				Math.floor(Math.random() * 4)
-			],
-			humidity: Math.floor(Math.random() * 40) + 40,
-			wind_speed: Math.floor(Math.random() * 20) + 5,
-			unit,
-		}),
-	search_web: async ({ query }) =>
-		JSON.stringify({
-			query,
-			results: [
-				{ title: `关于「${query}」的搜索结果 1`, url: "https://example.com/1", snippet: "相关的网页摘要。" },
-				{ title: `关于「${query}」的搜索结果 2`, url: "https://example.com/2", snippet: "另一条有用信息。" },
-			],
-		}),
-	update_recipe: async (input) => JSON.stringify(input.recipe ?? input),
-	rag_search: async ({ query, topK = 5 }) => {
-		// Call Supabase pgvector search via direct API
-		const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-		const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-		const embeddingUrl = process.env.EMBEDDING_BASE_URL || process.env.OPENAI_BASE_URL;
-		const embeddingKey = process.env.EMBEDDING_API_KEY || process.env.OPENAI_API_KEY;
-		const embeddingModel = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
+	get_current_time: async ({ timezone = "Asia/Shanghai" }) =>
+		JSON.stringify({ utc: new Date().toISOString(), local: new Date().toLocaleString("zh-CN", { timeZone: timezone }), timezone }),
 
-		if (!supabaseUrl || !supabaseKey || !embeddingUrl || !embeddingKey) {
+	get_weather: async ({ location, unit = "celsius" }) =>
+		JSON.stringify({ location, temperature: Math.floor(Math.random() * 15) + (unit === "celsius" ? 10 : 50), condition: ["多云", "晴天", "小雨"][Math.floor(Math.random() * 3)], humidity: Math.floor(Math.random() * 40) + 40, unit }),
+
+	search_web: async ({ query }) =>
+		JSON.stringify({ query, results: [{ title: `关于「${query}」的结果`, url: "https://example.com", snippet: "相关摘要信息。" }] }),
+
+	update_recipe: async (input) => JSON.stringify(input.recipe ?? input),
+
+	rag_search: async ({ query, topK = 5 }) => {
+		const supabase = createSupabaseClient();
+		const embeddingUrl = env("EMBEDDING_BASE_URL", env("OPENAI_BASE_URL"));
+		const embeddingKey = env("EMBEDDING_API_KEY", env("OPENAI_API_KEY"));
+		const embeddingModel = env("EMBEDDING_MODEL", "text-embedding-3-small");
+
+		if (!supabase || !embeddingUrl || !embeddingKey) {
 			return JSON.stringify({ context: "", message: "RAG 服务未配置" });
 		}
 
 		try {
-			// Get query embedding
+			// Embed query
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(), 30_000);
 			const embedRes = await fetch(`${embeddingUrl}/embeddings`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json", Authorization: `Bearer ${embeddingKey}` },
 				body: JSON.stringify({ input: [query], model: embeddingModel, dimensions: 1536 }),
+				signal: controller.signal,
 			});
 			// biome-ignore lint/suspicious/noExplicitAny: embedding response
 			const embedData = (await embedRes.json()) as any;
 			const queryEmbedding = embedData.data?.[0]?.embedding;
 			if (!queryEmbedding) return JSON.stringify({ context: "", message: "嵌入失败" });
 
-			// Search via Supabase RPC
-			const searchRes = await fetch(`${supabaseUrl}/rest/v1/rpc/match_documents`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					apikey: supabaseKey,
-					Authorization: `Bearer ${supabaseKey}`,
-				},
-				body: JSON.stringify({
-					query_embedding: JSON.stringify(queryEmbedding),
-					match_count: topK,
-					filter_paper_ids: [], // TODO: pass user's paper IDs from frontend state
-				}),
+			// Search via Supabase RPC (pass array directly, not stringified)
+			const { data: results, error } = await supabase.rpc("match_documents", {
+				query_embedding: queryEmbedding,
+				match_count: topK,
+				filter_paper_ids: [],
 			});
-			// biome-ignore lint/suspicious/noExplicitAny: RPC response
-			const results = (await searchRes.json()) as any[];
-			if (!results?.length) return JSON.stringify({ context: "未找到相关内容", papers: 0 });
 
-			const context = results.map((r: { content: string }) => r.content).join("\n\n---\n\n");
-			return JSON.stringify({ context, papers: results.length });
+			if (error || !results?.length) return JSON.stringify({ context: "未找到相关内容", papers: 0 });
+			return JSON.stringify({ context: results.map((r: { content: string }) => r.content).join("\n\n---\n\n"), papers: results.length });
 		} catch (e) {
 			return JSON.stringify({ context: "", message: `检索错误: ${(e as Error).message}` });
 		}
 	},
 };
 
-// ── System prompt ────────────────────────────────────────────���───────────────
+// ── System prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `你是一个智能的 AI 食谱助手，帮助用户创建和改进食谱。
 
 核心能力：
-1. **食谱创建与修改**: 当用户请求创建或修改食谱时，**必须**调用 \`update_recipe\` 工具。每次修改都要传入完整的食谱数据。
-2. **RAG 资料库检索**: 当用户**明确要求 RAG 搜索或资料库检索**时，使用 \`rag_suggest\` 工具。
+1. **食谱创建与修改**: 当用户请求创建或修改食谱时，**必须**调用 \`update_recipe\` 工具。
+2. **RAG 资料库检索**: 当用户**明确要求 RAG 搜索**时，使用 \`rag_suggest\`。
 3. **天气查询**: 调用 \`get_weather\`。
 4. **网络搜索**: 调用 \`search_web\`。
 
-RAG 检索规则（Human-in-the-Loop）：
-- **仅当**用户明确要求 RAG 搜索时，才调用 \`rag_suggest\` 生成 3 个候选查询。
-- 用户选择后，根据返回的 action 字段执行：
-  - \`confirm\`：按返回的 query 和 topK 调用 \`rag_search\`。
-  - \`auto\`：自行决定最佳查询来调用 \`rag_search\`。
-  - \`skip\`：用合理的查询直接调用 \`rag_search\`。
+RAG 规则：仅当用户明确要求时才调用 \`rag_suggest\`，用户确认后根据 action 调用 \`rag_search\`。
 
-食谱规则：
-- \`ingredients\` 中每个食材必须有 \`icon\`（emoji）、\`name\` 和 \`amount\`。
-- 修改食谱时保留已有内容，在其基础上追加或调整。
-- 完成食谱创建/修改后用一句话说明，不要重复描述食谱内容。
+食谱规则：ingredients 中每个食材必须有 icon（emoji）、name、amount。修改时保留已有内容。完成后一句话说明即可。
 
-通用规则：
-- 严格使用**简体中文**交流。
-- 保持回答简明扼要。`;
+通用规则：严格使用简体中文。保持简明扼要。`;
 
-// ── Graph nodes ──────────────────────────��────────────────────────���──────────
+// ── Graph nodes ──────────────────────────────────────────────────────────────
 
-async function startFlow(
-	state: State,
-	config?: RunnableConfig,
-): Promise<Command> {
-	// Initialize recipe if not present
+async function startFlow(state: State, config?: RunnableConfig): Promise<Command> {
 	if (!state.recipe) {
 		state.recipe = {
-			title: "创建你的食谱",
-			skill_level: "中级",
-			cooking_time: "30分钟",
-			special_preferences: [],
-			ingredients: [
-				{ icon: "🍴", name: "示例食材", amount: "1 份" },
-			],
+			title: "创建你的食谱", skill_level: "中级", cooking_time: "30分钟",
+			special_preferences: [], ingredients: [{ icon: "🍴", name: "示例食材", amount: "1 份" }],
 			instructions: ["第一步..."],
 		};
-		await dispatchCustomEvent(
-			"manually_emit_intermediate_state",
-			state,
-			config,
-		);
+		await dispatchCustomEvent("manually_emit_intermediate_state", state, config);
 	}
-
-	return new Command({
-		goto: "chat",
-		update: { messages: state.messages, recipe: state.recipe },
-	});
+	return new Command({ goto: "chat", update: { messages: state.messages, recipe: state.recipe } });
 }
 
-async function chatNode(
-	state: State,
-	config?: RunnableConfig,
-): Promise<Command> {
-	const recipeJson = state.recipe
-		? JSON.stringify(state.recipe, null, 2)
-		: "暂无食谱";
-
+async function chatNode(state: State, config?: RunnableConfig): Promise<Command> {
+	const recipeJson = state.recipe ? JSON.stringify(state.recipe, null, 2) : "暂无食谱";
 	const fullPrompt = `${SYSTEM_PROMPT}\n\n当前食谱状态：\n${recipeJson}`;
 
-	const model = new ChatOpenAI({ model: "gpt-4o-mini" });
+	// Use env vars for model config — ChatOpenAI reads OPENAI_API_KEY and OPENAI_BASE_URL automatically
+	const model = new ChatOpenAI({
+		model: env("MODEL", "gpt-4o-mini"),
+		...(env("OPENAI_BASE_URL") ? { configuration: { baseURL: env("OPENAI_BASE_URL") } } : {}),
+	});
 
-	// predict_state: stream update_recipe tool args as state updates in real-time
 	if (!config) config = { recursionLimit: 25 };
 	if (!config.metadata) config.metadata = {};
-	config.metadata.predict_state = [
-		{
-			state_key: "recipe",
-			tool: "update_recipe",
-			tool_argument: "recipe",
-		},
-	];
+	config.metadata.predict_state = [{ state_key: "recipe", tool: "update_recipe", tool_argument: "recipe" }];
 
-	const allTools = [
-		...(state.tools ?? []),
-		UPDATE_RECIPE_TOOL,
-		...STATIC_TOOLS,
-		...RAG_TOOLS,
-	];
-
+	const allTools = [...(state.tools ?? []), UPDATE_RECIPE_TOOL, ...STATIC_TOOLS, ...RAG_TOOLS];
 	const bound = model.bindTools(allTools, { parallel_tool_calls: false });
-
-	const response = await bound.invoke(
-		[new SystemMessage({ content: fullPrompt }), ...state.messages],
-		config,
-	);
-
+	const response = await bound.invoke([new SystemMessage({ content: fullPrompt }), ...state.messages], config);
 	const messages = [...state.messages, response];
 
-	// Handle tool calls
 	if (response.tool_calls?.length) {
 		const tc = response.tool_calls[0];
 
 		if (tc.name === "update_recipe") {
-			// Update recipe state — args.recipe contains the nested recipe data
 			const recipeData = tc.args.recipe ?? tc.args;
-			const recipe = state.recipe
-				? { ...state.recipe, ...recipeData }
-				: recipeData;
-
+			const recipe = state.recipe ? { ...state.recipe, ...recipeData } : recipeData;
 			state.recipe = recipe;
-			await dispatchCustomEvent(
-				"manually_emit_intermediate_state",
-				state,
-				config,
-			);
-
+			await dispatchCustomEvent("manually_emit_intermediate_state", state, config);
 			return new Command({
 				goto: "start",
-				update: {
-					messages: [
-						...messages,
-						{
-							role: "tool" as const,
-							content: "食谱已更新。",
-							tool_call_id: tc.id,
-						},
-					],
-					recipe,
-				},
+				update: { messages: [...messages, { role: "tool" as const, content: "食谱已更新。", tool_call_id: tc.id }], recipe },
 			});
 		}
 
-		// Regular tool or HITL
-		return new Command({
-			goto: "execute_tools",
-			update: { messages, recipe: state.recipe },
-		});
+		return new Command({ goto: "execute_tools", update: { messages, recipe: state.recipe } });
 	}
 
-	return new Command({
-		goto: END,
-		update: { messages, recipe: state.recipe },
-	});
+	return new Command({ goto: END, update: { messages, recipe: state.recipe } });
 }
 
 async function toolsNode(state: State): Promise<Command> {
 	const lastMsg = state.messages[state.messages.length - 1];
-	if (!(lastMsg instanceof AIMessage)) {
-		return new Command({ goto: END, update: {} });
-	}
+	if (!(lastMsg instanceof AIMessage)) return new Command({ goto: END, update: {} });
 
 	const tc = lastMsg.tool_calls?.[0];
 	if (!tc) return new Command({ goto: END, update: {} });
 
-	// HITL: interrupt for rag_suggest
 	if (tc.name === "rag_suggest") {
 		const userResponse = interrupt({
-			type: "rag_suggest",
-			toolCallId: tc.id,
-			queries: tc.args.queries,
-			defaultTopK: tc.args.defaultTopK,
+			type: "rag_suggest", toolCallId: tc.id,
+			queries: tc.args.queries, defaultTopK: tc.args.defaultTopK,
 		});
 		return new Command({
 			goto: "chat",
-			update: {
-				messages: [
-					...state.messages,
-					new ToolMessage({
-						tool_call_id: tc.id ?? "",
-						content: JSON.stringify(userResponse),
-					}),
-				],
-			},
+			update: { messages: [...state.messages, new ToolMessage({ tool_call_id: tc.id ?? "", content: JSON.stringify(userResponse) })] },
 		});
 	}
 
-	// Regular tool execution
 	const handler = handlers[tc.name];
-	const result = handler
-		? await handler(tc.args)
-		: JSON.stringify({ error: `Unknown tool: ${tc.name}` });
-
+	const result = handler ? await handler(tc.args) : JSON.stringify({ error: `Unknown tool: ${tc.name}` });
 	return new Command({
 		goto: "chat",
-		update: {
-			messages: [
-				...state.messages,
-				new ToolMessage({ tool_call_id: tc.id ?? "", content: result }),
-			],
-		},
+		update: { messages: [...state.messages, new ToolMessage({ tool_call_id: tc.id ?? "", content: result })] },
 	});
 }
 
-// ── Build graph ─────────────��────────────────────────────────────────────────
+// ── Build graph ──────────────────────────────────────────────────────────────
 
 export const graph = new StateGraph(AgentState)
 	.addNode("start", startFlow, { ends: ["chat"] })

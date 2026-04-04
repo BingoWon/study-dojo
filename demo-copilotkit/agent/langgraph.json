@@ -1,7 +1,0 @@
-{
-  "node_version": "22",
-  "graphs": {
-    "shared_state": "./src/agent.ts:graph"
-  },
-  "dependencies": ["."]
-}

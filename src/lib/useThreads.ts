@@ -4,18 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 export interface Thread {
 	id: string;
 	title: string;
-	createdAt: number;
-	updatedAt: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+interface RawThread {
+	id: string;
+	title: string;
+	created_at: string;
+	updated_at: string;
 }
 
 function makeDraftThread(): Thread {
-	const now = Math.floor(Date.now() / 1000);
-	return {
-		id: crypto.randomUUID(),
-		title: "新对话",
-		createdAt: now,
-		updatedAt: now,
-	};
+	const now = new Date().toISOString();
+	return { id: crypto.randomUUID(), title: "新对话", createdAt: now, updatedAt: now };
 }
 
 export function useThreads() {
@@ -26,8 +28,9 @@ export function useThreads() {
 
 	const fetchThreads = useCallback(async () => {
 		const res = await fetch("/api/threads");
-		if (res.ok) return (await res.json()) as Thread[];
-		return [];
+		if (!res.ok) return [];
+		const raw = (await res.json()) as RawThread[];
+		return raw.map((t) => ({ id: t.id, title: t.title, createdAt: t.created_at, updatedAt: t.updated_at }));
 	}, []);
 
 	useEffect(() => {

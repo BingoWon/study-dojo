@@ -8,9 +8,7 @@
 		"build": "next build",
 		"start": "next start",
 		"agent": "cd agent && npx @langchain/langgraph-cli@latest dev --host 0.0.0.0 --port 8123 --no-browser",
-		"lint": "biome check --write .",
-		"typecheck": "tsc -b",
-		"check": "pnpm lint && pnpm typecheck"
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@clerk/nextjs": "^6.17.0",
@@ -18,13 +16,9 @@
 		"@copilotkit/react-ui": "latest",
 		"@copilotkit/runtime": "latest",
 		"@copilotkit/shared": "latest",
-		"@langchain/core": "^1.1.38",
-		"@langchain/textsplitters": "^1.0.1",
-		"@supabase/ssr": "^0.10.0",
 		"@supabase/supabase-js": "^2.101.1",
 		"@tabler/icons-react": "^3.41.1",
 		"@tailwindcss/typography": "^0.5.19",
-		"drizzle-orm": "^0.45.2",
 		"lucide-react": "^1.7.0",
 		"mammoth": "^1.12.0",
 		"next": "^15.3.2",
@@ -35,7 +29,6 @@
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.10",
 		"@tailwindcss/postcss": "^4.2.2",
 		"@types/node": "^22.0.0",
 		"@types/react": "^19.2.14",

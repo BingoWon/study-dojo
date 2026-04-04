@@ -149,7 +149,7 @@ export async function checkPaperByHash(supabase: SupabaseClient, hash: string) {
 		.select("id, status")
 		.eq("hash", hash)
 		.limit(1)
-		.single();
+		.maybeSingle();
 	return data
 		? { exists: true, paperId: data.id, status: data.status }
 		: { exists: false };
@@ -190,7 +190,7 @@ export async function ingestFile(
 		.select("id, status, lang")
 		.eq("hash", hash)
 		.limit(1)
-		.single();
+		.maybeSingle();
 	if (existing) {
 		await supabase
 			.from("user_papers")
@@ -321,7 +321,7 @@ export async function ingestFile(
 			id: crypto.randomUUID(),
 			content,
 			paper_id: paperId,
-			embedding: JSON.stringify(embeddings[j]),
+			embedding: embeddings[j],
 		}));
 		await supabase.from("documents").insert(rows);
 	}
@@ -403,14 +403,14 @@ export async function getPaperMarkdown(
 		.eq("user_id", userId)
 		.eq("paper_id", paperId)
 		.limit(1)
-		.single();
+		.maybeSingle();
 	if (!link) return null;
 
 	const { data: paper } = await supabase
 		.from("papers")
 		.select("hash, lang")
 		.eq("id", paperId)
-		.single();
+		.maybeSingle();
 	if (!paper) return null;
 
 	const path =
@@ -419,7 +419,7 @@ export async function getPaperMarkdown(
 			: `papers/${paper.hash}.md`;
 	const { data } = await supabase.storage.from("papers").download(path);
 	if (!data) return null;
-	return data.text();
+	return await data.text();
 }
 
 // ── Vector Search (pgvector) ────────────────────────────────────────────────
@@ -446,7 +446,7 @@ export async function retrieveContext(
 
 	// pgvector similarity search with paper filtering
 	const { data } = await supabase.rpc("match_documents", {
-		query_embedding: JSON.stringify(queryEmbedding),
+		query_embedding: queryEmbedding,
 		match_count: topK,
 		filter_paper_ids: paperIds,
 	});

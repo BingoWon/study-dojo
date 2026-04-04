@@ -13,21 +13,24 @@ export async function GET(
 	const supabase = createServerClient();
 	const { data: link } = await supabase
 		.from("user_papers")
-		.select("title, paper_id")
+		.select("title")
 		.eq("user_id", userId)
 		.eq("paper_id", id)
-		.single();
+		.maybeSingle();
 	if (!link) return NextResponse.json({ error: "未找到" }, { status: 404 });
 
 	const { data: paper } = await supabase
 		.from("papers")
 		.select("hash, file_ext")
 		.eq("id", id)
-		.single();
+		.maybeSingle();
 	if (!paper) return NextResponse.json({ error: "未找到" }, { status: 404 });
 
+	// Match storage path pattern from rag.ts ingestFile
 	const ext = paper.file_ext ?? "pdf";
-	const storagePath = `papers/${paper.hash}.${ext === "docx" ? "docx" : ext === "img" ? "img" : "pdf"}`;
+	const category = ext === "docx" ? "docx" : ["png", "jpg", "jpeg", "webp", "bmp", "tiff"].includes(ext) ? "img" : "pdf";
+	const storagePath = `papers/${paper.hash}.${category}`;
+
 	const { data } = await supabase.storage.from("papers").download(storagePath);
 	if (!data) return NextResponse.json({ error: "文件不存在" }, { status: 404 });
 
@@ -35,7 +38,7 @@ export async function GET(
 	return new Response(data, {
 		headers: {
 			"Content-Type": "application/octet-stream",
-			"Content-Disposition": `attachment; filename="${filename}.${ext}"; filename*=UTF-8''${filename}.${ext}`,
+			"Content-Disposition": `attachment; filename="${filename}.${ext}"`,
 		},
 	});
 }
