@@ -421,7 +421,7 @@ function MainApp() {
 							<ErrorBoundary>
 								<CopilotChat
 									agentId="roast_prof"
-									className="copilot-chat-custom h-full"
+									className="copilot-chat-fill"
 								/>
 							</ErrorBoundary>
 						)}
