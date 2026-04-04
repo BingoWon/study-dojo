@@ -1,61 +1,14 @@
-import type { ToolCallMessagePartProps } from "@assistant-ui/react";
-import { BookOpen, Loader2, Search, Sparkles, X } from "lucide-react";
-import { type FC, useContext, useState } from "react";
-import { AddToolResultCtx } from "../../Chat";
+import { BookOpen, Search, Sparkles, X } from "lucide-react";
+import { type FC, useState } from "react";
 
-// ── Suggest Search (blocks agent until user responds via addToolResult) ──────
+// ── Search Card (renders during interrupt, calls onRespond to resume) ───────
 
-export const SuggestSearchToolUI: FC<ToolCallMessagePartProps> = ({
-	toolCallId,
-	args,
-	result,
-}) => {
-	const a = args as { queries?: string[]; defaultTopK?: number };
-
-	// Already resolved — show compact confirmation
-	if (result) {
-		const r = result as { action: string; query?: string; topK?: number };
-		if (r.action === "skip") {
-			return (
-				<div className="mb-3 flex items-center gap-2 text-xs text-zinc-500">
-					<X className="w-3.5 h-3.5" />
-					已跳过确认，由 AI 自主检索
-				</div>
-			);
-		}
-		if (r.action === "auto") {
-			return (
-				<div className="mb-3 flex items-center gap-2 text-xs text-blue-500 dark:text-blue-400">
-					<Sparkles className="w-3.5 h-3.5" />
-					已委托 AI 选择最佳查询
-				</div>
-			);
-		}
-		return (
-			<div className="mb-3 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-				<Search className="w-3.5 h-3.5" />
-				已确认检索：{r.query}（{r.topK} 条）
-			</div>
-		);
-	}
-
-	return (
-		<SearchCard
-			toolCallId={toolCallId}
-			queries={a.queries ?? []}
-			defaultTopK={a.defaultTopK ?? 5}
-		/>
-	);
-};
-
-// ── Search Card (calls addToolResult to unblock the agent) ──────────────────
-
-const SearchCard: FC<{
-	toolCallId: string;
+export const SearchCard: FC<{
 	queries: string[];
 	defaultTopK: number;
-}> = ({ toolCallId, queries, defaultTopK }) => {
-	const addToolResult = useContext(AddToolResultCtx);
+	// biome-ignore lint/suspicious/noExplicitAny: resume value
+	onRespond: (value: any) => void;
+}> = ({ queries, defaultTopK, onRespond }) => {
 	const [selected, setSelected] = useState<number | null>(null);
 	const [custom, setCustom] = useState("");
 	const [topK, setTopK] = useState(defaultTopK);
@@ -68,13 +21,8 @@ const SearchCard: FC<{
 			: null;
 	const canSubmit = !!activeQuery && activeQuery.length > 0;
 
-	// Like Mastra's `respond()` — sends tool result back to the agent
-	const respond = (output: Record<string, unknown>) => {
-		addToolResult?.({ tool: "rag_suggest", toolCallId, output });
-	};
-
 	return (
-		<div className="mb-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/50 bg-white/70 dark:bg-zinc-800/70 overflow-hidden shadow-sm backdrop-blur-sm">
+		<div className="rounded-2xl border border-zinc-200/60 dark:border-zinc-700/50 bg-white/70 dark:bg-zinc-800/70 overflow-hidden shadow-sm backdrop-blur-sm">
 			<div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100/60 dark:border-zinc-700/40">
 				<div className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
 					<BookOpen className="w-4 h-4 text-blue-500" />
@@ -147,7 +95,7 @@ const SearchCard: FC<{
 				<button
 					type="button"
 					onClick={() =>
-						respond({
+						onRespond({
 							action: "auto",
 							message:
 								"用户让你帮他选择，请自行决定最佳查询和参数来执行 rag_search。",
@@ -162,7 +110,7 @@ const SearchCard: FC<{
 					type="button"
 					disabled={!canSubmit}
 					onClick={() =>
-						respond({
+						onRespond({
 							action: "confirm",
 							query: activeQuery,
 							topK,
@@ -181,7 +129,7 @@ const SearchCard: FC<{
 				<button
 					type="button"
 					onClick={() =>
-						respond({
+						onRespond({
 							action: "skip",
 							message: "用户不想被确认，请直接执行 rag_search。",
 						})
@@ -192,35 +140,6 @@ const SearchCard: FC<{
 					不要问我
 				</button>
 			</div>
-		</div>
-	);
-};
-
-// ── Search Execution Result ─────────────────────────────────────────────────
-
-export const PaperSearchToolUI: FC<ToolCallMessagePartProps> = ({
-	result,
-	isError,
-}) => {
-	if (isError) {
-		return <div className="mb-2 text-xs text-red-500">资料检索失败</div>;
-	}
-	if (!result) {
-		return (
-			<div className="mb-2 flex items-center gap-2 text-xs text-blue-500 dark:text-blue-400">
-				<Loader2 className="w-3.5 h-3.5 animate-spin" />
-				正在检索资料...
-			</div>
-		);
-	}
-	const r = result as { context?: string; papers?: number; message?: string };
-	const hasContext = r.context && r.context !== "未找到相关内容";
-	return (
-		<div className="mb-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-			<BookOpen className="w-3.5 h-3.5 shrink-0" />
-			{hasContext
-				? `已从 ${r.papers ?? 0} 份资料中检索到相关内容`
-				: r.message || "未找到相关内容"}
 		</div>
 	);
 };

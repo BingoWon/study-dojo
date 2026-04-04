@@ -1,26 +1,20 @@
-import {
-	convertToModelMessages,
-	createUIMessageStream,
-	createUIMessageStreamResponse,
-	stepCountIs,
-	streamText,
-} from "ai";
+import { HumanMessage } from "@langchain/core/messages";
+import { Command } from "@langchain/langgraph";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { convertToWireFormat, createAgent, generateTitle } from "./agent";
 import { getUserId } from "./auth";
+import { D1Saver } from "./checkpointer";
 import {
 	createDb,
 	deleteThread,
 	ensureThread,
-	getMessagesByThreadId,
 	getThread,
 	getThreadsByUserId,
-	saveMessages,
 	touchThread,
 	updateThreadTitle,
 } from "./db";
 import { log } from "./log";
-import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import {
 	checkPaperByHash,
 	classifyFile,
@@ -31,7 +25,6 @@ import {
 	unlinkUserPaper,
 } from "./rag";
 import { papers, userPapers } from "./schema";
-import { createRagTools, staticTools } from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -66,7 +59,11 @@ app.delete("/api/threads/:id", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	await deleteThread(db, c.req.param("id"), userId);
+	const threadId = c.req.param("id");
+	await deleteThread(db, threadId, userId);
+	// Also clean up checkpoints
+	const saver = new D1Saver(c.env.DB);
+	await saver.deleteThread(threadId).catch(() => {});
 	return c.json({ ok: true });
 });
 
@@ -74,10 +71,42 @@ app.get("/api/threads/:id/messages", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	const thread = await getThread(db, c.req.param("id"));
-	if (!thread || thread.userId !== userId) return c.json([], 200);
-	const rows = await getMessagesByThreadId(db, c.req.param("id"));
-	return c.json(rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts })));
+	const threadId = c.req.param("id");
+
+	const thread = await getThread(db, threadId);
+	if (!thread || thread.userId !== userId) return c.json({ messages: [] }, 200);
+
+	// Load messages from LangGraph checkpoint
+	try {
+		const saver = new D1Saver(c.env.DB);
+		const tuple = await saver.getTuple({
+			configurable: { thread_id: threadId },
+		});
+
+		if (!tuple) return c.json({ messages: [] }, 200);
+
+		const rawMsgs = tuple.checkpoint.channel_values?.messages;
+		const messages = Array.isArray(rawMsgs) ? convertToWireFormat(rawMsgs) : [];
+
+		// Check for pending interrupts
+		const pendingWrites = tuple.pendingWrites ?? [];
+		const interruptWrite = pendingWrites.find(
+			([, channel]) => channel === "__interrupt__",
+		);
+		const interruptValue = interruptWrite
+			? // biome-ignore lint/suspicious/noExplicitAny: interrupt value shape varies
+				(interruptWrite[2] as any)?.[0]?.value
+			: undefined;
+
+		return c.json({ messages, interrupt: interruptValue ?? null });
+	} catch (e) {
+		log.error({
+			module: "messages",
+			msg: "failed to load checkpoint",
+			error: String(e),
+		});
+		return c.json({ messages: [] }, 200);
+	}
 });
 
 // ── Papers ───────────────────────────────────────────────────────────────────
@@ -99,7 +128,6 @@ app.get("/api/papers/check", async (c) => {
 	const result = await checkPaperByHash(db, hash);
 	if (!result.exists) return c.json({ exists: false });
 
-	// Auto-link user if not already linked
 	const now = Math.floor(Date.now() / 1000);
 	await db
 		.insert(userPapers)
@@ -152,7 +180,6 @@ app.post("/api/papers", async (c) => {
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "处理失败";
 				log.error({ module: "ingest", msg, paperId: ingestPaperId });
-				// Mark paper as failed in DB so it doesn't stay stuck
 				if (ingestPaperId) {
 					await db
 						.update(papers)
@@ -201,10 +228,7 @@ app.get("/api/papers/:id/download", async (c) => {
 	const paperId = c.req.param("id");
 
 	const [row] = await db
-		.select({
-			r2Key: papers.r2Key,
-			title: userPapers.title,
-		})
+		.select({ r2Key: papers.r2Key, title: userPapers.title })
 		.from(userPapers)
 		.innerJoin(papers, eq(papers.id, userPapers.paperId))
 		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
@@ -251,32 +275,17 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 		.json<{ fileName?: string; fileExt?: string }>()
 		.catch(() => ({ fileName: undefined, fileExt: undefined }));
 
-	const md = await getPaperMarkdown(paperId, {
-		db,
-		r2: c.env.R2,
-		userId,
-	});
+	const md = await getPaperMarkdown(paperId, { db, r2: c.env.R2, userId });
 	if (!md) return c.json({ error: "未找到" }, 404);
 
-	const excerpt = md.slice(0, 500);
 	const fullName = fileName
 		? fileExt
 			? `${fileName}.${fileExt}`
 			: fileName
 		: null;
 	const hintStr = fullName ? `\n文件名：${fullName}` : "";
-	const titleModel = createTitleModel(c.env);
-	const result = streamText({
-		model: titleModel,
-		prompt: `根据以下资料内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hintStr}\n${excerpt}`,
-		providerOptions: { openrouter: { reasoning: { effort: "none" } } },
-	});
 
-	let title = "";
-	for await (const chunk of result.textStream) {
-		title += chunk;
-	}
-	title = title.trim().replace(/["""''「」『』。，！？、：；]/g, "");
+	const title = await generateTitle(`${md.slice(0, 500)}${hintStr}`, c.env);
 
 	if (title) {
 		await renameUserPaper(db, userId, paperId, title);
@@ -289,236 +298,209 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// biome-ignore lint/suspicious/noExplicitAny: UIMessage wire format
-type WireMessage = Record<string, any>;
-
-/**
- * Resolve data: URLs in wire messages BEFORE convertToModelMessages.
- * Strip "data:<mime>;base64," prefix → raw base64 string for ALL file types.
- * This prevents the AI SDK's downloadAssets from trying to fetch data: URLs.
- * The @ai-sdk/openai provider re-wraps the base64 into the correct wire format
- * (image_url for images, { file: { file_data } } for PDFs, etc.).
- */
-function resolveDataUrls(messages: WireMessage[]): WireMessage[] {
-	return messages.map((msg) => {
-		if (!Array.isArray(msg.parts)) return msg;
-		const parts = msg.parts.map(
-			// biome-ignore lint/suspicious/noExplicitAny: flexible wire part
-			(part: any) => {
-				if (typeof part.url !== "string") return part;
-				const match = part.url.match(/^data:([^;]+);base64,(.+)$/s);
-				if (!match) return part;
-				return { ...part, url: match[2], mediaType: match[1] };
-			},
-		);
-		return { ...msg, parts };
-	});
-}
-
-function extractLastUserText(messages: WireMessage[]): string {
-	const last = [...messages].reverse().find((m) => m.role === "user");
-	if (!last?.parts) return last?.content ?? "";
-	return (
-		last.parts
-			.filter((p: { type: string }) => p.type === "text")
-			.map((p: { text: string }) => p.text)
-			.join(" ") ?? ""
-	);
-}
-
-// ── Chat (AI SDK streamText + Assistant-UI) ──────────────────────────────────
+// ── Chat (LangGraph streaming) ──────────────────────────────────────────────
 
 app.post("/api/chat", async (c) => {
 	try {
-		const { messages } = await c.req.json<{
-			messages: WireMessage[];
+		const body = await c.req.json<{
+			threadId: string;
+			message?: string;
+			attachments?: Array<{ type: string; data: string; mimeType?: string }>;
+			resume?: unknown;
 		}>();
-		const threadId = c.req.header("x-thread-id") || undefined;
-		const userId = await requireUserId(c);
 
+		const { threadId } = body;
+		const userId = await requireUserId(c);
+		if (!userId) return c.json({ error: "未授权" }, 401);
 		if (!c.env.API_KEY) return c.json({ error: "缺少 API_KEY 配置" }, 500);
 		if (!c.env.MODEL) return c.json({ error: "缺少 MODEL 配置" }, 500);
 
 		const db = createDb(c.env.DB);
-		const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+		const checkpointer = new D1Saver(c.env.DB);
 
-		// ── Persist user message ──────────────────────────────────────────────
-		if (threadId && userId && lastUserMsg) {
+		// Ensure thread exists
+		await ensureThread(db, threadId, userId);
+
+		// Get user's papers for RAG
+		let paperIds: string[] = [];
+		if (c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
 			try {
-				await ensureThread(db, threadId, userId);
-				const parts = lastUserMsg.parts?.length
-					? lastUserMsg.parts
-					: [{ type: "text" as const, text: lastUserMsg.content ?? "" }];
-				await saveMessages(db, [
-					{
-						id: lastUserMsg.id ?? crypto.randomUUID(),
-						threadId,
-						role: "user",
-						parts: parts as unknown[],
-						createdAt: Math.floor(Date.now() / 1000),
-					},
-				]);
-				await touchThread(db, threadId, userId);
-			} catch (e) {
-				log.error({
-					module: "chat",
-					msg: "persist user msg failed",
-					error: String(e),
-				});
-			}
-		}
-
-		// ── Build tools (static + RAG if available) ─────────────────────────
-		const systemPrompt = c.env.SYSTEM_PROMPT || SYSTEM_PROMPT;
-
-		// biome-ignore lint/suspicious/noExplicitAny: tool generics incompatible with Record
-		let ragTools: Record<string, any> = {};
-		if (userId && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
-			try {
-				const userLinks = await db
+				const links = await db
 					.select({ paperId: userPapers.paperId })
 					.from(userPapers)
 					.where(eq(userPapers.userId, userId));
-				ragTools = createRagTools({
-					paperIds: userLinks.map((l) => l.paperId),
-					db,
-					vectorize: c.env.VECTORIZE,
-					env: c.env,
-				});
+				paperIds = links.map((l) => l.paperId);
 			} catch {
-				// Vectorize only works remotely; silently skip in local dev
+				// Vectorize only works remotely; skip in local dev
 			}
 		}
 
-		// ── Determine if title generation is needed ──────────────────────────
-		const userMessages = messages.filter((m) => m.role === "user");
-		const isFirstMessage = userMessages.length === 1;
+		const graph = createAgent({
+			env: c.env,
+			db,
+			paperIds,
+			checkpointer,
+		});
+
+		const config = { configurable: { thread_id: threadId } };
+
+		// Determine if this is a first message (for title generation)
+		const existingTuple = await checkpointer.getTuple(config);
+		const existingMsgs = existingTuple?.checkpoint.channel_values?.messages;
+		const isFirstMessage =
+			!body.resume &&
+			(!existingMsgs ||
+				!Array.isArray(existingMsgs) ||
+				existingMsgs.length === 0);
 		const firstUserText = isFirstMessage
-			? extractLastUserText(userMessages).slice(0, 200)
+			? (body.message ?? "").slice(0, 200)
 			: "";
 
-		// ── Stream with concurrent title generation ──────────────────────────
-		const wrappedModel = createModel(c.env);
+		// Build input
+		// biome-ignore lint/suspicious/noExplicitAny: LangGraph input varies
+		let graphInput: any;
 
-		let resolveFinish!: () => void;
-		const finishPromise = new Promise<void>((r) => {
-			resolveFinish = r;
-		});
-
-		const uiStream = createUIMessageStream({
-			execute: async ({ writer }) => {
-				const modelMessages = await convertToModelMessages(
-					// biome-ignore lint/suspicious/noExplicitAny: wire format → UIMessage
-					resolveDataUrls(messages) as any,
-				);
-
-				// Detect HITL continuation: last model message is a tool-result
-				// → this is a resumed run after addToolResult, disable reasoning
-				// to avoid duplicating the thinking block from the first run
-				const lastModelMsg = modelMessages[modelMessages.length - 1];
-				const isHitlContinuation =
-					lastModelMsg?.role === "tool" ||
-					(lastModelMsg?.role === "assistant" &&
-						Array.isArray(lastModelMsg.content) &&
-						lastModelMsg.content.some(
-							(p: { type: string }) => p.type === "tool-result",
-						));
-
-				const chatResult = streamText({
-					model: wrappedModel,
-					system: systemPrompt,
-					messages: modelMessages,
-					tools: { ...staticTools, ...ragTools },
-					stopWhen: stepCountIs(5),
-					...(isHitlContinuation && {
-						providerOptions: {
-							openrouter: { reasoning: { effort: "none" } },
-						},
-					}),
-				});
-
-				let titlePromise: Promise<void> | null = null;
-
-				if (firstUserText && threadId && userId) {
-					titlePromise = (async () => {
-						try {
-							const titleResult = streamText({
-								model: createTitleModel(c.env),
-								prompt: `为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${firstUserText}`,
-								providerOptions: {
-									openrouter: {
-										reasoning: { effort: "none" },
-									},
-								},
-							});
-
-							let fullTitle = "";
-							for await (const chunk of titleResult.textStream) {
-								fullTitle += chunk;
-								writer.write({
-									type: "data-title-delta",
-									data: chunk,
-								});
-							}
-
-							const cleaned = fullTitle
-								.trim()
-								.replace(/["""''「」『』。，！？、：；]/g, "");
-							if (cleaned) {
-								await updateThreadTitle(db, threadId, userId, cleaned);
-							}
-						} catch (e) {
-							log.error({
-								module: "chat",
-								msg: "title stream failed",
-								error: String(e),
-							});
-						}
-					})();
+		if (body.resume !== undefined) {
+			// Resume after interrupt
+			graphInput = new Command({ resume: body.resume });
+		} else if (body.message) {
+			// New message
+			// biome-ignore lint/suspicious/noExplicitAny: multimodal content parts
+			const contentParts: any[] = [{ type: "text", text: body.message }];
+			if (body.attachments) {
+				for (const att of body.attachments) {
+					if (att.type === "image") {
+						contentParts.push({
+							type: "image_url",
+							image_url: { url: att.data },
+						});
+					}
 				}
+			}
+			const humanMsg =
+				contentParts.length === 1
+					? new HumanMessage(body.message)
+					: new HumanMessage({ content: contentParts });
 
-				writer.merge(chatResult.toUIMessageStream({ sendReasoning: true }));
+			graphInput = { messages: [humanMsg] };
+		} else {
+			return c.json({ error: "缺少 message 或 resume 参数" }, 400);
+		}
 
-				if (titlePromise) await titlePromise;
-			},
-			onFinish: async ({ messages: finishedMessages }) => {
+		// Fire concurrent title generation
+		let titlePromise: Promise<string> | null = null;
+		if (firstUserText) {
+			titlePromise = generateTitle(firstUserText, c.env).catch(() => "");
+		}
+
+		// SSE streaming
+		const encoder = new TextEncoder();
+
+		const stream = new ReadableStream({
+			async start(controller) {
+				const send = (event: string, data: unknown) => {
+					controller.enqueue(
+						encoder.encode(
+							`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+						),
+					);
+				};
+
 				try {
-					if (threadId && userId && finishedMessages.length > 0) {
-						const assistantMsgs = finishedMessages.filter(
-							(m) => m.role !== "user",
-						);
-						if (assistantMsgs.length > 0) {
-							const now = Math.floor(Date.now() / 1000);
-							await saveMessages(
-								db,
-								assistantMsgs.map((m) => ({
-									id: m.id,
-									threadId,
-									role: m.role,
-									parts: m.parts as unknown[],
-									createdAt: now,
-								})),
-							);
-							await touchThread(db, threadId, userId);
+					const msgStream = await graph.stream(graphInput, {
+						...config,
+						streamMode: "messages",
+					});
+
+					for await (const event of msgStream) {
+						// streamMode: "messages" yields [chunk, metadata]
+						// biome-ignore lint/suspicious/noExplicitAny: LangGraph stream event
+						const chunk = (Array.isArray(event) ? event[0] : event) as any;
+						if (!chunk) continue;
+
+						// Text content streaming
+						if (typeof chunk.content === "string" && chunk.content) {
+							send("delta", { content: chunk.content });
+						}
+
+						// Tool call chunks (streaming tool call args)
+						if (Array.isArray(chunk.tool_call_chunks)) {
+							for (const tc of chunk.tool_call_chunks) {
+								if (tc.id && tc.name) {
+									send("tool-call-start", {
+										id: tc.id,
+										name: tc.name,
+									});
+								}
+							}
+						}
+
+						// Complete tool calls (from full AIMessage, not chunks)
+						if (
+							Array.isArray(chunk.tool_calls) &&
+							chunk.tool_calls.length > 0
+						) {
+							for (const tc of chunk.tool_calls) {
+								send("tool-call", {
+									id: tc.id,
+									name: tc.name,
+									args: tc.args,
+								});
+								// Real-time recipe update
+								if (tc.name === "update_recipe") {
+									send("recipe-update", tc.args);
+								}
+							}
 						}
 					}
+
+					// Check for interrupts
+					const state = await graph.getState(config);
+					const tasks = state.tasks ?? [];
+					// biome-ignore lint/suspicious/noExplicitAny: task type from LangGraph
+					const interruptTask = tasks.find((t: any) => t.interrupts?.length);
+
+					if (interruptTask) {
+						send("interrupt", {
+							// biome-ignore lint/suspicious/noExplicitAny: interrupt value varies
+							value: (interruptTask as any).interrupts[0].value,
+						});
+					} else {
+						// Send final message list
+						const finalMsgs = state.values?.messages;
+						if (Array.isArray(finalMsgs)) {
+							send("messages", convertToWireFormat(finalMsgs));
+						}
+						send("done", {});
+					}
+
+					// Title generation
+					if (titlePromise) {
+						const title = await titlePromise;
+						if (title) {
+							send("title", { title });
+							await updateThreadTitle(db, threadId, userId, title);
+						}
+					}
+
+					await touchThread(db, threadId, userId);
 				} catch (e) {
-					log.error({
-						module: "chat",
-						msg: "persist assistant msgs failed",
-						error: String(e),
-					});
+					const msg = e instanceof Error ? e.message : "未知错误";
+					log.error({ module: "chat", msg, error: String(e) });
+					send("error", { message: msg });
 				} finally {
-					resolveFinish();
+					controller.close();
 				}
 			},
-			generateId: () => crypto.randomUUID(),
 		});
 
-		c.executionCtx.waitUntil(finishPromise);
-		return createUIMessageStreamResponse({ stream: uiStream });
+		return new Response(stream, {
+			headers: {
+				"Content-Type": "text/event-stream",
+				"Cache-Control": "no-cache",
+				Connection: "keep-alive",
+			},
+		});
 	} catch (error: unknown) {
 		const msg = error instanceof Error ? error.message : "未知错误";
 		log.error({ module: "chat", msg });
