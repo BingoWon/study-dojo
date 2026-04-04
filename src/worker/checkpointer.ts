@@ -18,10 +18,23 @@ import {
 
 export class D1Saver extends BaseCheckpointSaver {
 	private db: D1Database;
+	private enc = new TextEncoder();
+	private dec = new TextDecoder();
 
 	constructor(db: D1Database) {
 		super();
 		this.db = db;
+	}
+
+	/** serde.dumpsTyped returns [type, Uint8Array] — decode to string for D1 TEXT columns */
+	private async dump(value: unknown): Promise<string> {
+		const [, bytes] = await this.serde.dumpsTyped(value);
+		return this.dec.decode(bytes as Uint8Array);
+	}
+
+	/** serde.loadsTyped expects (type, Uint8Array) — encode D1 TEXT string back */
+	private async load(text: string): Promise<unknown> {
+		return this.serde.loadsTyped("json", this.enc.encode(text));
 	}
 
 	async getTuple(config: RunnableConfig): Promise<CheckpointTuple | undefined> {
@@ -56,14 +69,8 @@ export class D1Saver extends BaseCheckpointSaver {
 		if (!row) return undefined;
 		checkpointId = row.checkpoint_id;
 
-		const checkpoint = (await this.serde.loadsTyped(
-			"json",
-			row.checkpoint,
-		)) as Checkpoint;
-		const metadata = (await this.serde.loadsTyped(
-			"json",
-			row.metadata,
-		)) as CheckpointMetadata;
+		const checkpoint = (await this.load(row.checkpoint)) as Checkpoint;
+		const metadata = (await this.load(row.metadata)) as CheckpointMetadata;
 
 		// Load pending writes
 		const writesResult = await this.db
@@ -80,7 +87,7 @@ export class D1Saver extends BaseCheckpointSaver {
 				return [
 					w.task_id as string,
 					w.channel as string,
-					await this.serde.loadsTyped("json", w.value),
+					await this.load(w.value),
 				] as [string, string, unknown];
 			}),
 		);
@@ -173,7 +180,7 @@ export class D1Saver extends BaseCheckpointSaver {
 					return [
 						w.task_id as string,
 						w.channel as string,
-						await this.serde.loadsTyped("json", w.value),
+						await this.load(w.value),
 					] as [string, string, unknown];
 				}),
 			);
@@ -217,8 +224,8 @@ export class D1Saver extends BaseCheckpointSaver {
 		if (!threadId) throw new Error("Missing thread_id in config.configurable");
 
 		const prepared = copyCheckpoint(checkpoint);
-		const [, serializedCheckpoint] = await this.serde.dumpsTyped(prepared);
-		const [, serializedMetadata] = await this.serde.dumpsTyped(metadata);
+		const serializedCheckpoint = await this.dump(prepared);
+		const serializedMetadata = await this.dump(metadata);
 
 		await this.db
 			.prepare(
@@ -261,7 +268,7 @@ export class D1Saver extends BaseCheckpointSaver {
 
 		const stmts = await Promise.all(
 			writes.map(async ([channel, value], idx) => {
-				const [, serialized] = await this.serde.dumpsTyped(value);
+				const serialized = await this.dump(value);
 				const writeIdx = WRITES_IDX_MAP[channel as string] ?? idx;
 
 				return this.db

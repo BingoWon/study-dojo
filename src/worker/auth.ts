@@ -87,11 +87,6 @@ export async function getUserId(
 				data,
 			);
 			if (!valid) return null;
-		} else {
-			log.warn({
-				module: "auth",
-				msg: "CLERK_JWKS_URL not set, skipping JWT verification",
-			});
 		}
 
 		return payload.sub ?? null;

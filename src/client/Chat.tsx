@@ -166,6 +166,7 @@ export function Chat({
 				const decoder = new TextDecoder();
 				let buffer = "";
 				let accumulated = "";
+				const recipeArgsBuf = { name: "", args: "" };
 
 				while (true) {
 					const { done, value } = await reader.read();
@@ -186,8 +187,25 @@ export function Chat({
 										setStreamingText(accumulated);
 										break;
 
+									case "tool-call-chunk":
+										// Streaming tool call args — try to parse for recipe updates
+										if (
+											data.name === "update_recipe" ||
+											recipeArgsBuf.name === "update_recipe"
+										) {
+											if (data.name) recipeArgsBuf.name = data.name;
+											if (data.args) recipeArgsBuf.args += data.args;
+											try {
+												const partial = JSON.parse(recipeArgsBuf.args);
+												onRecipeUpdate(partial);
+											} catch {
+												/* partial JSON, wait for more */
+											}
+										}
+										break;
+
 									case "tool-call":
-										// Tool call complete — show inline
+										// Complete tool call
 										break;
 
 									case "recipe-update":

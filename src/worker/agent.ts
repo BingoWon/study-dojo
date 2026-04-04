@@ -1,6 +1,6 @@
 /**
  * LangGraph agent — StateGraph with tools + HITL interrupt for RAG.
- * Uses ChatOpenAI via OpenRouter, raw JSON tool schemas (no zod compat issues).
+ * Uses WorkersChatModel (native fetch streaming, CF Workers compatible).
  */
 
 import {
@@ -9,7 +9,6 @@ import {
 	SystemMessage,
 	ToolMessage,
 } from "@langchain/core/messages";
-import type { RunnableConfig } from "@langchain/core/runnables";
 import {
 	Annotation,
 	END,
@@ -18,8 +17,8 @@ import {
 	START,
 	StateGraph,
 } from "@langchain/langgraph";
-import { ChatOpenAI } from "@langchain/openai";
 import type { DbClient } from "./db";
+import { WorkersChatModel } from "./llm";
 import { retrieveContext } from "./rag";
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -276,20 +275,20 @@ export function createAgent(opts: {
 	const toolDefs = [...STATIC_TOOLS, ...(hasRag ? RAG_TOOLS : [])];
 	const handlers = createToolHandlers(opts);
 
-	const model = new ChatOpenAI({
-		model: opts.env.MODEL,
+	const model = new WorkersChatModel({
+		baseURL: opts.env.BASE_URL,
 		apiKey: opts.env.API_KEY,
-		configuration: { baseURL: opts.env.BASE_URL },
-		streaming: true,
+		model: opts.env.MODEL,
 	});
 
 	const systemPrompt = opts.env.SYSTEM_PROMPT || SYSTEM_PROMPT;
 
-	// ── Chat node: invoke LLM with tools ──────────────────────────────────────
-	async function chatNode(state: AgentStateType, config?: RunnableConfig) {
-		const bound = model.bindTools(toolDefs, {
-			parallel_tool_calls: false,
-		});
+	// ── Chat node: streaming LLM with tools ──────────────────────────────────
+	async function chatNode(
+		state: AgentStateType,
+		config?: import("@langchain/core/runnables").RunnableConfig,
+	) {
+		const bound = model.bindTools(toolDefs, { parallel_tool_calls: false });
 		const response = await bound.invoke(
 			[new SystemMessage(systemPrompt), ...state.messages],
 			config,
@@ -358,12 +357,12 @@ export function createAgent(opts: {
 // ── Title generation ─────────────────────────────────────────────────────────
 
 export async function generateTitle(text: string, env: Env): Promise<string> {
-	const model = new ChatOpenAI({
-		model: env.TITLE_MODEL || env.MODEL,
+	const titleModel = new WorkersChatModel({
+		baseURL: env.BASE_URL,
 		apiKey: env.API_KEY,
-		configuration: { baseURL: env.BASE_URL },
+		model: env.TITLE_MODEL || env.MODEL,
 	});
-	const response = await model.invoke([
+	const response = await titleModel.invoke([
 		new SystemMessage(
 			"为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：",
 		),
