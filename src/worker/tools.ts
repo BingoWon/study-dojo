@@ -121,8 +121,7 @@ export const staticTools = {
 					.describe("饮食偏好标签"),
 			}),
 		),
-		// No execute — args stream to frontend for real-time rendering.
-		// Frontend provides result via addResult() for model continuation.
+		execute: async (input) => input,
 	}),
 };
 

@@ -9,14 +9,12 @@ import {
 	ThreadPrimitive,
 	useAui,
 	useAuiState,
-	useMessage,
 } from "@assistant-ui/react";
 import "@assistant-ui/react-markdown/styles/dot.css";
 import {
 	AlertCircle,
 	ArrowDown,
 	ArrowUp,
-	BookOpen,
 	Check,
 	ChevronLeft,
 	ChevronRight,
@@ -29,7 +27,7 @@ import {
 	Square,
 	X,
 } from "lucide-react";
-import { createContext, type FC, useEffect, useMemo, useState } from "react";
+import { createContext, type FC, useEffect } from "react";
 import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
@@ -286,12 +284,28 @@ const AssistantMessage: FC = () => (
 		</div>
 
 		<div className="mt-1 ml-2 flex min-h-6 items-center gap-2">
-			<MemoryIndicator />
+			<MemoryBadge />
 			<BranchPicker />
 			<AssistantActionBar />
 		</div>
 	</MessagePrimitive.Root>
 );
+
+// ── Memory Badge (reads from message metadata, not data parts) ──────────────
+
+const MemoryBadge: FC = () => {
+	const metadata = useAuiState((s) => s.message.metadata) as
+		| { mem0?: { memory: string; score: number }[] }
+		| undefined;
+	const memories = metadata?.mem0;
+	if (!memories?.length) return null;
+
+	return (
+		<span className="text-[10px] text-indigo-500 dark:text-indigo-400">
+			{memories.length} 条记忆已参考
+		</span>
+	);
+};
 
 const MessageError: FC = () => (
 	<MessagePrimitive.Error>
@@ -353,64 +367,6 @@ const BranchPicker: FC<{ className?: string }> = ({ className }) => (
 		</BranchPickerPrimitive.Next>
 	</BranchPickerPrimitive.Root>
 );
-
-// ── Memory Indicator ─────────────────────────────────────────────────────────
-
-type RetrievedMemory = { memory: string; score: number };
-
-const MemoryIndicator: FC = () => {
-	const parts = useMessage((m) => m.content);
-	const [open, setOpen] = useState(false);
-
-	const memories = useMemo<RetrievedMemory[]>(() => {
-		const result: RetrievedMemory[] = [];
-		for (const part of parts ?? []) {
-			const p = part as { type: string; data?: unknown };
-			if (p.type === "data-mem0-get" && Array.isArray(p.data)) {
-				for (const m of p.data as RetrievedMemory[])
-					result.push(m);
-			}
-		}
-		return result;
-	}, [parts]);
-
-	if (memories.length === 0) return null;
-
-	return (
-		<div className="relative inline-flex mb-1">
-			<button
-				type="button"
-				onClick={() => setOpen((v) => !v)}
-				className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition cursor-pointer"
-			>
-				<BookOpen className="h-3 w-3" />
-				{memories.length} 条记忆已参考
-			</button>
-			{open && (
-				<div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-3">
-					<h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
-						参考的记忆
-					</h4>
-					<div className="max-h-48 overflow-y-auto space-y-2">
-						{memories.map((m, i) => (
-							<div
-								key={`mem-${i}`}
-								className="flex items-start gap-2 pb-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0"
-							>
-								<span className="flex-1 text-xs text-zinc-600 dark:text-zinc-400">
-									{m.memory}
-								</span>
-								<span className="shrink-0 text-[9px] text-zinc-400">
-									{Math.round(m.score * 100)}%
-								</span>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
-		</div>
-	);
-};
 
 // ── Main Chat ─────────────────────────────────────────────────────────────────
 

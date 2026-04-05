@@ -517,14 +517,6 @@ app.post("/api/chat", async (c) => {
 
 		const uiStream = createUIMessageStream({
 			execute: async ({ writer }) => {
-				// Send retrieved memories as data event
-				if (retrievedMemories.length > 0) {
-					writer.write({
-						type: "data-mem0-get" as "data-mem0-get",
-						data: retrievedMemories,
-					});
-				}
-
 				const modelMessages = await convertToModelMessages(
 					// biome-ignore lint/suspicious/noExplicitAny: wire format → UIMessage
 					resolveDataUrls(messages) as any,
@@ -552,7 +544,15 @@ app.post("/api/chat", async (c) => {
 					}),
 				});
 
-				writer.merge(chatResult.toUIMessageStream({ sendReasoning: true }));
+				writer.merge(
+					chatResult.toUIMessageStream({
+						sendReasoning: true,
+						messageMetadata: ({ part }) =>
+							part.type === "start" && retrievedMemories.length > 0
+								? { mem0: retrievedMemories }
+								: undefined,
+					}),
+				);
 			},
 			onFinish: async ({ messages: finishedMessages }) => {
 				try {
