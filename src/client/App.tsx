@@ -150,18 +150,29 @@ function App() {
 				return;
 			}
 
-			// Add highlight (deduplicate by text+color to prevent re-triggering
-			// when tool UIs re-mount on thread switch)
+			// Mainstream highlight behavior: same text → replace color;
+			// exact duplicate (text+color) → skip (prevents re-trigger on
+			// thread switch when tool UIs re-mount)
 			const newItemId = crypto.randomUUID();
 			let added = false;
 			setHighlights((prev) => {
 				const next = new Map(prev);
 				const existing = next.get(docId) ?? [];
-				if (existing.some((h) => h.text === text && h.color === color)) {
-					return prev;
+				const dup = existing.find((h) => h.text === text);
+				if (dup) {
+					if (dup.color === color) return prev; // exact duplicate
+					// Same text, different color → replace
+					added = true;
+					next.set(
+						docId,
+						existing.map((h) =>
+							h.id === dup.id ? { id: newItemId, text, color } : h,
+						),
+					);
+				} else {
+					added = true;
+					next.set(docId, [...existing, { id: newItemId, text, color }]);
 				}
-				added = true;
-				next.set(docId, [...existing, { id: newItemId, text, color }]);
 				return next;
 			});
 

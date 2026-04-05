@@ -25,34 +25,34 @@ mark.doc-hl:empty {
 	display: none;
 }
 mark.hl-yellow {
-	background-color: oklch(0.905 0.182 98.11 / 0.5);
+	background-color: oklch(0.947 0.109 98.11);
 }
 mark.hl-red {
-	background-color: oklch(0.859 0.143 14.83 / 0.5);
+	background-color: oklch(0.929 0.086 14.83);
 }
 mark.hl-green {
-	background-color: oklch(0.905 0.093 164.15 / 0.5);
+	background-color: oklch(0.952 0.056 164.15);
 }
 mark.hl-blue {
-	background-color: oklch(0.882 0.085 230.03 / 0.5);
+	background-color: oklch(0.941 0.051 230.03);
 }
 mark.hl-purple {
-	background-color: oklch(0.829 0.107 285.36 / 0.5);
+	background-color: oklch(0.915 0.064 285.36);
 }
 .dark mark.hl-yellow {
-	background-color: oklch(0.795 0.184 86.05 / 0.3);
+	background-color: oklch(0.35 0.08 86.05);
 }
 .dark mark.hl-red {
-	background-color: oklch(0.637 0.237 25.33 / 0.3);
+	background-color: oklch(0.32 0.1 25.33);
 }
 .dark mark.hl-green {
-	background-color: oklch(0.765 0.177 163.22 / 0.3);
+	background-color: oklch(0.35 0.08 163.22);
 }
 .dark mark.hl-blue {
-	background-color: oklch(0.707 0.165 254.62 / 0.3);
+	background-color: oklch(0.33 0.07 254.62);
 }
 .dark mark.hl-purple {
-	background-color: oklch(0.654 0.219 284.53 / 0.3);
+	background-color: oklch(0.32 0.09 284.53);
 }
 
 /* Code block text contrast for both themes */
