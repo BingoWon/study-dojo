@@ -483,28 +483,29 @@ app.post("/api/chat", async (c) => {
 			}
 		}
 
-		// ── Extract memories concurrently with streaming ────────────────────
-		const addMemoriesTask =
-			userId && c.env.MEM0_API_KEY
-				? addMemories(
-						c.env,
-						messages
-							.filter(
-								(m: WireMessage) =>
-									m.role === "user" || m.role === "assistant",
-							)
-							.slice(-6)
-							.map((m: WireMessage) => ({
-								role: m.role as string,
-								content:
-									m.parts
-										?.filter((p: { type: string }) => p.type === "text")
-										.map((p: { text?: string }) => p.text ?? "")
-										.join(" ") ?? "",
-							})),
-						userId,
-					)
-				: Promise.resolve([]);
+		// ── Extract memories concurrently (fire-and-forget, async on Mem0) ──
+		if (userId && c.env.MEM0_API_KEY) {
+			c.executionCtx.waitUntil(
+				addMemories(
+					c.env,
+					messages
+						.filter(
+							(m: WireMessage) =>
+								m.role === "user" || m.role === "assistant",
+						)
+						.slice(-6)
+						.map((m: WireMessage) => ({
+							role: m.role as string,
+							content:
+								m.parts
+									?.filter((p: { type: string }) => p.type === "text")
+									.map((p: { text?: string }) => p.text ?? "")
+									.join(" ") ?? "",
+						})),
+					userId,
+				),
+			);
+		}
 
 		// ── Stream chat response ───────────────────────────��─────────────────
 		const wrappedModel = createModel(c.env);
@@ -552,15 +553,6 @@ app.post("/api/chat", async (c) => {
 				});
 
 				writer.merge(chatResult.toUIMessageStream({ sendReasoning: true }));
-
-				// Send new/updated memories as data event
-				const newMemories = await addMemoriesTask;
-				if (newMemories.length > 0) {
-					writer.write({
-						type: "data-mem0-update" as "data-mem0-update",
-						data: newMemories,
-					});
-				}
 			},
 			onFinish: async ({ messages: finishedMessages }) => {
 				try {

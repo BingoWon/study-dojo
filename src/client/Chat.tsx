@@ -381,40 +381,25 @@ const BranchPicker: FC<{ className?: string }> = ({ className }) => (
 
 // ── Memory Indicator ─────────────────────────────────────────────────────────
 
-type MemoryDisplay = { event: string; memory: string; score: number };
+type RetrievedMemory = { memory: string; score: number };
 
 const MemoryIndicator: FC = () => {
 	const parts = useMessage((m) => m.content);
 	const [open, setOpen] = useState(false);
 
-	const memories = useMemo<MemoryDisplay[]>(() => {
-		const result: MemoryDisplay[] = [];
+	const memories = useMemo<RetrievedMemory[]>(() => {
+		const result: RetrievedMemory[] = [];
 		for (const part of parts ?? []) {
 			const p = part as { type: string; data?: unknown };
 			if (p.type === "data-mem0-get" && Array.isArray(p.data)) {
-				for (const m of p.data as { memory: string; score: number }[])
-					result.push({ event: "GET", memory: m.memory, score: m.score });
-			}
-			if (p.type === "data-mem0-update" && Array.isArray(p.data)) {
-				for (const m of p.data as {
-					event: string;
-					data: { memory: string };
-				}[])
-					result.push({ event: m.event, memory: m.data.memory, score: 1 });
+				for (const m of p.data as RetrievedMemory[])
+					result.push(m);
 			}
 		}
 		return result;
 	}, [parts]);
 
 	if (memories.length === 0) return null;
-
-	const hasGet = memories.some((m) => m.event === "GET");
-	const hasUpdate = memories.some((m) => m.event !== "GET");
-	const label = hasGet && hasUpdate
-		? "记忆已访问并更新"
-		: hasGet
-			? "记忆已访问"
-			: "记忆已更新";
 
 	return (
 		<div className="relative inline-flex mb-1">
@@ -424,46 +409,25 @@ const MemoryIndicator: FC = () => {
 				className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition cursor-pointer"
 			>
 				<BookOpen className="h-3 w-3" />
-				{label}
+				{memories.length} 条记忆已参考
 			</button>
 			{open && (
 				<div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-3">
 					<h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
-						记忆详情
+						参考的记忆
 					</h4>
 					<div className="max-h-48 overflow-y-auto space-y-2">
 						{memories.map((m, i) => (
 							<div
-								key={`${m.event}-${i}`}
+								key={`mem-${i}`}
 								className="flex items-start gap-2 pb-2 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0"
 							>
-								<span
-									className={`shrink-0 mt-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-										m.event === "GET"
-											? "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
-											: m.event === "ADD"
-												? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-												: m.event === "DELETE"
-													? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-													: "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-									}`}
-								>
-									{m.event === "GET"
-										? "检索"
-										: m.event === "ADD"
-											? "新增"
-											: m.event === "DELETE"
-												? "删除"
-												: "更新"}
-								</span>
 								<span className="flex-1 text-xs text-zinc-600 dark:text-zinc-400">
 									{m.memory}
 								</span>
-								{m.event === "GET" && (
-									<span className="shrink-0 text-[9px] text-zinc-400">
-										{Math.round(m.score * 100)}%
-									</span>
-								)}
+								<span className="shrink-0 text-[9px] text-zinc-400">
+									{Math.round(m.score * 100)}%
+								</span>
 							</div>
 						))}
 					</div>

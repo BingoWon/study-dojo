@@ -2,27 +2,32 @@ import { useAui, useAuiState } from "@assistant-ui/react";
 import { useCallback, useEffect, useRef } from "react";
 import type { SidebarTab } from "../components/ThreadListSidebar";
 
+type ThreadItem = { id: string; remoteId?: string };
+
 /**
  * Syncs the active thread ID and sidebar tab with the browser URL.
  *
- * URL format:
+ * URL uses remoteId (server-side UUID), never local runtime IDs.
+ *
  *   /                         → new thread, tab=chat
- *   /c/{threadId}             → specific thread, tab=chat
- *   /c/{threadId}?tab=library → specific thread, library tab
- *   /c/{threadId}?tab=memory  → specific thread, memory tab
+ *   /c/{remoteId}             → specific thread, tab=chat
+ *   /c/{remoteId}?tab=library → specific thread, library tab
+ *   /c/{remoteId}?tab=memory  → specific thread, memory tab
  */
 export function useUrlSync(
 	sidebarTab: SidebarTab,
 	setSidebarTab: (tab: SidebarTab) => void,
 ) {
 	const aui = useAui();
+	const threadItems = useAuiState(
+		(s) => s.threads.threadItems as unknown as ThreadItem[],
+	);
 	const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-	const threadIds = useAuiState((s) => s.threads.threadIds);
 	const initializedRef = useRef(false);
 
 	// ── Read URL on mount → restore thread + tab ────────────────────────
 	useEffect(() => {
-		if (initializedRef.current || threadIds.length === 0) return;
+		if (initializedRef.current || !threadItems?.length) return;
 		initializedRef.current = true;
 
 		const path = window.location.pathname;
@@ -34,25 +39,29 @@ export function useUrlSync(
 			setSidebarTab(tab);
 		}
 
-		// Restore thread from URL
+		// Restore thread by remoteId from URL
 		const match = path.match(/^\/c\/([a-f0-9-]+)$/i);
 		if (match) {
-			const urlThreadId = match[1];
-			if (threadIds.includes(urlThreadId)) {
-				if (urlThreadId !== mainThreadId) {
-					aui.threads().switchToThread(urlThreadId);
-				}
-			} else {
-				// Thread not found (invalid ID or no permission) → redirect to root
+			const urlRemoteId = match[1];
+			const found = threadItems.find((t) => t.remoteId === urlRemoteId);
+			if (found && found.id !== mainThreadId) {
+				aui.threads().switchToThread(found.id);
+			} else if (!found) {
 				window.history.replaceState(null, "", "/");
 			}
 		}
-	}, [threadIds, mainThreadId, aui, setSidebarTab]);
+	}, [threadItems, mainThreadId, aui, setSidebarTab]);
 
-	// ── Update URL when thread changes ──────────────────────────────────
+	// ── Derive current main thread's remoteId ───────────────────────────
+	const mainRemoteId = useAuiState((s) => {
+		const items = s.threads.threadItems as unknown as ThreadItem[];
+		return items?.find?.((t) => t.id === s.threads.mainThreadId)?.remoteId;
+	});
+
+	// ── Update URL when thread or tab changes ───────────────────────────
 	const updateUrl = useCallback(
-		(threadId: string | undefined, tab: SidebarTab) => {
-			const path = threadId ? `/c/${threadId}` : "/";
+		(remoteId: string | undefined, tab: SidebarTab) => {
+			const path = remoteId ? `/c/${remoteId}` : "/";
 			const params = new URLSearchParams();
 			if (tab !== "chat") params.set("tab", tab);
 			const search = params.toString();
@@ -65,16 +74,6 @@ export function useUrlSync(
 		[],
 	);
 
-	// Derive remoteId from the main thread's state
-	const mainRemoteId = useAuiState((s) => {
-		const items = s.threads.threadItems as unknown as {
-			id: string;
-			remoteId?: string;
-		}[];
-		return items?.find?.((t) => t.id === s.threads.mainThreadId)?.remoteId;
-	});
-
-	// Sync on thread or tab change
 	useEffect(() => {
 		if (!initializedRef.current) return;
 		updateUrl(mainRemoteId, sidebarTab);

@@ -9,16 +9,11 @@ type Mem0Env = { MEM0_API_KEY: string };
 export type MemoryItem = {
 	id: string;
 	memory: string;
-	categories?: string[];
+	user_id?: string;
+	categories?: string[] | null;
 	score?: number;
 	created_at: string;
 	updated_at: string;
-};
-
-export type MemoryEvent = {
-	id: string;
-	event: "ADD" | "UPDATE" | "DELETE" | "NOOP";
-	data: { memory: string };
 };
 
 // ── Internal fetch helper ───────────────────────────────────────────────────
@@ -43,7 +38,7 @@ async function mem0Fetch<T>(
 	return res.json() as Promise<T>;
 }
 
-// ── Search relevant memories ────────────────────────────────────────────────
+// ── Search relevant memories (v1 — returns bare array) ──────────────────────
 
 export async function searchMemories(
 	env: Mem0Env,
@@ -51,21 +46,10 @@ export async function searchMemories(
 	userId: string,
 ): Promise<MemoryItem[]> {
 	try {
-		const data = await mem0Fetch<{ results: MemoryItem[] }>(
-			env,
-			"/v2/memories/search/",
-			{
-				method: "POST",
-				body: JSON.stringify({
-					query,
-					user_id: userId,
-					rerank: true,
-					threshold: 0.1,
-					top_k: 10,
-				}),
-			},
-		);
-		return data.results ?? [];
+		return await mem0Fetch<MemoryItem[]>(env, "/v1/memories/search/", {
+			method: "POST",
+			body: JSON.stringify({ query, user_id: userId }),
+		});
 	} catch (e) {
 		log.warn({
 			module: "memory",
@@ -76,45 +60,39 @@ export async function searchMemories(
 	}
 }
 
-// ── Add memories from conversation ──────────────────────────────────────────
+// ── Add memories from conversation (async — returns PENDING status) ─────────
 
 export async function addMemories(
 	env: Mem0Env,
 	messages: { role: string; content: string }[],
 	userId: string,
-): Promise<MemoryEvent[]> {
+): Promise<void> {
 	try {
-		const data = await mem0Fetch<{ results: MemoryEvent[] }>(
-			env,
-			"/v1/memories/",
-			{
-				method: "POST",
-				body: JSON.stringify({ messages, user_id: userId }),
-			},
-		);
-		return (data.results ?? []).filter((e) => e.event !== "NOOP");
+		await mem0Fetch(env, "/v1/memories/", {
+			method: "POST",
+			body: JSON.stringify({ messages, user_id: userId }),
+		});
+		// API returns PENDING status; memories are extracted asynchronously
 	} catch (e) {
 		log.warn({
 			module: "memory",
 			msg: "add failed",
 			error: (e as Error).message,
 		});
-		return [];
 	}
 }
 
-// ── List all memories for a user ────────────────────────────────────────────
+// ── List all memories for a user (returns bare array) ───────────────────────
 
 export async function listMemories(
 	env: Mem0Env,
 	userId: string,
 ): Promise<MemoryItem[]> {
 	try {
-		const data = await mem0Fetch<{ results: MemoryItem[] }>(
+		return await mem0Fetch<MemoryItem[]>(
 			env,
 			`/v1/memories/?user_id=${encodeURIComponent(userId)}`,
 		);
-		return data.results ?? [];
 	} catch (e) {
 		log.warn({
 			module: "memory",

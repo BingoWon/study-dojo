@@ -144,17 +144,13 @@ export function createMemoryTool(opts: {
 				}),
 			),
 			execute: async ({ content }) => {
-				const result = await addMemories(
+				await addMemories(
 					opts.env,
 					[{ role: "user", content }],
 					opts.userId,
 				);
-				const added = result.filter((e) => e.event === "ADD");
-				return {
-					success: true,
-					count: added.length,
-					message: added.length > 0 ? "已保存到记忆" : "信息已存在或无法提取",
-				};
+				// Mem0 processes memories asynchronously
+				return { success: true, message: "已提交到记忆系统" };
 			},
 		}),
 	};
