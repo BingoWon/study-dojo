@@ -8,10 +8,7 @@ import {
 	type RemoteThreadListAdapter,
 } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
-import {
-	DefaultChatTransport,
-	lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
+import { DefaultChatTransport } from "ai";
 import { createAssistantStream } from "assistant-stream";
 import {
 	PaperSearchToolUI,
@@ -171,6 +168,24 @@ function ThreadAdapterProvider({ children }: { children: ReactNode }) {
 	);
 }
 
+// ── HITL auto-resend ────────────────────────────────────────────────────────
+// Only trigger auto-resend when a HITL tool (frontend-only, no server execute)
+// has a result provided via addResult. Server-executed tools complete within
+// the stream — re-sending would create duplicate "2/2" branches.
+
+function hasHitlToolWithResult({ messages }: { messages: UIMessage[] }): boolean {
+	const last = messages[messages.length - 1];
+	if (!last || last.role !== "assistant") return false;
+	// Check if the last message has a rag_suggest tool with output
+	return last.parts.some((p) => {
+		const part = p as { type: string; toolName?: string; state?: string };
+		return (
+			part.type === "tool-rag_suggest" &&
+			part.state === "output-available"
+		);
+	});
+}
+
 // ── Runtime Hook (per-thread) ───────────────────────────────────────────────
 // Uses useChat + useAISDKRuntime directly (not useChatRuntime) so we can
 // call chat.setMessages() after loading history from the server.
@@ -215,7 +230,7 @@ function useMyRuntime() {
 	const chat = useChat({
 		id: stateRef.current.id,
 		transport,
-		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+		sendAutomaticallyWhen: hasHitlToolWithResult,
 	});
 
 	// Sync loaded messages into the Chat instance after fetch completes
