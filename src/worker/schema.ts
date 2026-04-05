@@ -30,8 +30,8 @@ export const messages = sqliteTable("messages", {
 		.default(sql`(strftime('%s', 'now'))`),
 });
 
-/** Global shared papers, deduplicated by content hash. Never deleted. */
-export const papers = sqliteTable("papers", {
+/** Global shared documents, deduplicated by content hash. Never deleted. */
+export const documents = sqliteTable("documents", {
 	id: text("id").primaryKey(),
 	hash: text("hash").notNull().unique(),
 	r2Key: text("r2_key").notNull(),
@@ -46,27 +46,27 @@ export const papers = sqliteTable("papers", {
 		.default(sql`(strftime('%s', 'now'))`),
 });
 
-/** Per-user paper links with independent titles. */
-export const userPapers = sqliteTable(
-	"user_papers",
+/** Per-user document links with independent titles. */
+export const userDocuments = sqliteTable(
+	"user_documents",
 	{
 		userId: text("user_id").notNull(),
-		paperId: text("paper_id")
+		docId: text("doc_id")
 			.notNull()
-			.references(() => papers.id),
-		title: text("title").notNull().default("新资料"),
+			.references(() => documents.id),
+		title: text("title").notNull().default("新文档"),
 		createdAt: integer("created_at", { mode: "number" })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.paperId] })],
+	(t) => [primaryKey({ columns: [t.userId, t.docId] })],
 );
 
-/** RAG chunks belonging to a paper (no user_id). */
-export const documents = sqliteTable("documents", {
+/** RAG chunks belonging to a document (no user_id). */
+export const chunks = sqliteTable("chunks", {
 	id: text("id").primaryKey(),
 	content: text("content").notNull(),
-	paperId: text("paper_id"),
+	docId: text("doc_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),

@@ -13,14 +13,18 @@ import {
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { createAssistantStream } from "assistant-stream";
+import { AcademicSearchToolUI } from "./components/tools/AcademicSearchToolUI";
+import { AskUserToolUI } from "./components/tools/AskUserToolUI";
 import {
-	PaperSearchToolUI,
-	SuggestSearchToolUI,
-} from "./components/tools/PaperSearchToolUI";
+	DocSearchToolUI,
+	DocSuggestToolUI,
+} from "./components/tools/DocSearchToolUI";
+import { HighlightDocToolUI } from "./components/tools/HighlightDocToolUI";
+import { OpenDocToolUI } from "./components/tools/OpenDocToolUI";
+import { ReadDocToolUI } from "./components/tools/ReadDocToolUI";
 import { RecipeToolUI } from "./components/tools/RecipeToolUI";
 import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
-import { WeatherToolUI } from "./components/tools/WeatherToolUI";
 import {
 	type FC,
 	type ReactNode,
@@ -206,6 +210,7 @@ function useMyRuntime() {
 				api: "/api/chat",
 				headers: () => ({
 					"x-thread-id": stateRef.current.remoteId ?? stateRef.current.id,
+					"x-active-doc": sessionStorage.getItem("center:activeTab") ?? "",
 				}),
 			}),
 		[],
@@ -239,11 +244,15 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
 	return (
 		<AssistantRuntimeProvider runtime={runtime}>
-			{/* Tool UIs self-register by toolName — no central mapping needed */}
-			<WeatherToolUI />
+			{/* Each tool UI matches a backend tool by toolName */}
+			<AskUserToolUI />
 			<SearchToolUI />
-			<SuggestSearchToolUI />
-			<PaperSearchToolUI />
+			<AcademicSearchToolUI />
+			<DocSuggestToolUI />
+			<DocSearchToolUI />
+			<OpenDocToolUI />
+			<HighlightDocToolUI />
+			<ReadDocToolUI />
 			<RecipeToolUI />
 			<SaveMemoryToolUI />
 			{children}

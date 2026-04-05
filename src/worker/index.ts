@@ -29,16 +29,24 @@ import {
 } from "./memory";
 import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
 import {
-	checkPaperByHash,
+	checkDocByHash,
 	classifyFile,
-	getPaperMarkdown,
+	getDocumentChunks,
+	getDocumentMarkdown,
+	getDocumentMeta,
 	ingestFile,
-	listUserPapers,
-	renameUserPaper,
-	unlinkUserPaper,
+	listUserDocuments,
+	renameUserDocument,
+	unlinkUserDocument,
 } from "./rag";
-import { papers, userPapers } from "./schema";
-import { createMemoryTool, createRagTools, staticTools } from "./tools";
+import { documents, userDocuments } from "./schema";
+import {
+	createDocTools,
+	createExaTools,
+	createMemoryTool,
+	hitlTools,
+	staticTools,
+} from "./tools";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -100,7 +108,6 @@ app.post("/api/threads/:id/generate-title", async (c) => {
 	const threadId = c.req.param("id");
 
 	try {
-		// Ensure thread exists (may race with /api/chat's ensureThread)
 		await ensureThread(db, threadId, userId);
 
 		const title = await generateLLMTitle(
@@ -123,36 +130,35 @@ app.post("/api/threads/:id/generate-title", async (c) => {
 	}
 });
 
-// ── Papers ───────────────────────────────────────────────────────────────────
+// ── Documents ───────────────────────────────────────────────────────────────
 
-app.get("/api/papers", async (c) => {
+app.get("/api/documents", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	return c.json(await listUserPapers(db, userId));
+	return c.json(await listUserDocuments(db, userId));
 });
 
-app.get("/api/papers/check", async (c) => {
+app.get("/api/documents/check", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const hash = c.req.query("hash");
 	if (!hash) return c.json({ error: "缺少 hash 参数" }, 400);
 
 	const db = createDb(c.env.DB);
-	const result = await checkPaperByHash(db, hash);
+	const result = await checkDocByHash(db, hash);
 	if (!result.exists) return c.json({ exists: false });
 
-	// Auto-link user if not already linked
 	const now = Math.floor(Date.now() / 1000);
 	await db
-		.insert(userPapers)
-		.values({ userId, paperId: result.paperId, createdAt: now })
+		.insert(userDocuments)
+		.values({ userId, docId: result.docId, createdAt: now })
 		.onConflictDoNothing();
 
 	return c.json(result);
 });
 
-app.post("/api/papers", async (c) => {
+app.post("/api/documents", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const formData = await c.req.formData();
@@ -174,7 +180,7 @@ app.post("/api/papers", async (c) => {
 				);
 			};
 
-			let ingestPaperId: string | undefined;
+			let ingestDocId: string | undefined;
 			try {
 				const fileExt = file.name.split(".").pop()?.toLowerCase();
 				await ingestFile(buffer, {
@@ -188,19 +194,18 @@ app.post("/api/papers", async (c) => {
 					vectorize: c.env.VECTORIZE,
 					env: c.env,
 					onStatus: (status, data) => {
-						if (data?.paperId) ingestPaperId = data.paperId as string;
+						if (data?.docId) ingestDocId = data.docId as string;
 						send("status", { status, ...data });
 					},
 				});
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : "处理失败";
-				log.error({ module: "ingest", msg, paperId: ingestPaperId });
-				// Mark paper as failed in DB so it doesn't stay stuck
-				if (ingestPaperId) {
+				log.error({ module: "ingest", msg, docId: ingestDocId });
+				if (ingestDocId) {
 					await db
-						.update(papers)
+						.update(documents)
 						.set({ status: "failed" })
-						.where(eq(papers.id, ingestPaperId))
+						.where(eq(documents.id, ingestDocId))
 						.catch(() => {});
 				}
 				send("status", { status: "failed", error: msg });
@@ -219,38 +224,38 @@ app.post("/api/papers", async (c) => {
 	});
 });
 
-app.patch("/api/papers/:id", async (c) => {
+app.patch("/api/documents/:id", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const { title } = await c.req.json<{ title: string }>();
 	const db = createDb(c.env.DB);
-	await renameUserPaper(db, userId, c.req.param("id"), title);
+	await renameUserDocument(db, userId, c.req.param("id"), title);
 	return c.json({ ok: true });
 });
 
-app.delete("/api/papers/:id", async (c) => {
+app.delete("/api/documents/:id", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
-	await unlinkUserPaper(db, userId, c.req.param("id"));
+	await unlinkUserDocument(db, userId, c.req.param("id"));
 	return c.json({ ok: true });
 });
 
-app.get("/api/papers/:id/download", async (c) => {
+app.get("/api/documents/:id/download", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 
 	const db = createDb(c.env.DB);
-	const paperId = c.req.param("id");
+	const docId = c.req.param("id");
 
 	const [row] = await db
 		.select({
-			r2Key: papers.r2Key,
-			title: userPapers.title,
+			r2Key: documents.r2Key,
+			title: userDocuments.title,
 		})
-		.from(userPapers)
-		.innerJoin(papers, eq(papers.id, userPapers.paperId))
-		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
+		.from(userDocuments)
+		.innerJoin(documents, eq(documents.id, userDocuments.docId))
+		.where(and(eq(userDocuments.userId, userId), eq(userDocuments.docId, docId)))
 		.limit(1);
 	if (!row) return c.json({ error: "未找到" }, 404);
 
@@ -269,12 +274,12 @@ app.get("/api/papers/:id/download", async (c) => {
 	});
 });
 
-app.get("/api/papers/:id/markdown", async (c) => {
+app.get("/api/documents/:id/markdown", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const lang = (c.req.query("lang") as "original" | "zh") || "original";
 	const db = createDb(c.env.DB);
-	const md = await getPaperMarkdown(c.req.param("id"), {
+	const md = await getDocumentMarkdown(c.req.param("id"), {
 		db,
 		r2: c.env.R2,
 		userId,
@@ -284,37 +289,51 @@ app.get("/api/papers/:id/markdown", async (c) => {
 	return c.text(md);
 });
 
-app.post("/api/papers/:id/generate-title", async (c) => {
+app.get("/api/documents/:id/chunks", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	const docId = c.req.param("id");
+	const doc = await getDocumentMeta(db, docId, userId);
+	if (!doc) return c.json({ error: "未找到" }, 404);
+	const rows = await getDocumentChunks(db, docId);
+	return c.json({ total: rows.length, chunks: rows.map((r) => r.content) });
+});
+
+app.post("/api/documents/:id/generate-title", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
 
 	const db = createDb(c.env.DB);
-	const paperId = c.req.param("id");
+	const docId = c.req.param("id");
 	const { fileName, fileExt } = await c.req
 		.json<{ fileName?: string; fileExt?: string }>()
 		.catch(() => ({ fileName: undefined, fileExt: undefined }));
 
-	const md = await getPaperMarkdown(paperId, {
-		db,
-		r2: c.env.R2,
-		userId,
-	});
-	if (!md) return c.json({ error: "未找到" }, 404);
-
-	const excerpt = md.slice(0, 500);
 	const fullName = fileName
 		? fileExt
 			? `${fileName}.${fileExt}`
 			: fileName
 		: null;
+
+	const md = await getDocumentMarkdown(docId, {
+		db,
+		r2: c.env.R2,
+		userId,
+	});
+
+	// Build prompt from markdown content (preferred) or filename (fallback)
+	const excerpt = md?.slice(0, 500);
+	if (!excerpt && !fullName) return c.json({ error: "未找到" }, 404);
+
 	const hintStr = fullName ? `\n文件名：${fullName}` : "";
-	const title = await generateLLMTitle(
-		c.env,
-		`根据以下资料内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hintStr}\n${excerpt}`,
-	);
+	const prompt = excerpt
+		? `根据以下文档内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hintStr}\n${excerpt}`
+		: `根据文件名生成简洁中文标题，6-12个字，无标点无引号，只回复标题：\n${fullName}`;
+	const title = await generateLLMTitle(c.env, prompt);
 
 	if (title) {
-		await renameUserPaper(db, userId, paperId, title);
+		await renameUserDocument(db, userId, docId, title);
 	}
 
 	return c.json({ title });
@@ -377,13 +396,6 @@ app.get("/api/health", (c) => c.json({ status: "ok" }));
 // biome-ignore lint/suspicious/noExplicitAny: UIMessage wire format
 type WireMessage = Record<string, any>;
 
-/**
- * Resolve data: URLs in wire messages BEFORE convertToModelMessages.
- * Strip "data:<mime>;base64," prefix → raw base64 string for ALL file types.
- * This prevents the AI SDK's downloadAssets from trying to fetch data: URLs.
- * The @ai-sdk/openai provider re-wraps the base64 into the correct wire format
- * (image_url for images, { file: { file_data } } for PDFs, etc.).
- */
 function resolveDataUrls(messages: WireMessage[]): WireMessage[] {
 	return messages.map((msg) => {
 		if (!Array.isArray(msg.parts)) return msg;
@@ -415,6 +427,18 @@ app.post("/api/chat", async (c) => {
 		if (!c.env.LLM_MODEL) return c.json({ error: "缺少 LLM_MODEL 配置" }, 500);
 
 		const db = createDb(c.env.DB);
+
+		// Trim text parts in all messages
+		for (const msg of messages) {
+			if (Array.isArray(msg.parts)) {
+				for (const p of msg.parts) {
+					if (p.type === "text" && typeof p.text === "string") {
+						p.text = p.text.trim();
+					}
+				}
+			}
+		}
+
 		const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
 
 		// ── Persist user message ──────────────────────────────────────────────
@@ -443,6 +467,28 @@ app.post("/api/chat", async (c) => {
 			}
 		}
 
+		// ── Auto-generate title on first message (fire-and-forget) ──────────
+		const userMessages = messages.filter((m: WireMessage) => m.role === "user");
+		if (threadId && userId && userMessages.length === 1) {
+			const firstText = userMessages[0].parts
+				?.filter((p: { type: string }) => p.type === "text")
+				.map((p: { text?: string }) => p.text ?? "")
+				.join(" ")
+				?.slice(0, 200);
+			if (firstText) {
+				c.executionCtx.waitUntil(
+					generateLLMTitle(
+						c.env,
+						`为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${firstText}`,
+					).then(async (title) => {
+						if (title) {
+							await updateThreadTitle(db, threadId, userId, title);
+						}
+					}).catch(() => {}),
+				);
+			}
+		}
+
 		// ── Retrieve relevant memories ───────────────────────────────────────
 		let retrievedMemories: Awaited<ReturnType<typeof searchMemories>> = [];
 		if (userId && c.env.MEM0_API_KEY) {
@@ -455,9 +501,31 @@ app.post("/api/chat", async (c) => {
 			}
 		}
 
-		// ── Build tools ─────────────────────────────────────────────────────
-		const systemPrompt = SYSTEM_PROMPT + formatMemoriesForPrompt(retrievedMemories);
+		// ── Fetch user's document list ──────────────────────────────────────
+		let docList: Awaited<ReturnType<typeof listUserDocuments>> = [];
+		if (userId) {
+			try {
+				docList = await listUserDocuments(db, userId);
+			} catch {}
+		}
 
+		// ── Build system prompt ──────────────────────────────────────────────
+		let systemPrompt = SYSTEM_PROMPT + formatMemoriesForPrompt(retrievedMemories);
+		if (docList.length > 0) {
+			const readyDocs = docList.filter((d) => d.status === "ready");
+			if (readyDocs.length > 0) {
+				const activeDocId = c.req.header("x-active-doc") || undefined;
+				const docListStr = readyDocs
+					.map((d) => {
+						const active = d.id === activeDocId ? " ← 当前打开" : "";
+						return `- ID: ${d.id}  标题:「${d.title}」 分块数：${d.chunks}${active}`;
+					})
+					.join("\n");
+				systemPrompt += `\n\n用户文档库（共 ${readyDocs.length} 份）：\n${docListStr}`;
+			}
+		}
+
+		// ── Build tools ─────────────────────────────────────────────────────
 		// biome-ignore lint/suspicious/noExplicitAny: tool generics incompatible with Record
 		let memoryTools: Record<string, any> = {};
 		if (userId && c.env.MEM0_API_KEY) {
@@ -465,15 +533,19 @@ app.post("/api/chat", async (c) => {
 		}
 
 		// biome-ignore lint/suspicious/noExplicitAny: tool generics incompatible with Record
-		let ragTools: Record<string, any> = {};
-		if (userId && c.env.VECTORIZE && c.env.EMBEDDING_BASE_URL) {
+		let exaTools: Record<string, any> = {};
+		if (c.env.EXA_API_KEY) {
+			exaTools = createExaTools({ env: c.env });
+		}
+
+		// biome-ignore lint/suspicious/noExplicitAny: tool generics incompatible with Record
+		let docTools: Record<string, any> = {};
+		if (userId) {
 			try {
-				const userLinks = await db
-					.select({ paperId: userPapers.paperId })
-					.from(userPapers)
-					.where(eq(userPapers.userId, userId));
-				ragTools = createRagTools({
-					paperIds: userLinks.map((l) => l.paperId),
+				const docIds = docList.map((d) => d.id);
+				docTools = createDocTools({
+					docIds,
+					docList,
 					db,
 					vectorize: c.env.VECTORIZE,
 					env: c.env,
@@ -507,7 +579,7 @@ app.post("/api/chat", async (c) => {
 			);
 		}
 
-		// ── Stream chat response ───────────────────────────��─────────────────
+		// ── Stream chat response ─────────────────────────────────────────────
 		const wrappedModel = createModel(c.env);
 
 		let resolveFinish!: () => void;
@@ -535,7 +607,7 @@ app.post("/api/chat", async (c) => {
 					model: wrappedModel,
 					system: systemPrompt,
 					messages: modelMessages,
-					tools: { ...staticTools, ...memoryTools, ...ragTools },
+					tools: { ...staticTools, ...hitlTools, ...exaTools, ...memoryTools, ...docTools },
 					stopWhen: stepCountIs(5),
 					...(isHitlContinuation && {
 						providerOptions: {

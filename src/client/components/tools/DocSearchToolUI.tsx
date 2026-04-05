@@ -5,16 +5,16 @@ import {
 import { BookOpen, Loader2, Search, Sparkles, X } from "lucide-react";
 import { type FC, useState } from "react";
 
-// ── RAG Suggest (HITL — streams query options, blocks for user choice) ──────
+// ── Doc Suggest (HITL — streams query options, blocks for user choice) ──────
 
 type SuggestArgs = { queries?: string[]; defaultTopK?: number };
 type SuggestResult = { action: string; query?: string; topK?: number };
 
-export const SuggestSearchToolUI = makeAssistantToolUI<
+export const DocSuggestToolUI = makeAssistantToolUI<
 	SuggestArgs,
 	SuggestResult
 >({
-	toolName: "rag_suggest",
+	toolName: "doc_suggest",
 	render: ({ args, result, addResult, status }) => {
 		const { propStatus } = useToolArgsStatus<SuggestArgs>();
 
@@ -91,10 +91,10 @@ const SearchCard: FC<{
 
 	return (
 		<div className="mb-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/50 bg-white dark:bg-zinc-800 overflow-hidden shadow-sm">
-			<div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-700/40">
+			<div className="flex items-center justify-between px-4 py-3 border-b border-divider dark:border-divider-dark">
 				<div className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
 					<BookOpen className="w-4 h-4 text-blue-500" />
-					资料检索
+					文档检索
 				</div>
 				<span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
 					{queriesStreaming ? "生成中..." : "等待确认"}
@@ -166,14 +166,14 @@ const SearchCard: FC<{
 						/>
 					</div>
 
-					<div className="flex items-center gap-2 px-4 py-3 border-t border-zinc-100 dark:border-zinc-700/40">
+					<div className="flex items-center gap-2 px-4 py-3 border-t border-divider dark:border-divider-dark">
 						<button
 							type="button"
 							onClick={() =>
 								addResult({
 									action: "auto",
 									message:
-										"用户让你帮他选择，请自行决定最佳查询和参数来执行 rag_search。",
+										"用户让你帮他选择，请自行决定最佳查询和参数来执行 doc_search。",
 								} as SuggestResult)
 							}
 							className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
@@ -189,7 +189,7 @@ const SearchCard: FC<{
 									action: "confirm",
 									query: activeQuery!,
 									topK,
-									message: `用户确认使用查询「${activeQuery}」检索 ${topK} 条结果。请调用 rag_search。`,
+									message: `用户确认使用查询「${activeQuery}」检索 ${topK} 条结果。请调用 doc_search。`,
 								} as SuggestResult)
 							}
 							className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition ${
@@ -207,7 +207,7 @@ const SearchCard: FC<{
 								addResult({
 									action: "skip",
 									message:
-										"用户不想被确认，请直接执行 rag_search。",
+										"用户不想被确认，请直接执行 doc_search。",
 								} as SuggestResult)
 							}
 							className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
@@ -222,29 +222,38 @@ const SearchCard: FC<{
 	);
 };
 
-// ── RAG Search Result ───────────────────────────────────────────────────────
+// ── Doc Search Result ───────────────────────────────────────────────────────
 
 type SearchArgs = { query: string; topK: number };
-type SearchResult = { context?: string; papers?: number; message?: string };
+type SearchResult = {
+	context?: string;
+	searchedDocuments?: number;
+	totalDocuments?: number;
+	message?: string;
+};
 
-export const PaperSearchToolUI = makeAssistantToolUI<SearchArgs, SearchResult>({
-	toolName: "rag_search",
+export const DocSearchToolUI = makeAssistantToolUI<SearchArgs, SearchResult>({
+	toolName: "doc_search",
 	render: ({ result, status }) => {
 		if (status.type === "running") {
 			return (
 				<div className="mb-2 flex items-center gap-2 text-xs text-blue-500 dark:text-blue-400">
 					<Loader2 className="w-3.5 h-3.5 animate-spin" />
-					正在检索资料...
+					正在检索文档...
 				</div>
 			);
 		}
 		if (!result) return null;
-		const hasContext = result.context && result.context !== "未找到相关内容";
+		const hasContext = !!result.context && result.context !== "未找到相关内容";
+		const scope =
+			result.searchedDocuments && result.totalDocuments && result.searchedDocuments < result.totalDocuments
+				? `${result.searchedDocuments} 份指定文档`
+				: `${result.totalDocuments ?? 0} 份文档`;
 		return (
 			<div className="mb-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
 				<BookOpen className="w-3.5 h-3.5 shrink-0" />
 				{hasContext
-					? `已从 ${result.papers ?? 0} 份资料中检索到相关内容`
+					? `已从 ${scope} 中检索到相关内容`
 					: result.message || "未找到相关内容"}
 			</div>
 		);

@@ -29,6 +29,9 @@ importers:
       '@clerk/react':
         specifier: ^6.1.4
         version: 6.1.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@exalabs/ai-sdk':
+        specifier: ^2.0.1
+        version: 2.0.1(ai@6.0.142(zod@4.3.6))
       '@langchain/cloudflare':
         specifier: ^1.0.4
         version: 1.0.4(@langchain/core@1.1.38(@opentelemetry/api@1.9.0)(openai@6.33.0(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.3.6))(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
@@ -68,6 +71,9 @@ importers:
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0
+      mark.js:
+        specifier: ^8.11.1
+        version: 8.11.1
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -99,6 +105,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.2(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.3)(jiti@2.6.1)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
+      '@types/mark.js':
+        specifier: ^8.11.12
+        version: 8.11.12
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
@@ -1025,6 +1034,11 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@exalabs/ai-sdk@2.0.1':
+    resolution: {integrity: sha512-qrZGJbrrk3MwEFYhhzzJgQarWnica3dBkt86Ex8S8vak2rYNC2EI1hSwVEBmQQeNtLd8tx1J8xSKwQ/5mya6cA==}
+    peerDependencies:
+      ai: ^6.0.0
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -2517,6 +2531,12 @@ packages:
   '@types/istanbul-reports@3.0.4':
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
 
+  '@types/jquery@4.0.0':
+    resolution: {integrity: sha512-Z+to+A2VkaHq1DfI2oSwsoCdhCHMpTSgjWzNcbNlRGYzksDBpPUgEcAL+RQjOBJRaLoEAOHXxqDGBVP+BblBwg==}
+
+  '@types/mark.js@8.11.12':
+    resolution: {integrity: sha512-244ZnaIBpz4c6xutliAnYVZp6xJlmC569jZqnR3ElO1Y01ooYASSVQEqpd2x0A2UfrgVMs5V9/9tUAdZaDMytQ==}
+
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
 
@@ -3694,6 +3714,9 @@ packages:
     resolution: {integrity: sha512-cwnK1RIcRdDMi2HRx2EXGYlxqIEh0Oo3bLhorgnsVJi2UkbX1+jKxuBNR9PC5+JaX7EkmJxFPmo6mjLpqShI2w==}
     engines: {node: '>=12.0.0'}
     hasBin: true
+
+  mark.js@8.11.1:
+    resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
@@ -5679,6 +5702,11 @@ snapshots:
   '@esbuild/win32-x64@0.27.3':
     optional: true
 
+  '@exalabs/ai-sdk@2.0.1(ai@6.0.142(zod@4.3.6))':
+    dependencies:
+      ai: 6.0.142(zod@4.3.6)
+      zod: 3.25.76
+
   '@floating-ui/core@1.7.5':
     dependencies:
       '@floating-ui/utils': 0.2.11
@@ -7263,6 +7291,12 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
 
+  '@types/jquery@4.0.0': {}
+
+  '@types/mark.js@8.11.12':
+    dependencies:
+      '@types/jquery': 4.0.0
+
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -8385,6 +8419,8 @@ snapshots:
       path-is-absolute: 1.0.1
       underscore: 1.13.8
       xmlbuilder: 10.1.1
+
+  mark.js@8.11.1: {}
 
   markdown-table@3.0.4: {}
 

@@ -154,6 +154,46 @@ export function useResizableLayout(
 		}
 	}, [rightCollapsed]);
 
+	// Focus mode: collapse both sidebars, restore on second call
+	const savedRef = useRef<{
+		left: number;
+		right: number;
+		leftC: boolean;
+		rightC: boolean;
+	} | null>(null);
+	const [focused, setFocused] = useState(false);
+
+	const toggleFocus = useCallback(() => {
+		if (!focused) {
+			savedRef.current = {
+				left: leftWidth,
+				right: rightWidth,
+				leftC: leftCollapsed,
+				rightC: rightCollapsed,
+			};
+			setLeftCollapsed(true);
+			setRightCollapsed(true);
+			setLeftWidth(0);
+			setRightWidth(0);
+			setFocused(true);
+		} else {
+			const s = savedRef.current;
+			if (s) {
+				setLeftCollapsed(s.leftC);
+				setRightCollapsed(s.rightC);
+				setLeftWidth(s.leftC ? 0 : s.left);
+				setRightWidth(s.rightC ? 0 : s.right);
+			} else {
+				setLeftCollapsed(false);
+				setRightCollapsed(false);
+				setLeftWidth(defaultsRef.current.left);
+				setRightWidth(defaultsRef.current.right);
+			}
+			setFocused(false);
+			savedRef.current = null;
+		}
+	}, [focused, leftWidth, rightWidth, leftCollapsed, rightCollapsed]);
+
 	const leftDividerProps: DividerProps = {
 		onMouseDown: (e) => onMouseDown("left", e),
 		onDoubleClick: () => {
@@ -177,9 +217,11 @@ export function useResizableLayout(
 		rightWidth,
 		leftCollapsed,
 		rightCollapsed,
+		focused,
 		leftDividerProps,
 		rightDividerProps,
 		toggleLeft,
 		toggleRight,
+		toggleFocus,
 	};
 }

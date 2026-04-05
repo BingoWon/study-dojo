@@ -41,6 +41,39 @@ export const RecipeUpdateCtx = createContext<
 	((data: Partial<Recipe>) => void) | null
 >(null);
 
+// ── Document Select Context ─────────────────────────────────────────────────
+
+export const DocSelectCtx = createContext<
+	| ((
+			docId: string,
+			title: string,
+			lang?: string | null,
+			fileExt?: string | null,
+	  ) => void)
+	| null
+>(null);
+
+// ── Highlight Context ───────────────────────────────────────────────────────
+
+export type HighlightItem = {
+	id: string; // unique per highlight
+	text: string | null; // null = full document
+	color: string;
+};
+
+export type HighlightAction = {
+	docId: string;
+	text: string | null;
+	color: string;
+	title: string;
+	lang?: string | null;
+	fileExt?: string | null;
+};
+
+export const HighlightCtx = createContext<
+	((action: HighlightAction) => void) | null
+>(null);
+
 // ── Attachment Components ────────────────────────────────────────────────────
 
 const UserAttachment: FC = () => (
@@ -134,6 +167,8 @@ const Composer: FC = () => (
 				className="mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0"
 				rows={1}
 				autoFocus
+				spellCheck={false}
+				autoComplete="off"
 			/>
 			<ComposerAction />
 		</ComposerPrimitive.AttachmentDropzone>
@@ -373,11 +408,15 @@ const BranchPicker: FC<{ className?: string }> = ({ className }) => (
 export function Chat({
 	recipe,
 	onRecipeUpdate,
+	onDocSelect,
+	onHighlight,
 	onLoadingChange,
 	registerImprove,
 }: {
 	recipe: Recipe;
 	onRecipeUpdate: (partial: Partial<Recipe>) => void;
+	onDocSelect?: (docId: string, title: string, lang?: string | null, fileExt?: string | null) => void;
+	onHighlight?: (action: HighlightAction) => void;
 	onLoadingChange?: (loading: boolean) => void;
 	registerImprove?: (fn: () => void) => void;
 }) {
@@ -403,6 +442,8 @@ export function Chat({
 
 	return (
 		<RecipeUpdateCtx value={onRecipeUpdate}>
+		<DocSelectCtx value={onDocSelect ?? null}>
+		<HighlightCtx value={onHighlight ?? null}>
 			<ThreadPrimitive.Root
 				className="flex h-full flex-col text-sm"
 				style={
@@ -447,6 +488,8 @@ export function Chat({
 					</ThreadPrimitive.ViewportFooter>
 				</ThreadPrimitive.Viewport>
 			</ThreadPrimitive.Root>
+		</HighlightCtx>
+		</DocSelectCtx>
 		</RecipeUpdateCtx>
 	);
 }

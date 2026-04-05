@@ -33,7 +33,7 @@ export type SidebarTab = "chat" | "library" | "memory";
 // ── Shared Constants ────────────────────────────────────────────────────────
 
 const CACHE_KEYS = {
-	library: "cache:papers",
+	library: "cache:documents",
 	memory: "cache:memories",
 } as const;
 
@@ -203,23 +203,23 @@ function writeCache(key: string, data: unknown) {
 // ── Main Sidebar ────────────────────────────────────────────────────────────
 
 export const ThreadListSidebar: FC<{
-	activePaperId: string | null;
+	activeDocId: string | null;
 	activeTab: SidebarTab;
 	onTabChange: (tab: SidebarTab) => void;
-	onPaperSelect?: (
-		paperId: string,
+	onDocSelect?: (
+		docId: string,
 		title: string,
 		lang?: string | null,
 		fileExt?: string | null,
 	) => void;
-}> = ({ activePaperId, activeTab, onTabChange, onPaperSelect }) => (
+}> = ({ activeDocId, activeTab, onTabChange, onDocSelect }) => (
 	<div className="w-full h-full flex flex-col transition-all z-40 relative">
 		{/* Tab 切换 */}
-		<div className="flex border-b border-zinc-200/50 dark:border-zinc-700/50">
+		<div className="flex border-b border-divider dark:border-divider-dark">
 			{(
 				[
 					{ id: "chat", label: "对话", icon: MessageSquare },
-					{ id: "library", label: "资料", icon: BookOpen },
+					{ id: "library", label: "文档", icon: BookOpen },
 					{ id: "memory", label: "记忆", icon: Brain },
 				] as const
 			).map((tab) => (
@@ -262,9 +262,9 @@ export const ThreadListSidebar: FC<{
 		)}
 
 		{activeTab === "library" && (
-			<PapersPanel
-				activePaperId={activePaperId}
-				onPaperSelect={onPaperSelect}
+			<DocumentsPanel
+				activeDocId={activeDocId}
+				onDocSelect={onDocSelect}
 			/>
 		)}
 
@@ -280,7 +280,7 @@ export const ThreadListSidebar: FC<{
 const SidebarUserSection: FC = () => {
 	const { user } = useUser();
 	return (
-		<div className="flex items-center gap-3 px-3 py-3 border-t border-zinc-200/50 dark:border-zinc-700/50 shrink-0">
+		<div className="flex items-center gap-3 px-3 py-3 border-t border-divider dark:border-divider-dark shrink-0">
 			<UserButton
 				appearance={{ elements: { avatarBox: "h-7 w-7" } }}
 			/>
@@ -549,9 +549,9 @@ const MemoryListItem: FC<{
 	);
 };
 
-// ── Papers Panel ────────────────────────────────────────────────────────────
+// ── Documents Panel ────────────────────────────────────────────────────────────
 
-interface Paper {
+interface LibraryDoc {
 	id: string;
 	title: string;
 	chunks: number;
@@ -564,17 +564,17 @@ interface Paper {
 const PLACEHOLDER_TITLE = "等待解析后自动生成标题…";
 
 
-const PapersPanel: FC<{
-	activePaperId: string | null;
-	onPaperSelect?: (
-		paperId: string,
+const DocumentsPanel: FC<{
+	activeDocId: string | null;
+	onDocSelect?: (
+		docId: string,
 		title: string,
 		lang?: string | null,
 		fileExt?: string | null,
 	) => void;
-}> = ({ activePaperId, onPaperSelect }) => {
-	const [papers, setPapers] = useState<Paper[]>(
-		() => readCache<Paper[]>(CACHE_KEYS.library) ?? [],
+}> = ({ activeDocId, onDocSelect }) => {
+	const [docs, setDocs] = useState<LibraryDoc[]>(
+		() => readCache<LibraryDoc[]>(CACHE_KEYS.library) ?? [],
 	);
 	const [loading, setLoading] = useState(true);
 	const [dragOver, setDragOver] = useState(false);
@@ -592,12 +592,12 @@ const PapersPanel: FC<{
 		return () => el.removeEventListener("paste", handler);
 	});
 
-	const fetchPapers = useCallback(async () => {
+	const fetchDocs = useCallback(async () => {
 		try {
-			const res = await fetch("/api/papers");
+			const res = await fetch("/api/documents");
 			if (res.ok) {
 				const data = await res.json();
-				setPapers(data as Paper[]);
+				setDocs(data as LibraryDoc[]);
 				writeCache(CACHE_KEYS.library, data);
 			}
 		} catch {
@@ -608,13 +608,13 @@ const PapersPanel: FC<{
 	}, []);
 
 	useEffect(() => {
-		fetchPapers();
-	}, [fetchPapers]);
+		fetchDocs();
+	}, [fetchDocs]);
 
-	const updatePaperStatus = useCallback(
-		(paperId: string, status: string, extra?: Partial<Paper>) => {
-			setPapers((prev) =>
-				prev.map((p) => (p.id === paperId ? { ...p, status, ...extra } : p)),
+	const updateDocStatus = useCallback(
+		(docId: string, status: string, extra?: Partial<LibraryDoc>) => {
+			setDocs((prev) =>
+				prev.map((p) => (p.id === docId ? { ...p, status, ...extra } : p)),
 			);
 		},
 		[],
@@ -629,15 +629,15 @@ const PapersPanel: FC<{
 		const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 		try {
-			const checkRes = await fetch(`/api/papers/check?hash=${encodeURIComponent(hash)}`);
+			const checkRes = await fetch(`/api/documents/check?hash=${encodeURIComponent(hash)}`);
 			if (checkRes.ok) {
 				const check = (await checkRes.json()) as { exists: boolean };
-				if (check.exists) { await fetchPapers(); return; }
+				if (check.exists) { await fetchDocs(); return; }
 			}
 		} catch { /* proceed */ }
 
 		const tempId = crypto.randomUUID() as string;
-		setPapers((prev) => [{
+		setDocs((prev) => [{
 			id: tempId, title: PLACEHOLDER_TITLE, chunks: 0, status: "uploading",
 			fileExt: file.name.split(".").pop()?.toLowerCase(), createdAt: Math.floor(Date.now() / 1000),
 		}, ...prev]);
@@ -646,13 +646,13 @@ const PapersPanel: FC<{
 		form.append("file", file);
 
 		try {
-			const res = await fetch("/api/papers", { method: "POST", body: form });
-			if (!res.ok || !res.body) { updatePaperStatus(tempId, "failed"); return; }
+			const res = await fetch("/api/documents", { method: "POST", body: form });
+			if (!res.ok || !res.body) { updateDocStatus(tempId, "failed"); return; }
 
 			const reader = res.body.getReader();
 			const decoder = new TextDecoder();
 			let buf = "";
-			let realPaperId = tempId;
+			let realDocId = tempId;
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -665,53 +665,53 @@ const PapersPanel: FC<{
 					if (!line.startsWith("data: ")) continue;
 					try {
 						const data = JSON.parse(line.slice(6)) as {
-							status: string; paperId?: string; chunks?: number;
+							status: string; docId?: string; chunks?: number;
 							lang?: string; fileName?: string; duplicate?: boolean;
 						};
-						if (data.paperId && realPaperId === tempId) {
-							realPaperId = data.paperId;
-							setPapers((prev) => prev.map((p) => p.id === tempId ? { ...p, id: realPaperId } : p));
+						if (data.docId && realDocId === tempId) {
+							realDocId = data.docId;
+							setDocs((prev) => prev.map((p) => p.id === tempId ? { ...p, id: realDocId } : p));
 						}
-						if (data.duplicate) { setPapers((prev) => prev.filter((p) => p.id !== realPaperId)); await fetchPapers(); return; }
-						updatePaperStatus(realPaperId, data.status, { chunks: data.chunks ?? 0, lang: data.lang });
+						if (data.duplicate) { setDocs((prev) => prev.filter((p) => p.id !== realDocId)); await fetchDocs(); return; }
+						updateDocStatus(realDocId, data.status, { chunks: data.chunks ?? 0, lang: data.lang });
 						if (data.status === "ready") {
 							try {
-								const titleRes = await fetch(`/api/papers/${realPaperId}/generate-title`, {
+								const titleRes = await fetch(`/api/documents/${realDocId}/generate-title`, {
 									method: "POST", headers: { "Content-Type": "application/json" },
 									body: JSON.stringify({ fileName: data.fileName, fileExt: file.name.split(".").pop()?.toLowerCase() }),
 								});
 								if (titleRes.ok) {
 									const { title } = (await titleRes.json()) as { title: string };
-									if (title) updatePaperStatus(realPaperId, "ready", { title });
+									if (title) updateDocStatus(realDocId, "ready", { title });
 								}
 							} catch { /* best-effort */ }
 						}
 					} catch { /* skip */ }
 				}
 			}
-		} catch { updatePaperStatus(tempId, "failed"); }
+		} catch { updateDocStatus(tempId, "failed"); }
 	};
 
 	const handleUnlink = async (id: string, e: React.MouseEvent) => {
 		e.stopPropagation();
-		setPapers((prev) => {
+		setDocs((prev) => {
 			const next = prev.filter((p) => p.id !== id);
 			writeCache(CACHE_KEYS.library, next);
 			return next;
 		});
-		await fetch(`/api/papers/${id}`, { method: "DELETE" });
+		await fetch(`/api/documents/${id}`, { method: "DELETE" });
 	};
 
 	const handleRename = async (id: string, title: string) => {
-		setPapers((prev) => prev.map((p) => (p.id === id ? { ...p, title } : p)));
-		await fetch(`/api/papers/${id}`, {
+		setDocs((prev) => prev.map((p) => (p.id === id ? { ...p, title } : p)));
+		await fetch(`/api/documents/${id}`, {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ title }),
 		});
 	};
 
-	const showLoader = loading && papers.length === 0;
+	const showLoader = loading && docs.length === 0;
 
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: drop zone
@@ -724,9 +724,10 @@ const PapersPanel: FC<{
 			onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleUpload(f); }}
 			onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
 			onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
-			onClick={() => fileRef.current?.click()}
 		>
-			<div className={`m-3 p-4 rounded-xl border-2 border-dashed transition-all flex flex-col items-center gap-2 pointer-events-none ${dragOver ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-zinc-300 dark:border-zinc-700"}`}>
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: upload click */}
+			<div className={`m-3 p-4 rounded-xl border-2 border-dashed transition-all flex flex-col items-center gap-2 cursor-pointer ${dragOver ? "border-blue-400 bg-blue-50 dark:bg-blue-900/20" : "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600"}`}
+				onClick={() => fileRef.current?.click()}>
 				<Upload className="w-5 h-5 text-zinc-400" />
 				<span className="text-xs text-zinc-500 dark:text-zinc-400">拖拽、点击或粘贴上传</span>
 				<span className="text-[10px] text-zinc-400 dark:text-zinc-600">PDF · 图片 · TXT · MD · DOCX</span>
@@ -737,16 +738,16 @@ const PapersPanel: FC<{
 
 			<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1 pointer-events-auto">
 				{showLoader && <CenteredLoader />}
-				{!showLoader && papers.length === 0 && (
+				{!showLoader && docs.length === 0 && (
 					<EmptyState
 						icon={<BookOpen className="w-8 h-8" />}
-						title="暂无资料"
+						title="暂无文档"
 						subtitle="拖拽、点击或粘贴上传文件到上方区域"
 					/>
 				)}
-				{papers.map((p) => (
-					<PaperListItem key={p.id} paper={p} isActive={p.id === activePaperId}
-						onClick={() => { if (p.status === "ready") onPaperSelect?.(p.id, p.title, p.lang, p.fileExt); }}
+				{docs.map((p) => (
+					<DocListItem key={p.id} doc={p} isActive={p.id === activeDocId}
+						onClick={() => { if (p.status === "ready") onDocSelect?.(p.id, p.title, p.lang, p.fileExt); }}
 						onUnlink={(e) => handleUnlink(p.id, e)} onRename={(title) => handleRename(p.id, title)} />
 				))}
 			</div>
@@ -775,12 +776,12 @@ const ProgressBar: FC<{ status: string }> = ({ status }) => {
 	return <div className="flex items-center mt-1 w-full">{items}</div>;
 };
 
-// ── Paper List Item ─────────────────────────────────────────────────────────
+// ── Document List Item ─────────────────────────────────────────────────────────
 
-const PaperListItem: FC<{
-	paper: Paper; isActive: boolean; onClick: () => void;
+const DocListItem: FC<{
+	doc: LibraryDoc; isActive: boolean; onClick: () => void;
 	onUnlink: (e: React.MouseEvent) => void; onRename: (title: string) => void;
-}> = ({ paper: p, isActive, onClick, onUnlink, onRename }) => {
+}> = ({ doc: p, isActive, onClick, onUnlink, onRename }) => {
 	const [editing, setEditing] = useState(false);
 	const FileIcon = getFileIcon(p.fileExt);
 	const icon = p.status === "ready" ? <FileIcon className="w-4 h-4" />
@@ -794,8 +795,8 @@ const PaperListItem: FC<{
 	const isReady = p.status === "ready";
 
 	return (
-		// biome-ignore lint/a11y/useKeyWithClickEvents: paper click
-		// biome-ignore lint/a11y/noStaticElementInteractions: paper click
+		// biome-ignore lint/a11y/useKeyWithClickEvents: document click
+		// biome-ignore lint/a11y/noStaticElementInteractions: document click
 		<div
 			onClick={(e) => { e.stopPropagation(); onClick(); }}
 			onDoubleClick={() => isReady && setEditing(true)}

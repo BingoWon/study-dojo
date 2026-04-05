@@ -15,7 +15,7 @@ CREATE TABLE `messages` (
 	FOREIGN KEY (`thread_id`) REFERENCES `threads`(`id`) ON UPDATE no action ON DELETE cascade
 );
 
-CREATE TABLE `papers` (
+CREATE TABLE `documents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`hash` text NOT NULL UNIQUE,
 	`r2_key` text NOT NULL,
@@ -28,23 +28,23 @@ CREATE TABLE `papers` (
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );
 
-CREATE TABLE `user_papers` (
+CREATE TABLE `user_documents` (
 	`user_id` text NOT NULL,
-	`paper_id` text NOT NULL REFERENCES `papers`(`id`),
-	`title` text DEFAULT '新资料' NOT NULL,
+	`doc_id` text NOT NULL REFERENCES `documents`(`id`),
+	`title` text DEFAULT '新文档' NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL,
-	PRIMARY KEY (`user_id`, `paper_id`)
+	PRIMARY KEY (`user_id`, `doc_id`)
 );
 
-CREATE TABLE `documents` (
+CREATE TABLE `chunks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`content` text NOT NULL,
-	`paper_id` text,
+	`doc_id` text,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );
 
 CREATE INDEX `idx_threads_user_id` ON `threads` (`user_id`);
 CREATE INDEX `idx_messages_thread_id` ON `messages` (`thread_id`);
-CREATE INDEX `idx_papers_hash` ON `papers` (`hash`);
-CREATE INDEX `idx_user_papers_user_id` ON `user_papers` (`user_id`);
-CREATE INDEX `idx_documents_paper_id` ON `documents` (`paper_id`);
+CREATE INDEX `idx_documents_hash` ON `documents` (`hash`);
+CREATE INDEX `idx_user_documents_user_id` ON `user_documents` (`user_id`);
+CREATE INDEX `idx_chunks_doc_id` ON `chunks` (`doc_id`);

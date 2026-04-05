@@ -2,15 +2,15 @@ import { CloudflareVectorizeStore } from "@langchain/cloudflare";
 import { Document } from "@langchain/core/documents";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { MarkdownTextSplitter } from "@langchain/textsplitters";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import mammoth from "mammoth";
 import type { DbClient } from "./db";
 import { log } from "./log";
-import { documents, papers, userPapers } from "./schema";
+import { chunks as chunksTable, documents, userDocuments } from "./schema";
 import { isChinese, translateMarkdown } from "./translate";
 
-const CHUNK_SIZE = 512;
-const CHUNK_OVERLAP = 64;
+const CHUNK_SIZE = 1500;
+const CHUNK_OVERLAP = 128;
 const INSERT_BATCH = 15;
 const DEFAULT_DIMENSIONS = 1536;
 
@@ -90,7 +90,6 @@ async function parseWithPaddleOCR(
 				useDocOrientationClassify: true,
 				useDocUnwarping: true,
 				useLayoutDetection: true,
-				// 图表识别会输出大量 HTML table 代码，严重干扰 RAG 分块和检索质量
 				useChartRecognition: false,
 				prettifyMarkdown: true,
 			}),
@@ -165,23 +164,23 @@ async function extractMarkdown(
 
 // ── Hash Check ──────────────────────────────────────────────────────────────
 
-export async function checkPaperByHash(
+export async function checkDocByHash(
 	db: DbClient,
 	hash: string,
 ): Promise<
-	{ exists: true; paperId: string; status: string } | { exists: false }
+	{ exists: true; docId: string; status: string } | { exists: false }
 > {
 	const [row] = await db
-		.select({ id: papers.id, status: papers.status })
-		.from(papers)
-		.where(eq(papers.hash, hash))
+		.select({ id: documents.id, status: documents.status })
+		.from(documents)
+		.where(eq(documents.hash, hash))
 		.limit(1);
 	return row
-		? { exists: true, paperId: row.id, status: row.status }
+		? { exists: true, docId: row.id, status: row.status }
 		: { exists: false };
 }
 
-// ── Full Paper Ingestion (sync, with status callbacks) ──────────────────────
+// ── Full Document Ingestion (sync, with status callbacks) ─────────────────
 
 type StatusCallback = (status: string, data?: Record<string, unknown>) => void;
 
@@ -206,7 +205,7 @@ export async function ingestFile(
 		env: IngestEnv;
 		onStatus: StatusCallback;
 	},
-): Promise<{ paperId: string; chunks: number }> {
+): Promise<{ docId: string; chunks: number }> {
 	const { db, onStatus } = opts;
 	const hash = await hashBuffer(fileBuffer);
 	const ext =
@@ -215,35 +214,35 @@ export async function ingestFile(
 
 	// Dedup check
 	const [existing] = await db
-		.select({ id: papers.id, status: papers.status, lang: papers.lang })
-		.from(papers)
-		.where(eq(papers.hash, hash))
+		.select({ id: documents.id, status: documents.status, lang: documents.lang })
+		.from(documents)
+		.where(eq(documents.hash, hash))
 		.limit(1);
 
 	if (existing) {
 		await db
-			.insert(userPapers)
-			.values({ userId: opts.userId, paperId: existing.id, createdAt: now })
+			.insert(userDocuments)
+			.values({ userId: opts.userId, docId: existing.id, createdAt: now })
 			.onConflictDoNothing();
 		onStatus("ready", {
-			paperId: existing.id,
+			docId: existing.id,
 			duplicate: true,
 			status: existing.status,
 			lang: existing.lang,
 		});
-		return { paperId: existing.id, chunks: 0 };
+		return { docId: existing.id, chunks: 0 };
 	}
 
-	const paperId = crypto.randomUUID();
-	const r2Key = `papers/${hash}.${ext}`;
+	const docId = crypto.randomUUID();
+	const r2Key = `docs/${hash}.${ext}`;
 	const setStatus = (status: string) =>
-		db.update(papers).set({ status }).where(eq(papers.id, paperId));
+		db.update(documents).set({ status }).where(eq(documents.id, docId));
 
 	// Step 1: Upload
-	onStatus("uploading", { paperId });
+	onStatus("uploading", { docId });
 	await opts.r2.put(r2Key, fileBuffer);
-	await db.insert(papers).values({
-		id: paperId,
+	await db.insert(documents).values({
+		id: docId,
 		hash,
 		r2Key,
 		fileExt: opts.fileExt ?? ext,
@@ -252,12 +251,12 @@ export async function ingestFile(
 		createdAt: now,
 	});
 	await db
-		.insert(userPapers)
-		.values({ userId: opts.userId, paperId, createdAt: now })
+		.insert(userDocuments)
+		.values({ userId: opts.userId, docId, createdAt: now })
 		.onConflictDoNothing();
 
 	// Step 2: Parse (PaddleOCR sync)
-	onStatus("parsing", { paperId });
+	onStatus("parsing", { docId });
 	await setStatus("parsing");
 	const markdown = await extractMarkdown(
 		fileBuffer,
@@ -266,16 +265,16 @@ export async function ingestFile(
 		opts.env.PADDLE_OCR_TOKEN,
 		opts.env.PADDLE_OCR_URL,
 	);
-	const markdownR2Key = `papers/${hash}.md`;
+	const markdownR2Key = `docs/${hash}.md`;
 	await opts.r2.put(markdownR2Key, markdown);
-	await db.update(papers).set({ markdownR2Key }).where(eq(papers.id, paperId));
+	await db.update(documents).set({ markdownR2Key }).where(eq(documents.id, docId));
 
 	// Detect language
 	const lang = isChinese(markdown) ? "zh" : "en";
-	await db.update(papers).set({ lang }).where(eq(papers.id, paperId));
+	await db.update(documents).set({ lang }).where(eq(documents.id, docId));
 
 	// Step 3: Translate
-	onStatus("translating", { paperId, lang });
+	onStatus("translating", { docId, lang });
 	await setStatus("translating");
 	if (lang === "en" && opts.env.TMT_SECRET_ID && opts.env.TMT_SECRET_KEY) {
 		try {
@@ -283,63 +282,63 @@ export async function ingestFile(
 				TMT_SECRET_ID: opts.env.TMT_SECRET_ID,
 				TMT_SECRET_KEY: opts.env.TMT_SECRET_KEY,
 			});
-			const translatedR2Key = `papers/${hash}.zh.md`;
+			const translatedR2Key = `docs/${hash}.zh.md`;
 			await opts.r2.put(translatedR2Key, translated);
 			await db
-				.update(papers)
+				.update(documents)
 				.set({ translatedR2Key })
-				.where(eq(papers.id, paperId));
+				.where(eq(documents.id, docId));
 		} catch (e) {
 			log.warn({
 				module: "rag",
 				msg: "translation failed, skipping",
 				error: (e as Error).message,
 			});
-			onStatus("translating", { paperId, lang, skipped: true });
+			onStatus("translating", { docId, lang, skipped: true });
 		}
 	}
 
 	// Step 4: Chunking (always on original language markdown)
-	onStatus("chunking", { paperId, lang });
+	onStatus("chunking", { docId, lang });
 	await setStatus("chunking");
 	const splitter = new MarkdownTextSplitter({
 		chunkSize: CHUNK_SIZE,
 		chunkOverlap: CHUNK_OVERLAP,
 	});
-	const chunks = await splitter.splitText(markdown);
+	const textChunks = await splitter.splitText(markdown);
 
-	if (chunks.length === 0) {
+	if (textChunks.length === 0) {
 		await db
-			.update(papers)
+			.update(documents)
 			.set({ status: "ready", chunks: 0 })
-			.where(eq(papers.id, paperId));
-		onStatus("ready", { paperId, chunks: 0, lang, fileName: opts.fileName });
-		return { paperId, chunks: 0 };
+			.where(eq(documents.id, docId));
+		onStatus("ready", { docId, chunks: 0, lang, fileName: opts.fileName });
+		return { docId, chunks: 0 };
 	}
 
-	const ids = chunks.map(() => crypto.randomUUID());
-	const rows = chunks.map((content, i) => ({
+	const ids = textChunks.map(() => crypto.randomUUID());
+	const rows = textChunks.map((content, i) => ({
 		id: ids[i],
 		content,
-		paperId,
+		docId,
 		createdAt: now,
 	}));
 
 	for (let i = 0; i < rows.length; i += INSERT_BATCH) {
-		await db.insert(documents).values(rows.slice(i, i + INSERT_BATCH));
+		await db.insert(chunksTable).values(rows.slice(i, i + INSERT_BATCH));
 	}
 
 	// Step 5: Embedding
-	onStatus("embedding", { paperId, lang });
+	onStatus("embedding", { docId, lang });
 	await setStatus("embedding");
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
-	const docs = chunks.map(
+	const docs = textChunks.map(
 		(content, i) =>
 			new Document({
 				pageContent: content,
-				metadata: { id: ids[i], paperId },
+				metadata: { id: ids[i], docId },
 			}),
 	);
 
@@ -355,75 +354,75 @@ export async function ingestFile(
 
 	// Done
 	await db
-		.update(papers)
-		.set({ status: "ready", chunks: chunks.length })
-		.where(eq(papers.id, paperId));
+		.update(documents)
+		.set({ status: "ready", chunks: textChunks.length })
+		.where(eq(documents.id, docId));
 	onStatus("ready", {
-		paperId,
-		chunks: chunks.length,
+		docId,
+		chunks: textChunks.length,
 		lang,
 		fileName: opts.fileName,
 	});
 
-	return { paperId, chunks: chunks.length };
+	return { docId, chunks: textChunks.length };
 }
 
-// ── User Paper Operations ───────────────────────────────────────────────────
+// ── User Document Operations ──────────────────────────────────────────────
 
-export async function listUserPapers(db: DbClient, userId: string) {
+export async function listUserDocuments(db: DbClient, userId: string) {
 	return db
 		.select({
-			id: papers.id,
-			title: userPapers.title,
-			chunks: papers.chunks,
-			status: papers.status,
-			lang: papers.lang,
-			fileExt: papers.fileExt,
-			createdAt: userPapers.createdAt,
+			id: documents.id,
+			title: userDocuments.title,
+			chunks: documents.chunks,
+			status: documents.status,
+			lang: documents.lang,
+			fileExt: documents.fileExt,
+			createdAt: userDocuments.createdAt,
 		})
-		.from(userPapers)
-		.innerJoin(papers, eq(papers.id, userPapers.paperId))
-		.where(eq(userPapers.userId, userId))
-		.orderBy(desc(userPapers.createdAt));
+		.from(userDocuments)
+		.innerJoin(documents, eq(documents.id, userDocuments.docId))
+		.where(eq(userDocuments.userId, userId))
+		.orderBy(desc(userDocuments.createdAt));
 }
 
-export async function renameUserPaper(
+export async function renameUserDocument(
 	db: DbClient,
 	userId: string,
-	paperId: string,
+	docId: string,
 	title: string,
 ) {
 	await db
-		.update(userPapers)
+		.update(userDocuments)
 		.set({ title })
-		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)));
+		.where(and(eq(userDocuments.userId, userId), eq(userDocuments.docId, docId)));
 }
 
-export async function unlinkUserPaper(
+export async function unlinkUserDocument(
 	db: DbClient,
 	userId: string,
-	paperId: string,
+	docId: string,
 ) {
 	await db
-		.delete(userPapers)
-		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)));
+		.delete(userDocuments)
+		.where(and(eq(userDocuments.userId, userId), eq(userDocuments.docId, docId)));
 }
 
 export async function isUserLinked(
 	db: DbClient,
 	userId: string,
-	paperId: string,
+	docId: string,
 ): Promise<boolean> {
 	const [row] = await db
-		.select({ paperId: userPapers.paperId })
-		.from(userPapers)
-		.where(and(eq(userPapers.userId, userId), eq(userPapers.paperId, paperId)))
+		.select({ docId: userDocuments.docId })
+		.from(userDocuments)
+		.where(and(eq(userDocuments.userId, userId), eq(userDocuments.docId, docId)))
 		.limit(1);
 	return !!row;
 }
 
-export async function getPaperMarkdown(
-	paperId: string,
+export async function getDocumentMarkdown(
+	docId: string,
 	opts: {
 		db: DbClient;
 		r2: R2Bucket;
@@ -431,47 +430,68 @@ export async function getPaperMarkdown(
 		lang?: "original" | "zh";
 	},
 ): Promise<string | null> {
-	if (!(await isUserLinked(opts.db, opts.userId, paperId))) return null;
+	if (!(await isUserLinked(opts.db, opts.userId, docId))) return null;
 
-	const [paper] = await opts.db
+	const [doc] = await opts.db
 		.select()
-		.from(papers)
-		.where(eq(papers.id, paperId))
+		.from(documents)
+		.where(eq(documents.id, docId))
 		.limit(1);
-	if (!paper?.markdownR2Key) return null;
+	if (!doc?.markdownR2Key) return null;
 
-	// If requesting Chinese translation and it exists, use it
 	const r2Key =
-		opts.lang === "zh" && paper.translatedR2Key
-			? paper.translatedR2Key
-			: paper.markdownR2Key;
+		opts.lang === "zh" && doc.translatedR2Key
+			? doc.translatedR2Key
+			: doc.markdownR2Key;
 
 	const obj = await opts.r2.get(r2Key);
 	if (!obj) return null;
 	return obj.text();
 }
 
-// ── Retrieve Context (filtered by paperIds only) ────────────────────────────
+export async function getDocumentMeta(
+	db: DbClient,
+	docId: string,
+	userId: string,
+) {
+	if (!(await isUserLinked(db, userId, docId))) return null;
+	const [row] = await db
+		.select()
+		.from(documents)
+		.where(eq(documents.id, docId))
+		.limit(1);
+	return row ?? null;
+}
+
+export async function getDocumentChunks(db: DbClient, docId: string) {
+	return db
+		.select({ content: chunksTable.content })
+		.from(chunksTable)
+		.where(eq(chunksTable.docId, docId))
+		.orderBy(sql`rowid`);
+}
+
+// ── Retrieve Context (filtered by docIds only) ─────────────────────────────
 
 export async function retrieveContext(
 	query: string,
 	opts: {
-		paperIds: string[];
+		docIds: string[];
 		topK?: number;
 		db: DbClient;
 		vectorize: VectorizeIndex;
 		env: EmbeddingEnv;
 	},
 ): Promise<string> {
-	if (opts.paperIds.length === 0) return "";
+	if (opts.docIds.length === 0) return "";
 
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
 	const filter: Record<string, unknown> =
-		opts.paperIds.length === 1
-			? { paperId: opts.paperIds[0] }
-			: { paperId: { $in: opts.paperIds } };
+		opts.docIds.length === 1
+			? { docId: opts.docIds[0] }
+			: { docId: { $in: opts.docIds } };
 
 	let results: [Document, number][];
 	try {
@@ -491,9 +511,9 @@ export async function retrieveContext(
 	if (matchedIds.length === 0) return "";
 
 	const rows = await opts.db
-		.select({ id: documents.id, content: documents.content })
-		.from(documents)
-		.where(inArray(documents.id, matchedIds));
+		.select({ id: chunksTable.id, content: chunksTable.content })
+		.from(chunksTable)
+		.where(inArray(chunksTable.id, matchedIds));
 
 	const contentMap = new Map(rows.map((r) => [r.id, r.content]));
 	return matchedIds
