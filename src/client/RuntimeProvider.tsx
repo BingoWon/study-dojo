@@ -1,3 +1,4 @@
+import type { UIMessage } from "@ai-sdk/react";
 import type { AttachmentAdapter } from "@assistant-ui/react";
 import {
 	AssistantRuntimeProvider,
@@ -5,7 +6,6 @@ import {
 	useAui,
 	useRemoteThreadListRuntime,
 	type RemoteThreadListAdapter,
-	type ThreadHistoryAdapter,
 } from "@assistant-ui/react";
 import {
 	AssistantChatTransport,
@@ -13,10 +13,15 @@ import {
 } from "@assistant-ui/react-ai-sdk";
 import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import { createAssistantStream } from "assistant-stream";
-import { type FC, type ReactNode, useMemo } from "react";
+import {
+	type FC,
+	type ReactNode,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 
 // ── Attachment Adapter ──────────────────────────────────────────────────────
-// Universal adapter: images → ImagePart, others → FilePart (data URL)
 
 const readAsDataURL = (file: File): Promise<string> =>
 	new Promise((resolve, reject) => {
@@ -77,8 +82,6 @@ const threadListAdapter: RemoteThreadListAdapter = {
 	},
 
 	async initialize(localId) {
-		// The server creates the thread on first chat message (ensureThread).
-		// We just return the localId as the remoteId.
 		return { remoteId: localId, externalId: undefined };
 	},
 
@@ -91,13 +94,10 @@ const threadListAdapter: RemoteThreadListAdapter = {
 	},
 
 	async archive(remoteId) {
-		// We don't support archiving — delete instead
 		await fetch(`/api/threads/${remoteId}`, { method: "DELETE" });
 	},
 
-	async unarchive() {
-		// no-op
-	},
+	async unarchive() {},
 
 	async delete(remoteId) {
 		await fetch(`/api/threads/${remoteId}`, { method: "DELETE" });
@@ -108,9 +108,6 @@ const threadListAdapter: RemoteThreadListAdapter = {
 	},
 
 	async generateTitle(_remoteId, messages) {
-		// Quick client-side placeholder — the server generates the real LLM title
-		// on first message (fire-and-forget in /api/chat), so next list() refresh
-		// will pick up the proper title.
 		return createAssistantStream(async (controller) => {
 			const firstUser = messages.find((m) => m.role === "user");
 			const text =
@@ -126,57 +123,13 @@ const threadListAdapter: RemoteThreadListAdapter = {
 		});
 	},
 
-	// Provider runs inside each thread's context — provides adapters per thread
 	unstable_Provider: ThreadAdapterProvider,
 };
 
 // ── Per-Thread Adapter Provider ─────────────────────────────────────────────
-// Provides ThreadHistoryAdapter (message persistence) and AttachmentAdapter
-// for each thread instance. Runs inside ThreadListItemRuntimeProvider context.
 
 function ThreadAdapterProvider({ children }: { children: ReactNode }) {
-	const aui = useAui();
-
-	const history = useMemo(
-		() => ({
-			async load() {
-				const state = aui.threadListItem().getState();
-				const threadId = state.remoteId;
-				if (!threadId) return { messages: [] };
-
-				try {
-					const res = await fetch(`/api/threads/${threadId}/messages`);
-					if (!res.ok) return { messages: [] };
-					const msgs = (await res.json()) as Record<string, unknown>[];
-					// Cast to ExportedMessageRepository format — our API returns
-					// UIMessage-compatible objects that the runtime can consume
-					return {
-						messages: msgs.map(
-							(m: Record<string, unknown>, i: number, arr: Record<string, unknown>[]) => ({
-								parentId: i > 0 ? (arr[i - 1].id as string) : null,
-								message: m,
-							}),
-						),
-					};
-				} catch {
-					return { messages: [] };
-				}
-			},
-			async append() {
-				// Server persists messages in /api/chat onFinish callback — no-op here
-			},
-		}),
-		[aui],
-	) as unknown as ThreadHistoryAdapter;
-
-	const adapters = useMemo(
-		() => ({
-			attachments: attachmentAdapter,
-			history,
-		}),
-		[history],
-	);
-
+	const adapters = useMemo(() => ({ attachments: attachmentAdapter }), []);
 	return (
 		<RuntimeAdapterProvider adapters={adapters}>
 			{children}
@@ -185,11 +138,25 @@ function ThreadAdapterProvider({ children }: { children: ReactNode }) {
 }
 
 // ── Runtime Hook (per-thread) ───────────────────────────────────────────────
+// Loads messages from server for existing threads, passes to useChatRuntime.
 
 function useMyRuntime() {
 	const aui = useAui();
 	const state = aui.threadListItem().getState();
 	const threadId = state.remoteId ?? state.id;
+
+	// Load messages for existing threads
+	const [messages, setMessages] = useState<UIMessage[] | undefined>(undefined);
+	useEffect(() => {
+		if (!state.remoteId) {
+			setMessages(undefined);
+			return;
+		}
+		fetch(`/api/threads/${state.remoteId}/messages`)
+			.then((r) => (r.ok ? r.json() : []))
+			.then((msgs) => setMessages(msgs as UIMessage[]))
+			.catch(() => setMessages(undefined));
+	}, [state.remoteId]);
 
 	const transport = useMemo(
 		() =>
@@ -202,6 +169,7 @@ function useMyRuntime() {
 
 	return useChatRuntime({
 		transport,
+		messages,
 		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 	});
 }
