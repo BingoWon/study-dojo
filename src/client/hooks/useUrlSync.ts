@@ -8,7 +8,7 @@ import type { SidebarTab } from "../components/ThreadListSidebar";
  * URL format:
  *   /                         → new thread, tab=chat
  *   /c/{threadId}             → specific thread, tab=chat
- *   /c/{threadId}?tab=papers  → specific thread, papers tab
+ *   /c/{threadId}?tab=library → specific thread, library tab
  *   /c/{threadId}?tab=memory  → specific thread, memory tab
  */
 export function useUrlSync(
@@ -30,17 +30,21 @@ export function useUrlSync(
 
 		// Restore tab
 		const tab = params.get("tab");
-		if (tab === "papers" || tab === "memory") {
+		if (tab === "library" || tab === "memory") {
 			setSidebarTab(tab);
 		}
 
-		// Restore thread
+		// Restore thread from URL
 		const match = path.match(/^\/c\/([a-f0-9-]+)$/i);
 		if (match) {
 			const urlThreadId = match[1];
-			// Only switch if this thread exists in the list
-			if (threadIds.includes(urlThreadId) && urlThreadId !== mainThreadId) {
-				aui.threads().switchToThread(urlThreadId);
+			if (threadIds.includes(urlThreadId)) {
+				if (urlThreadId !== mainThreadId) {
+					aui.threads().switchToThread(urlThreadId);
+				}
+			} else {
+				// Thread not found (invalid ID or no permission) → redirect to root
+				window.history.replaceState(null, "", "/");
 			}
 		}
 	}, [threadIds, mainThreadId, aui, setSidebarTab]);

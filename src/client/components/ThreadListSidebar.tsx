@@ -35,7 +35,7 @@ import {
 	useState,
 } from "react";
 
-export type SidebarTab = "chat" | "papers" | "memory";
+export type SidebarTab = "chat" | "library" | "memory";
 
 export const ThreadListSidebar: FC<{
 	activePaperId: string | null;
@@ -55,7 +55,7 @@ export const ThreadListSidebar: FC<{
 				{(
 					[
 						{ id: "chat", label: "对话", icon: MessageSquare },
-						{ id: "papers", label: "资料", icon: BookOpen },
+						{ id: "library", label: "资料", icon: BookOpen },
 						{ id: "memory", label: "记忆", icon: Brain },
 					] as const
 				).map((tab) => (
@@ -97,7 +97,7 @@ export const ThreadListSidebar: FC<{
 				</>
 			)}
 
-			{activeTab === "papers" && (
+			{activeTab === "library" && (
 				<PapersPanel
 					activePaperId={activePaperId}
 					onPaperSelect={onPaperSelect}
@@ -187,6 +187,7 @@ interface MemoryItem {
 const MemoryPanel: FC = () => {
 	const [memories, setMemories] = useState<MemoryItem[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [unavailable, setUnavailable] = useState(false);
 	const [draft, setDraft] = useState("");
 	const [adding, setAdding] = useState(false);
 
@@ -194,6 +195,10 @@ const MemoryPanel: FC = () => {
 		setLoading(true);
 		try {
 			const res = await fetch("/api/memories");
+			if (res.status === 503) {
+				setUnavailable(true);
+				return;
+			}
 			if (res.ok) setMemories(await res.json());
 		} catch {
 			/* ignore */
@@ -208,7 +213,7 @@ const MemoryPanel: FC = () => {
 
 	const handleAdd = async () => {
 		const text = draft.trim();
-		if (!text || adding) return;
+		if (!text || adding || unavailable) return;
 		setAdding(true);
 		setDraft("");
 		try {
@@ -229,6 +234,21 @@ const MemoryPanel: FC = () => {
 		setMemories((prev) => prev.filter((m) => m.id !== id));
 		await fetch(`/api/memories/${id}`, { method: "DELETE" });
 	};
+
+	// Service unavailable
+	if (unavailable) {
+		return (
+			<div className="flex-1 flex flex-col items-center justify-center py-8 text-center px-4">
+				<Brain className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mb-2" />
+				<p className="text-xs text-zinc-400 dark:text-zinc-600">
+					记忆服务未配置
+				</p>
+				<p className="text-[10px] text-zinc-400/60 dark:text-zinc-600/60 mt-1 max-w-[180px]">
+					请在服务端配置 MEM0_API_KEY 以启用长期记忆功能
+				</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex-1 flex flex-col overflow-hidden">
@@ -627,9 +647,15 @@ const PapersPanel: FC<{
 			{/* 资料列表 */}
 			<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1 pointer-events-auto">
 				{papers.length === 0 && (
-					<p className="text-center text-xs text-zinc-400 dark:text-zinc-600 mt-4 pointer-events-none">
-						暂无资料
-					</p>
+					<div className="flex flex-col items-center justify-center py-8 text-center pointer-events-none">
+						<BookOpen className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mb-2" />
+						<p className="text-xs text-zinc-400 dark:text-zinc-600">
+							暂无资料
+						</p>
+						<p className="text-[10px] text-zinc-400/60 dark:text-zinc-600/60 mt-1 max-w-[180px]">
+							拖拽、点击或粘贴上传文件到上方区域
+						</p>
+					</div>
 				)}
 				{papers.map((p) => (
 					<PaperListItem

@@ -340,14 +340,16 @@ async function generateLLMTitle(env: Env, prompt: string): Promise<string> {
 app.get("/api/memories", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
-	if (!c.env.MEM0_API_KEY) return c.json([]);
+	if (!c.env.MEM0_API_KEY)
+		return c.json({ error: "记忆服务未配置" }, 503);
 	return c.json(await listMemories(c.env, userId));
 });
 
 app.post("/api/memories", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
-	if (!c.env.MEM0_API_KEY) return c.json({ error: "缺少 MEM0_API_KEY" }, 500);
+	if (!c.env.MEM0_API_KEY)
+		return c.json({ error: "记忆服务未配置" }, 503);
 	const { text } = await c.req.json<{ text: string }>();
 	if (!text?.trim()) return c.json({ error: "内容不能为空" }, 400);
 	const result = await addMemories(
