@@ -13,13 +13,7 @@ import {
 	lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { createAssistantStream } from "assistant-stream";
-import {
-	type FC,
-	type ReactNode,
-	useEffect,
-	useMemo,
-	useState,
-} from "react";
+import { type FC, type ReactNode, useEffect, useMemo, useState } from "react";
 
 // ── Attachment Adapter ──────────────────────────────────────────────────────
 
@@ -150,10 +144,11 @@ const threadListAdapter: RemoteThreadListAdapter = {
 
 // ── Per-Thread Adapter Provider ─────────────────────────────────────────────
 
+const threadAdapters = { attachments: attachmentAdapter };
+
 function ThreadAdapterProvider({ children }: { children: ReactNode }) {
-	const adapters = useMemo(() => ({ attachments: attachmentAdapter }), []);
 	return (
-		<RuntimeAdapterProvider adapters={adapters}>
+		<RuntimeAdapterProvider adapters={threadAdapters}>
 			{children}
 		</RuntimeAdapterProvider>
 	);

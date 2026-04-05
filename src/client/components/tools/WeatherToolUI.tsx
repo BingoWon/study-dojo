@@ -1,13 +1,11 @@
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { CloudRain, Droplets, MapPin, Sun, Wind } from "lucide-react";
 import type { FC } from "react";
-import { getToolStatus } from "../../lib/tool-status";
 import { ToolCallFallback } from "./ToolCallFallback";
 
 export const WeatherToolUI: FC<ToolCallMessagePartProps> = (props) => {
 	const { args, result, isError } = props;
-	const status = getToolStatus(result !== undefined, isError === true);
-	const isRunning = status === "running";
+	const isRunning = result === undefined;
 
 	const a = args as { location: string } | undefined;
 	const r = result as

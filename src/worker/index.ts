@@ -93,6 +93,9 @@ app.post("/api/threads/:id/generate-title", async (c) => {
 	const threadId = c.req.param("id");
 
 	try {
+		// Ensure thread exists (may race with /api/chat's ensureThread)
+		await ensureThread(db, threadId, userId);
+
 		const title = await generateLLMTitle(
 			c.env,
 			`为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${text}`,
