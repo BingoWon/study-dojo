@@ -47,7 +47,6 @@
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.1",
 		"drizzle-kit": "^0.31.10",
-		"puppeteer": "^24.40.0",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.3",

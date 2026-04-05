@@ -6,14 +6,15 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ThemeProvider } from "./components/ThemeProvider";
 import "./index.css";
 
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+
 const root = document.getElementById("root");
 if (root) {
 	createRoot(root).render(
 		<StrictMode>
 			<ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
 				<ErrorBoundary>
-					{/* @ts-expect-error: comply with strict prompt instructions not to pass publishableKey */}
-					<ClerkProvider afterSignOutUrl="/">
+					<ClerkProvider publishableKey={CLERK_KEY} afterSignOutUrl="/">
 						<App />
 					</ClerkProvider>
 				</ErrorBoundary>

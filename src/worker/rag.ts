@@ -14,7 +14,7 @@ const CHUNK_OVERLAP = 64;
 const INSERT_BATCH = 15;
 const DEFAULT_DIMENSIONS = 1536;
 
-const PADDLE_SYNC_URL =
+const PADDLE_OCR_URL_DEFAULT =
 	"https://y9z388hbpaj013l5.aistudio-app.com/layout-parsing";
 
 type EmbeddingEnv = {
@@ -55,6 +55,7 @@ async function parseWithPaddleOCR(
 	fileBuffer: ArrayBuffer,
 	token: string,
 	fileType: 0 | 1,
+	ocrUrl?: string,
 ): Promise<string> {
 	const bytes = new Uint8Array(fileBuffer);
 	let binary = "";
@@ -77,7 +78,7 @@ async function parseWithPaddleOCR(
 	try {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 120_000);
-		res = await fetch(PADDLE_SYNC_URL, {
+		res = await fetch(ocrUrl || PADDLE_OCR_URL_DEFAULT, {
 			method: "POST",
 			headers: {
 				Authorization: `token ${token}`,
@@ -148,6 +149,7 @@ async function extractMarkdown(
 	category: FileCategory,
 	ocrType: 0 | 1 | undefined,
 	ocrToken: string,
+	ocrUrl?: string,
 ): Promise<string> {
 	switch (category) {
 		case "text":
@@ -155,7 +157,7 @@ async function extractMarkdown(
 		case "docx":
 			return parseDocx(buffer);
 		case "ocr":
-			return parseWithPaddleOCR(buffer, ocrToken, ocrType ?? 0);
+			return parseWithPaddleOCR(buffer, ocrToken, ocrType ?? 0, ocrUrl);
 	}
 }
 
@@ -183,6 +185,7 @@ type StatusCallback = (status: string, data?: Record<string, unknown>) => void;
 
 type IngestEnv = EmbeddingEnv & {
 	PADDLE_OCR_TOKEN: string;
+	PADDLE_OCR_URL?: string;
 	TMT_SECRET_ID?: string;
 	TMT_SECRET_KEY?: string;
 };
@@ -259,6 +262,7 @@ export async function ingestFile(
 		opts.category,
 		opts.ocrType,
 		opts.env.PADDLE_OCR_TOKEN,
+		opts.env.PADDLE_OCR_URL,
 	);
 	const markdownR2Key = `papers/${hash}.md`;
 	await opts.r2.put(markdownR2Key, markdown);
