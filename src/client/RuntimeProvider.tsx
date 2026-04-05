@@ -199,17 +199,26 @@ function useMyRuntime() {
 		};
 	}, [remoteId]);
 
-	// Dynamic header: reads remoteId at send time (after initialize())
+	// Dynamic header: reads remoteId at send time (after initialize()).
+	// IMPORTANT: Read from aui store directly (not stateRef) to avoid a race
+	// condition where initialize() has resolved but React hasn't re-rendered
+	// yet, causing stateRef.current.remoteId to still be undefined and the
+	// local __LOCALID_xxx to be sent as x-thread-id — which creates a
+	// duplicate thread on the backend and splits the conversation.
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
 				api: "/api/chat",
-				headers: () => ({
-					"x-thread-id": stateRef.current.remoteId ?? stateRef.current.id,
-					"x-active-doc": sessionStorage.getItem("center:activeTab") ?? "",
-				}),
+				headers: () => {
+					const freshState = aui.threadListItem().getState();
+					const threadId = freshState.remoteId ?? freshState.id;
+					return {
+						"x-thread-id": threadId,
+						"x-active-doc": sessionStorage.getItem("center:activeTab") ?? "",
+					};
+				},
 			}),
-		[],
+		[aui],
 	);
 
 	// Use stable local ID for useChat's internal state (never changes).

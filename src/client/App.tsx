@@ -150,18 +150,24 @@ function App() {
 				return;
 			}
 
-			// Add highlight
-			const item: HighlightItem = { id: crypto.randomUUID(), text, color };
+			// Add highlight (deduplicate by text+color to prevent re-triggering
+			// when tool UIs re-mount on thread switch)
+			const newItemId = crypto.randomUUID();
+			let added = false;
 			setHighlights((prev) => {
 				const next = new Map(prev);
 				const existing = next.get(docId) ?? [];
-				next.set(docId, [...existing, item]);
+				if (existing.some((h) => h.text === text && h.color === color)) {
+					return prev;
+				}
+				added = true;
+				next.set(docId, [...existing, { id: newItemId, text, color }]);
 				return next;
 			});
 
 			// Auto-open and activate the doc, then scroll to it
 			handleDocSelect(docId, title, lang, fileExt);
-			setScrollToHl(item.id);
+			if (added) setScrollToHl(newItemId);
 		},
 		[handleDocSelect],
 	);
