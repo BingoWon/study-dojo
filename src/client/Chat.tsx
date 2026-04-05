@@ -201,9 +201,9 @@ const ThreadScrollToBottom: FC = () => (
 		<TooltipIconButton
 			tooltip="滚动到底部"
 			variant="outline"
-			className="absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+			className="absolute -top-10 z-10 self-center rounded-full size-8 shadow-md disabled:invisible"
 		>
-			<ArrowDown />
+			<ArrowDown className="size-4" />
 		</TooltipIconButton>
 	</ThreadPrimitive.ScrollToBottom>
 );
@@ -533,7 +533,7 @@ export function Chat({
 			>
 				<ThreadPrimitive.Viewport
 					turnAnchor="top"
-					className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-14"
+					className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto scroll-smooth px-4 pt-12"
 				>
 					{/* Existing thread loading → spinner; new thread → welcome */}
 					<AuiIf

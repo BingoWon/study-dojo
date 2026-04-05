@@ -5,19 +5,9 @@ import {
 	useAuiState,
 } from "@assistant-ui/react";
 import {
-	IconFileTypeBmp,
-	IconFileTypeDoc,
-	IconFileTypeDocx,
-	IconFileTypeJpg,
-	IconFileTypePdf,
-	IconFileTypePng,
-	IconFileTypeTxt,
-} from "@tabler/icons-react";
-import {
 	BookOpen,
 	Brain,
 	Check,
-	FileText,
 	Loader2,
 	MessageSquare,
 	Pencil,
@@ -26,6 +16,7 @@ import {
 	Upload,
 	X,
 } from "lucide-react";
+import { getFileIcon } from "../lib/file-icons";
 import {
 	type FC,
 	type ReactNode,
@@ -550,22 +541,6 @@ interface Paper {
 
 const PLACEHOLDER_TITLE = "等待解析后自动生成标题…";
 
-const FILE_ICONS: Record<string, FC<{ className?: string }>> = {
-	pdf: IconFileTypePdf,
-	png: IconFileTypePng,
-	jpg: IconFileTypeJpg,
-	jpeg: IconFileTypeJpg,
-	bmp: IconFileTypeBmp,
-	doc: IconFileTypeDoc,
-	docx: IconFileTypeDocx,
-	txt: IconFileTypeTxt,
-	md: IconFileTypeTxt,
-	markdown: IconFileTypeTxt,
-};
-
-function getFileIcon(ext?: string | null): FC<{ className?: string }> {
-	return FILE_ICONS[ext ?? ""] ?? FileText;
-}
 
 const PapersPanel: FC<{
 	activePaperId: string | null;

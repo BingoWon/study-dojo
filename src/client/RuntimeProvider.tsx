@@ -202,8 +202,10 @@ function useMyRuntime() {
 		[],
 	);
 
+	// Use stable local ID for useChat's internal state (never changes).
+	// remoteId is only used in transport headers for the server.
 	const chat = useChat({
-		id: remoteId ?? stateRef.current.id,
+		id: stateRef.current.id,
 		transport,
 		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 	});

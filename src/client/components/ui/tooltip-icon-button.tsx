@@ -22,7 +22,6 @@ export const TooltipIconButton = forwardRef<
 	HTMLButtonElement,
 	ButtonHTMLAttributes<HTMLButtonElement> & {
 		tooltip: string;
-		side?: string;
 		variant?: Variant;
 		size?: Size;
 		children: ReactNode;

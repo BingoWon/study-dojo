@@ -1,12 +1,5 @@
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
-import {
-	IconFileTypeDocx,
-	IconFileTypeJpg,
-	IconFileTypePdf,
-	IconFileTypePng,
-	IconFileTypeTxt,
-} from "@tabler/icons-react";
-import { ChefHat, FileText, Globe, Languages } from "lucide-react";
+import { ChefHat, Globe, Languages } from "lucide-react";
 import { type FC, useCallback, useRef, useState } from "react";
 import { Chat } from "./Chat";
 import { CollapsedHandle } from "./components/CollapsedHandle";
@@ -25,19 +18,10 @@ import {
 } from "./components/ThreadListSidebar";
 import { useResizableLayout } from "./hooks/useResizableLayout";
 import { useUrlSync } from "./hooks/useUrlSync";
+import { getFileIcon } from "./lib/file-icons";
 import { RuntimeProvider } from "./RuntimeProvider";
 
 type CenterTab = "recipe" | "paper";
-
-const FILE_TAB_ICONS: Record<string, FC<{ className?: string }>> = {
-	pdf: IconFileTypePdf,
-	png: IconFileTypePng,
-	jpg: IconFileTypeJpg,
-	jpeg: IconFileTypeJpg,
-	docx: IconFileTypeDocx,
-	txt: IconFileTypeTxt,
-	md: IconFileTypeTxt,
-};
 
 function App() {
 	const [recipe, setRecipe] = useState<Recipe>(INITIAL_RECIPE);
@@ -230,7 +214,7 @@ function App() {
 										>
 											{(() => {
 												const Icon =
-													FILE_TAB_ICONS[selectedPaper.fileExt ?? ""] ?? FileText;
+													getFileIcon(selectedPaper.fileExt);
 												return <Icon className="w-3.5 h-3.5 shrink-0" />;
 											})()}
 											<span className="truncate">{selectedPaper.title}</span>
