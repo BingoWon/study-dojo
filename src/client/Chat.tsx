@@ -1,24 +1,15 @@
-import { type UIMessage as Message, useChat } from "@ai-sdk/react";
-import type {
-	AttachmentAdapter,
-	ToolCallMessagePartProps,
-} from "@assistant-ui/react";
+import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import {
 	ActionBarPrimitive,
-	AssistantRuntimeProvider,
 	AttachmentPrimitive,
 	BranchPickerPrimitive,
 	ComposerPrimitive,
 	MessagePrimitive,
 	ThreadPrimitive,
+	useAui,
+	useAuiState,
 } from "@assistant-ui/react";
-import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import {
-	DefaultChatTransport,
-	lastAssistantMessageIsCompleteWithToolCalls,
-} from "ai";
-import {
-	AlertCircle,
 	Bot,
 	Check,
 	ChevronDown,
@@ -31,15 +22,7 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import {
-	createContext,
-	type FC,
-	useContext,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { createContext, type FC, useContext, useEffect, useRef } from "react";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { TextPart } from "./components/message/TextPart";
 import type { Recipe } from "./components/RecipePanel";
@@ -51,61 +34,7 @@ import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { WeatherToolUI } from "./components/tools/WeatherToolUI";
 
-// ── Attachment Adapter ───────────────────────────────────────────────────────
-// Universal adapter that handles all file types:
-//   - Images → ImageMessagePart (data URL)
-//   - Text   → TextMessagePart  (inline content, no XML wrapper)
-//   - Others → FileMessagePart  (data URL — PDFs, audio, video)
-
-const readAsDataURL = (file: File): Promise<string> =>
-	new Promise((resolve, reject) => {
-		const r = new FileReader();
-		r.onload = () => resolve(r.result as string);
-		r.onerror = reject;
-		r.readAsDataURL(file);
-	});
-
-const attachmentAdapter: AttachmentAdapter = {
-	accept: "image/*,application/pdf,video/*,audio/*",
-	async add({ file }) {
-		const isImage = file.type.startsWith("image/");
-		return {
-			id: file.name,
-			type: isImage ? "image" : "document",
-			name: file.name,
-			contentType: file.type,
-			file,
-			status: { type: "requires-action", reason: "composer-send" },
-		};
-	},
-	async send(attachment) {
-		const { file } = attachment;
-		const url = await readAsDataURL(file);
-		if (file.type.startsWith("image/")) {
-			return {
-				...attachment,
-				status: { type: "complete" },
-				content: [{ type: "image", image: url }],
-			};
-		}
-		return {
-			...attachment,
-			status: { type: "complete" },
-			content: [{ type: "file", data: url, mimeType: file.type }],
-		};
-	},
-	async remove() {},
-};
-
 // ── Recipe Update Context ────────────────────────────────────────────────────
-
-type AddToolResultFn = (opts: {
-	tool: string;
-	toolCallId: string;
-	// biome-ignore lint/suspicious/noExplicitAny: tool output varies per tool
-	output: any;
-}) => void;
-export const AddToolResultCtx = createContext<AddToolResultFn | null>(null);
 
 const RecipeUpdateCtx = createContext<((data: Partial<Recipe>) => void) | null>(
 	null,
@@ -286,218 +215,135 @@ const RecipeToolUI: FC<ToolCallMessagePartProps> = ({ result, isError }) => {
 
 // ── Empty State (Recipe-specific) ─────────────────────────────────────────────
 
-const RecipeEmptyState: FC<{ onSend: (text: string) => void }> = ({
-	onSend,
-}) => (
-	<div className="flex flex-col items-center justify-center h-full text-center px-4 select-none">
-		<div className="text-4xl mb-4">🍳</div>
-		<h2 className="text-lg font-bold text-zinc-700 dark:text-zinc-300 mb-2">
-			AI 食谱助手
-		</h2>
-		<p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 max-w-xs">
-			告诉我你想做什么菜，或者点击下方快速开始
-		</p>
-		<div className="flex flex-col gap-2 w-full max-w-xs">
-			{[
-				{ label: "意大利面", prompt: "做一道经典的意大利面" },
-				{ label: "中式炒菜", prompt: "做一道简单的家常炒菜" },
-				{ label: "健康沙拉", prompt: "做一份低卡健康沙拉" },
-			].map((item) => (
-				<button
-					key={item.label}
-					type="button"
-					onClick={() => onSend(item.prompt)}
-					className="text-left px-4 py-3 rounded-xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-sm text-zinc-700 dark:text-zinc-300"
-				>
-					🍽️ {item.label}
-				</button>
-			))}
+const RecipeEmptyState: FC = () => {
+	const aui = useAui();
+
+	const send = (text: string) => {
+		aui.thread().append({
+			role: "user",
+			content: [{ type: "text", text }],
+		});
+	};
+
+	return (
+		<div className="flex flex-col items-center justify-center h-full text-center px-4 select-none">
+			<div className="text-4xl mb-4">🍳</div>
+			<h2 className="text-lg font-bold text-zinc-700 dark:text-zinc-300 mb-2">
+				AI 食谱助手
+			</h2>
+			<p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 max-w-xs">
+				告诉我你想做什么菜，或者点击下方快速开始
+			</p>
+			<div className="flex flex-col gap-2 w-full max-w-xs">
+				{[
+					{ label: "意大利面", prompt: "做一道经典的意大利面" },
+					{ label: "中式炒菜", prompt: "做一道简单的家常炒菜" },
+					{ label: "健康沙拉", prompt: "做一份低卡健康沙拉" },
+				].map((item) => (
+					<button
+						key={item.label}
+						type="button"
+						onClick={() => send(item.prompt)}
+						className="text-left px-4 py-3 rounded-xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition text-sm text-zinc-700 dark:text-zinc-300"
+					>
+						🍽️ {item.label}
+					</button>
+				))}
+			</div>
 		</div>
-	</div>
-);
-
-// ── Error Banner ─────────────────────────────────────────────────────────────
-
-function parseErrorMessage(error: Error): string {
-	const msg = error.message || "";
-	if (msg.includes("API key")) return "API 密钥无效或未配置";
-	if (msg.includes("rate limit") || msg.includes("429"))
-		return "请求过于频繁，请稍后再试";
-	if (msg.includes("timeout") || msg.includes("ETIMEDOUT"))
-		return "请求超时，请检查网络连接";
-	if (msg.includes("fetch failed") || msg.includes("NetworkError"))
-		return "网络连接失败";
-	if (msg.includes("500")) return "服务器内部错误";
-	return msg.length > 100 ? `${msg.slice(0, 100)}…` : msg || "未知错误";
-}
-
-const ErrorBanner: FC<{ error: Error; onDismiss: () => void }> = ({
-	error,
-	onDismiss,
-}) => (
-	<div className="mx-3 mb-2 flex items-center gap-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 px-4 py-3 text-sm animate-in slide-in-from-top-2 duration-200">
-		<AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-		<span className="flex-1 text-red-700 dark:text-red-300">
-			{parseErrorMessage(error)}
-		</span>
-		<button
-			type="button"
-			onClick={onDismiss}
-			className="shrink-0 rounded-lg p-1 text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 transition-colors cursor-pointer"
-		>
-			<X className="h-3.5 w-3.5" />
-		</button>
-	</div>
-);
+	);
+};
 
 // ── Main Chat ─────────────────────────────────────────────────────────────────
 
 export function Chat({
-	threadId,
-	initialMessages,
-	onTitleUpdate,
 	recipe,
 	onRecipeUpdate,
 	onLoadingChange,
 	registerImprove,
 }: {
-	threadId: string;
-	initialMessages: Message[];
-	onTitleUpdate?: (title: string) => void;
 	recipe: Recipe;
 	onRecipeUpdate: (partial: Partial<Recipe>) => void;
 	onLoadingChange?: (loading: boolean) => void;
 	registerImprove?: (fn: () => void) => void;
 }) {
-	const titleBuf = useRef("");
-	const onTitleRef = useRef(onTitleUpdate);
-	onTitleRef.current = onTitleUpdate;
+	const aui = useAui();
+	const isRunning = useAuiState((s) => s.thread.isRunning);
 
-	const transport = useMemo(
-		() =>
-			new DefaultChatTransport({
-				api: "/api/chat",
-				headers: { "x-thread-id": threadId },
-			}),
-		[threadId],
-	);
-
-	const chat = useChat({
-		id: threadId,
-		transport,
-		messages: initialMessages,
-		sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-		onData: (part) => {
-			const p = part as { type: string; data?: unknown };
-			if (p.type === "data-title-delta" && typeof p.data === "string") {
-				titleBuf.current += p.data;
-				onTitleRef.current?.(titleBuf.current);
-			}
-		},
-	});
-
-	// ── Error tracking ───────────────────────────────────────────────────
-	const [visibleError, setVisibleError] = useState<Error | null>(null);
+	// Track loading state for parent
 	useEffect(() => {
-		if (chat.error) setVisibleError(chat.error);
-	}, [chat.error]);
+		onLoadingChange?.(isRunning);
+	}, [isRunning, onLoadingChange]);
 
+	// Register improve callback
 	useEffect(() => {
-		onLoadingChange?.(
-			chat.status === "streaming" || chat.status === "submitted",
-		);
-	}, [chat.status, onLoadingChange]);
-
-	const runtime = useAISDKRuntime(chat, {
-		adapters: { attachments: attachmentAdapter },
-	});
-
-	useEffect(() => {
-		if (registerImprove) {
-			registerImprove(() => {
-				const recipeCtx = `当前食谱状态：${JSON.stringify(recipe)}`;
-				runtime.thread.append({
-					role: "user",
-					content: [
-						{ type: "text", text: `请优化这个食谱，让它更好。${recipeCtx}` },
-					],
-				});
+		if (!registerImprove) return;
+		registerImprove(() => {
+			const recipeCtx = `当前食谱状态：${JSON.stringify(recipe)}`;
+			aui.thread().append({
+				role: "user",
+				content: [
+					{ type: "text", text: `请优化这个食谱，让它更好。${recipeCtx}` },
+				],
 			});
-		}
-	}, [registerImprove, recipe, runtime]);
+		});
+	}, [registerImprove, recipe, aui]);
 
 	return (
-		<AddToolResultCtx value={chat.addToolResult}>
-			<RecipeUpdateCtx value={onRecipeUpdate}>
-				<AssistantRuntimeProvider runtime={runtime}>
-					<div className="flex h-full w-full flex-col relative overflow-hidden font-sans">
-						<ThreadPrimitive.Root className="flex flex-col h-full w-full relative z-10">
-							<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-3 pt-14 pb-6 scroll-smooth">
-								<ThreadPrimitive.Empty>
-									<RecipeEmptyState
-										onSend={(text) =>
-											runtime.thread.append({
-												role: "user",
-												content: [{ type: "text", text }],
-											})
-										}
-									/>
-								</ThreadPrimitive.Empty>
+		<RecipeUpdateCtx value={onRecipeUpdate}>
+			<div className="flex h-full w-full flex-col relative overflow-hidden font-sans">
+				<ThreadPrimitive.Root className="flex flex-col h-full w-full relative z-10">
+					<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-3 pt-14 pb-6 scroll-smooth">
+						<ThreadPrimitive.Empty>
+							<RecipeEmptyState />
+						</ThreadPrimitive.Empty>
 
-								<ThreadPrimitive.Messages
-									components={{ UserMessage, AssistantMessage }}
+						<ThreadPrimitive.Messages
+							components={{ UserMessage, AssistantMessage }}
+						/>
+
+						<ThreadPrimitive.ScrollToBottom className="fixed bottom-36 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 shadow-lg transition-all opacity-0 data-[visible]:opacity-100 z-20 cursor-pointer">
+							<ChevronDown className="h-4 w-4" />
+						</ThreadPrimitive.ScrollToBottom>
+					</ThreadPrimitive.Viewport>
+
+					<ThreadPrimitive.ViewportFooter className="pb-4 pt-3 sticky bottom-0 bg-gradient-to-t from-white/50 via-white/40 dark:from-zinc-900/50 dark:via-zinc-900/40 to-transparent backdrop-blur-sm z-30">
+						<ComposerPrimitive.Root className="mx-3 flex w-auto flex-col rounded-2xl bg-white/70 dark:bg-zinc-800/70 p-2 shadow-sm border border-white/60 dark:border-zinc-700/50 backdrop-blur-xl transition-all focus-within:border-blue-400/40 focus-within:ring-2 focus-within:ring-blue-400/10">
+							<div className="flex flex-wrap gap-2 px-1 pt-1 pb-0 empty:hidden">
+								<ComposerPrimitive.Attachments
+									components={{ Attachment: ComposerAttachment }}
 								/>
-
-								<ThreadPrimitive.ScrollToBottom className="fixed bottom-36 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-500 shadow-lg transition-all opacity-0 data-[visible]:opacity-100 z-20 cursor-pointer">
-									<ChevronDown className="h-4 w-4" />
-								</ThreadPrimitive.ScrollToBottom>
-							</ThreadPrimitive.Viewport>
-
-							<ThreadPrimitive.ViewportFooter className="pb-4 pt-3 sticky bottom-0 bg-gradient-to-t from-white/50 via-white/40 dark:from-zinc-900/50 dark:via-zinc-900/40 to-transparent backdrop-blur-sm z-30">
-								{visibleError && (
-									<ErrorBanner
-										error={visibleError}
-										onDismiss={() => setVisibleError(null)}
-									/>
-								)}
-								<ComposerPrimitive.Root className="mx-3 flex w-auto flex-col rounded-2xl bg-white/70 dark:bg-zinc-800/70 p-2 shadow-sm border border-white/60 dark:border-zinc-700/50 backdrop-blur-xl transition-all focus-within:border-blue-400/40 focus-within:ring-2 focus-within:ring-blue-400/10">
-									<div className="flex flex-wrap gap-2 px-1 pt-1 pb-0 empty:hidden">
-										<ComposerPrimitive.Attachments
-											components={{ Attachment: ComposerAttachment }}
-										/>
-									</div>
-									<div className="flex items-end gap-1">
-										<ComposerPrimitive.AddAttachment
-											className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
-											title="添加附件"
+							</div>
+							<div className="flex items-end gap-1">
+								<ComposerPrimitive.AddAttachment
+									className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
+									title="添加附件"
+								>
+									<Paperclip className="h-4 w-4" />
+								</ComposerPrimitive.AddAttachment>
+								<ComposerPrimitive.Input
+									placeholder="输入消息..."
+									rows={1}
+									className="flex-1 max-h-28 resize-none bg-transparent px-2 py-2.5 outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 text-sm leading-relaxed"
+								/>
+								<div className="flex items-center gap-1 mb-0.5">
+									<ComposerPrimitive.Cancel className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-red-500 active:scale-95 cursor-pointer">
+										<Trash2 className="h-3.5 w-3.5" />
+									</ComposerPrimitive.Cancel>
+									<ComposerPrimitive.Send asChild>
+										<button
+											type="submit"
+											className="flex h-8 w-10 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40 cursor-pointer"
 										>
-											<Paperclip className="h-4 w-4" />
-										</ComposerPrimitive.AddAttachment>
-										<ComposerPrimitive.Input
-											placeholder="输入消息..."
-											rows={1}
-											className="flex-1 max-h-28 resize-none bg-transparent px-2 py-2.5 outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 text-sm leading-relaxed"
-										/>
-										<div className="flex items-center gap-1 mb-0.5">
-											<ComposerPrimitive.Cancel className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-red-500 active:scale-95 cursor-pointer">
-												<Trash2 className="h-3.5 w-3.5" />
-											</ComposerPrimitive.Cancel>
-											<ComposerPrimitive.Send asChild>
-												<button
-													type="submit"
-													className="flex h-8 w-10 items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-40 cursor-pointer"
-												>
-													<Send className="h-3.5 w-3.5 ml-0.5" />
-												</button>
-											</ComposerPrimitive.Send>
-										</div>
-									</div>
-								</ComposerPrimitive.Root>
-							</ThreadPrimitive.ViewportFooter>
-						</ThreadPrimitive.Root>
-					</div>
-				</AssistantRuntimeProvider>
-			</RecipeUpdateCtx>
-		</AddToolResultCtx>
+											<Send className="h-3.5 w-3.5 ml-0.5" />
+										</button>
+									</ComposerPrimitive.Send>
+								</div>
+							</div>
+						</ComposerPrimitive.Root>
+					</ThreadPrimitive.ViewportFooter>
+				</ThreadPrimitive.Root>
+			</div>
+		</RecipeUpdateCtx>
 	);
 }

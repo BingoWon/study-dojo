@@ -47,6 +47,9 @@ importers:
       ai:
         specifier: ^6.0.142
         version: 6.0.142(zod@4.3.6)
+      assistant-stream:
+        specifier: ^0.3.9
+        version: 0.3.9
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.0)
@@ -2688,8 +2691,8 @@ packages:
   assistant-cloud@0.1.23:
     resolution: {integrity: sha512-dUT+ALeXrGSC3J8jGp9HRPzHVLTfLBAFyUiPKMnV6lQ/sUAXkbUQ8BLfj1Q2ZRoCW+Y22/VuNsCJ0C97W7+o6g==}
 
-  assistant-stream@0.3.8:
-    resolution: {integrity: sha512-rE6WCaysWW1N7JGA1J5D6rOojVY2SMC3bpbtsJ/2gSXOxrBXrQPp7RSo6Ojx2n0eBca0RILFwMlUNXI6UKj+1g==}
+  assistant-stream@0.3.9:
+    resolution: {integrity: sha512-lemXFg+VFwKiAjqj3sIXF67d5Gy42ghVLYqJOFjhrT5+nPMrBMluFtoZSe/M7ZxZm5jNklIGRbkk6UU3T32iEg==}
 
   babel-jest@29.7.0:
     resolution: {integrity: sha512-BrvGY3xZSwEcCzKvKsCi2GgHqDqsYkOP4/by5xCgIwGXQxIEh+8ew3gmrE1y7XRR6LHZIj6yLYnUi/mm2KXKBg==}
@@ -4921,7 +4924,7 @@ snapshots:
     dependencies:
       '@assistant-ui/store': 0.2.5(@assistant-ui/tap@0.5.5(@types/react@19.2.14)(react@19.2.4))(@types/react@19.2.14)(react@19.2.4)
       '@assistant-ui/tap': 0.5.5(@types/react@19.2.14)(react@19.2.4)
-      assistant-stream: 0.3.8
+      assistant-stream: 0.3.9
       nanoid: 5.1.7
     optionalDependencies:
       '@types/react': 19.2.14
@@ -4956,7 +4959,7 @@ snapshots:
       '@radix-ui/react-use-callback-ref': 1.1.1(@types/react@19.2.14)(react@19.2.4)
       '@radix-ui/react-use-escape-keydown': 1.1.1(@types/react@19.2.14)(react@19.2.4)
       assistant-cloud: 0.1.23
-      assistant-stream: 0.3.8
+      assistant-stream: 0.3.9
       nanoid: 5.1.7
       radix-ui: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
@@ -7364,9 +7367,9 @@ snapshots:
 
   assistant-cloud@0.1.23:
     dependencies:
-      assistant-stream: 0.3.8
+      assistant-stream: 0.3.9
 
-  assistant-stream@0.3.8:
+  assistant-stream@0.3.9:
     dependencies:
       '@standard-schema/spec': 1.1.0
       nanoid: 5.1.7

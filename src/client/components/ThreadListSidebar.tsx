@@ -1,4 +1,10 @@
 import {
+	ThreadListItemPrimitive,
+	ThreadListPrimitive,
+	useAui,
+	useAuiState,
+} from "@assistant-ui/react";
+import {
 	IconFileTypeBmp,
 	IconFileTypeDoc,
 	IconFileTypeDocx,
@@ -26,18 +32,11 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { Thread } from "../lib/useThreads";
 
 export type SidebarTab = "chat" | "rag";
 
 export const ThreadListSidebar: FC<{
-	threads: Thread[];
-	activeThreadId: string | null;
 	activePaperId: string | null;
-	onSelect: (id: string) => void;
-	onCreate: () => void;
-	onDelete: (id: string) => void;
-	onRename: (id: string, title: string) => void;
 	activeTab: SidebarTab;
 	onTabChange: (tab: SidebarTab) => void;
 	onPaperSelect?: (
@@ -46,18 +45,7 @@ export const ThreadListSidebar: FC<{
 		lang?: string | null,
 		fileExt?: string | null,
 	) => void;
-}> = ({
-	threads,
-	activeThreadId,
-	activePaperId,
-	onSelect,
-	onCreate,
-	onDelete,
-	onRename,
-	activeTab,
-	onTabChange,
-	onPaperSelect,
-}) => {
+}> = ({ activePaperId, activeTab, onTabChange, onPaperSelect }) => {
 	return (
 		<div className="w-full h-full flex flex-col transition-all z-40 relative">
 			{/* Tab 切换 */}
@@ -88,29 +76,20 @@ export const ThreadListSidebar: FC<{
 			{activeTab === "chat" && (
 				<>
 					<div className="p-3">
-						<button
-							type="button"
-							onClick={onCreate}
-							className="flex items-center gap-2 w-full rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm font-medium px-3 py-2.5 transition border border-transparent hover:border-zinc-300 dark:hover:border-zinc-800 cursor-pointer"
-						>
-							<Plus className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-							开启新对话
-						</button>
+						<ThreadListPrimitive.New asChild>
+							<button
+								type="button"
+								className="flex items-center gap-2 w-full rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-900 dark:text-zinc-100 text-sm font-medium px-3 py-2.5 transition border border-transparent hover:border-zinc-300 dark:hover:border-zinc-800 cursor-pointer"
+							>
+								<Plus className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+								开启新对话
+							</button>
+						</ThreadListPrimitive.New>
 					</div>
 					<div className="flex-1 overflow-y-auto px-2 pb-4 flex flex-col gap-1">
-						{threads.map((t) => (
-							<ThreadListItem
-								key={t.id}
-								title={t.title}
-								isActive={t.id === activeThreadId}
-								onClick={() => onSelect(t.id)}
-								onDelete={(e) => {
-									e.stopPropagation();
-									onDelete(t.id);
-								}}
-								onRename={(title) => onRename(t.id, title)}
-							/>
-						))}
+						<ThreadListPrimitive.Items>
+							{() => <RuntimeThreadItem />}
+						</ThreadListPrimitive.Items>
 					</div>
 				</>
 			)}
@@ -122,6 +101,69 @@ export const ThreadListSidebar: FC<{
 				/>
 			)}
 		</div>
+	);
+};
+
+// ── Runtime-backed Thread Item ──────────────────────────────────────────────
+
+const RuntimeThreadItem: FC = () => {
+	const aui = useAui();
+	const [editing, setEditing] = useState(false);
+	const title = useAuiState((s) => s.threadListItem.title) || "新对话";
+	const id = useAuiState((s) => s.threadListItem.id);
+	const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+	const isActive = id === mainThreadId;
+
+	if (editing) {
+		return (
+			<ThreadListItemPrimitive.Root className="w-full">
+				<InlineEdit
+					icon={<MessageSquare className="w-4 h-4" />}
+					value={title}
+					onSave={(newTitle) => aui.threadListItem().rename(newTitle)}
+					onCancel={() => setEditing(false)}
+				/>
+			</ThreadListItemPrimitive.Root>
+		);
+	}
+
+	return (
+		<ThreadListItemPrimitive.Root
+			className={`${ITEM_BASE} ${isActive ? ITEM_ACTIVE : ITEM_IDLE}`}
+		>
+			<ThreadListItemPrimitive.Trigger
+				className="flex items-center gap-2 overflow-hidden flex-1 min-w-0 cursor-pointer"
+				onDoubleClick={() => setEditing(true)}
+			>
+				<MessageSquare className="w-4 h-4 opacity-50 shrink-0" />
+				<span className="truncate">
+					<ThreadListItemPrimitive.Title fallback="新对话" />
+				</span>
+			</ThreadListItemPrimitive.Trigger>
+			<div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+				<span
+					role="button"
+					tabIndex={-1}
+					onClick={(e) => {
+						e.stopPropagation();
+						setEditing(true);
+					}}
+					onKeyDown={() => {}}
+					className="p-1 hover:text-blue-500 transition cursor-pointer"
+				>
+					<Pencil className="w-3 h-3" />
+				</span>
+				<ThreadListItemPrimitive.Delete asChild>
+					<span
+						role="button"
+						tabIndex={-1}
+						className="p-1 hover:text-red-500 transition cursor-pointer"
+					>
+						<X className="w-3.5 h-3.5" />
+					</span>
+				</ThreadListItemPrimitive.Delete>
+			</div>
+		</ThreadListItemPrimitive.Root>
 	);
 };
 
@@ -690,43 +732,5 @@ const PaperListItem: FC<{
 			)}
 			{!isReady && <ItemActions onRemove={onUnlink} />}
 		</div>
-	);
-};
-
-// ── Thread List Item ─────────────────────────────────────────────────────────
-
-const ThreadListItem: FC<{
-	title: string;
-	isActive?: boolean;
-	onClick: () => void;
-	onDelete: (e: React.MouseEvent) => void;
-	onRename: (title: string) => void;
-}> = ({ title, isActive, onClick, onDelete, onRename }) => {
-	const [editing, setEditing] = useState(false);
-
-	if (editing) {
-		return (
-			<InlineEdit
-				icon={<MessageSquare className="w-4 h-4" />}
-				value={title}
-				onSave={onRename}
-				onCancel={() => setEditing(false)}
-			/>
-		);
-	}
-
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			onDoubleClick={() => setEditing(true)}
-			className={`${ITEM_BASE} ${isActive ? ITEM_ACTIVE : ITEM_IDLE}`}
-		>
-			<div className="flex items-center gap-2 overflow-hidden">
-				<MessageSquare className="w-4 h-4 opacity-50 shrink-0" />
-				<span className="truncate">{title}</span>
-			</div>
-			<ItemActions onEdit={() => setEditing(true)} onRemove={onDelete} />
-		</button>
 	);
 };

@@ -1,4 +1,3 @@
-import type { UIMessage as Message } from "@ai-sdk/react";
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
 import {
 	IconFileTypeDocx,
@@ -7,8 +6,8 @@ import {
 	IconFileTypePng,
 	IconFileTypeTxt,
 } from "@tabler/icons-react";
-import { ChefHat, FileText, Globe, Languages, Loader2 } from "lucide-react";
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { ChefHat, FileText, Globe, Languages } from "lucide-react";
+import { type FC, useCallback, useRef, useState } from "react";
 import { Chat } from "./Chat";
 import { CollapsedHandle } from "./components/CollapsedHandle";
 import { Divider } from "./components/Divider";
@@ -25,7 +24,7 @@ import {
 	ThreadListSidebar,
 } from "./components/ThreadListSidebar";
 import { useResizableLayout } from "./hooks/useResizableLayout";
-import { useThreads } from "./lib/useThreads";
+import { RuntimeProvider } from "./RuntimeProvider";
 
 type CenterTab = "recipe" | "paper";
 
@@ -40,19 +39,6 @@ const FILE_TAB_ICONS: Record<string, FC<{ className?: string }>> = {
 };
 
 function App() {
-	const {
-		threads,
-		activeThreadId,
-		setActiveThreadId,
-		createThread,
-		deleteThread,
-		setThreadTitle,
-		updateThreadTitle,
-		loading,
-	} = useThreads();
-
-	const [initialMessages, setInitialMessages] = useState<Message[]>([]);
-	const [chatReady, setChatReady] = useState(false);
 	const [recipe, setRecipe] = useState<Recipe>(INITIAL_RECIPE);
 	const [changedKeys, setChangedKeys] = useState<string[]>([]);
 	const [isAiLoading, setIsAiLoading] = useState(false);
@@ -68,37 +54,6 @@ function App() {
 	const improveRef = useRef<(() => void) | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const layout = useResizableLayout(containerRef);
-
-	useEffect(() => {
-		if (!activeThreadId) {
-			setChatReady(false);
-			return;
-		}
-		let cancelled = false;
-		setChatReady(false);
-		fetch(`/api/threads/${activeThreadId}/messages`)
-			.then((res) => (res.ok ? res.json() : []))
-			.then((msgs: unknown) => {
-				if (cancelled) return;
-				setInitialMessages(Array.isArray(msgs) ? (msgs as Message[]) : []);
-				setChatReady(true);
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setInitialMessages([]);
-				setChatReady(true);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [activeThreadId]);
-
-	const handleTitleUpdate = useCallback(
-		(title: string) => {
-			if (activeThreadId) setThreadTitle(activeThreadId, title);
-		},
-		[activeThreadId, setThreadTitle],
-	);
 
 	const handleRecipeUpdate = useCallback((partial: Partial<Recipe>) => {
 		setRecipe((prev) => {
@@ -219,147 +174,132 @@ function App() {
 			</Show>
 
 			<Show when="signed-in">
-				<div
-					ref={containerRef}
-					className={`flex-1 flex h-full overflow-hidden pt-2 pb-2 gap-1.5 z-10 ${layout.leftCollapsed ? "pl-0" : "pl-2"} ${layout.rightCollapsed ? "pr-0" : "pr-2"}`}
-				>
-					{/* 左栏 */}
-					{layout.leftCollapsed ? (
-						<CollapsedHandle direction="left" onClick={layout.toggleLeft} />
-					) : (
-						<div
-							style={{ width: layout.leftWidth }}
-							className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
-						>
-							<ThreadListSidebar
-								threads={threads}
-								activeThreadId={activeThreadId}
-								activePaperId={selectedPaper?.id ?? null}
-								onSelect={setActiveThreadId}
-								onCreate={createThread}
-								onDelete={deleteThread}
-								onRename={updateThreadTitle}
-								activeTab={sidebarTab}
-								onTabChange={setSidebarTab}
-								onPaperSelect={handlePaperSelect}
-							/>
-						</div>
-					)}
+				<RuntimeProvider>
+					<div
+						ref={containerRef}
+						className={`flex-1 flex h-full overflow-hidden pt-2 pb-2 gap-1.5 z-10 ${layout.leftCollapsed ? "pl-0" : "pl-2"} ${layout.rightCollapsed ? "pr-0" : "pr-2"}`}
+					>
+						{/* 左栏 */}
+						{layout.leftCollapsed ? (
+							<CollapsedHandle direction="left" onClick={layout.toggleLeft} />
+						) : (
+							<div
+								style={{ width: layout.leftWidth }}
+								className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
+							>
+								<ThreadListSidebar
+									activePaperId={selectedPaper?.id ?? null}
+									activeTab={sidebarTab}
+									onTabChange={setSidebarTab}
+									onPaperSelect={handlePaperSelect}
+								/>
+							</div>
+						)}
 
-					{/* 左分割线 */}
-					{!layout.leftCollapsed && <Divider {...layout.leftDividerProps} />}
+						{/* 左分割线 */}
+						{!layout.leftCollapsed && <Divider {...layout.leftDividerProps} />}
 
-					{/* 中间面板（tab 切换） */}
-					<div className="flex-1 h-full flex flex-col min-w-0 rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50 overflow-hidden">
-						{/* Tab bar */}
-						<div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-zinc-200/50 dark:border-zinc-700/50 flex-shrink-0">
-							<div className="flex items-center gap-1">
-								<button
-									type="button"
-									onClick={() => setCenterTab("recipe")}
-									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-										centerTab === "recipe"
-											? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
-											: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-									}`}
-								>
-									<ChefHat className="w-3.5 h-3.5" />
-									食谱
-								</button>
-								{selectedPaper && (
+						{/* 中间面板（tab 切换） */}
+						<div className="flex-1 h-full flex flex-col min-w-0 rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50 overflow-hidden">
+							{/* Tab bar */}
+							<div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-zinc-200/50 dark:border-zinc-700/50 flex-shrink-0">
+								<div className="flex items-center gap-1">
 									<button
 										type="button"
-										onClick={() => setCenterTab("paper")}
-										className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer max-w-[200px] ${
-											centerTab === "paper"
+										onClick={() => setCenterTab("recipe")}
+										className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+											centerTab === "recipe"
 												? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
 												: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
 										}`}
 									>
-										{(() => {
-											const Icon =
-												FILE_TAB_ICONS[selectedPaper.fileExt ?? ""] ?? FileText;
-											return <Icon className="w-3.5 h-3.5 shrink-0" />;
-										})()}
-										<span className="truncate">{selectedPaper.title}</span>
+										<ChefHat className="w-3.5 h-3.5" />
+										食谱
 									</button>
+									{selectedPaper && (
+										<button
+											type="button"
+											onClick={() => setCenterTab("paper")}
+											className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer max-w-[200px] ${
+												centerTab === "paper"
+													? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
+													: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+											}`}
+										>
+											{(() => {
+												const Icon =
+													FILE_TAB_ICONS[selectedPaper.fileExt ?? ""] ?? FileText;
+												return <Icon className="w-3.5 h-3.5 shrink-0" />;
+											})()}
+											<span className="truncate">{selectedPaper.title}</span>
+										</button>
+									)}
+								</div>
+
+								{/* Language toggle (English papers only) */}
+								{centerTab === "paper" && selectedPaper?.lang === "en" && (
+									<div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+										<button
+											type="button"
+											onClick={() => setViewLang("zh")}
+											className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
+												viewLang === "zh"
+													? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+													: "text-zinc-500 dark:text-zinc-400"
+											}`}
+										>
+											<Languages className="w-3 h-3" />
+											中文翻译
+										</button>
+										<button
+											type="button"
+											onClick={() => setViewLang("original")}
+											className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
+												viewLang === "original"
+													? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+													: "text-zinc-500 dark:text-zinc-400"
+											}`}
+										>
+											<Globe className="w-3 h-3" />
+											英文原文
+										</button>
+									</div>
 								)}
 							</div>
 
-							{/* Language toggle (English papers only) */}
-							{centerTab === "paper" && selectedPaper?.lang === "en" && (
-								<div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
-									<button
-										type="button"
-										onClick={() => setViewLang("zh")}
-										className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
-											viewLang === "zh"
-												? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-												: "text-zinc-500 dark:text-zinc-400"
-										}`}
-									>
-										<Languages className="w-3 h-3" />
-										中文翻译
-									</button>
-									<button
-										type="button"
-										onClick={() => setViewLang("original")}
-										className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
-											viewLang === "original"
-												? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-												: "text-zinc-500 dark:text-zinc-400"
-										}`}
-									>
-										<Globe className="w-3 h-3" />
-										英文原文
-									</button>
+							{/* 内容区 */}
+							{centerTab === "recipe" && (
+								<div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-4">
+									<RecipePanel
+										recipe={recipe}
+										onUpdate={handleRecipeUpdate}
+										isLoading={isAiLoading}
+										changedKeys={changedKeys}
+										onImprove={handleImprove}
+									/>
 								</div>
+							)}
+							{centerTab === "paper" && selectedPaper && (
+								<PaperViewer
+									paperId={selectedPaper.id}
+									viewLang={selectedPaper.lang === "en" ? viewLang : "original"}
+								/>
 							)}
 						</div>
 
-						{/* 内容区 */}
-						{centerTab === "recipe" && (
-							<div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-4">
-								<RecipePanel
-									recipe={recipe}
-									onUpdate={handleRecipeUpdate}
-									isLoading={isAiLoading}
-									changedKeys={changedKeys}
-									onImprove={handleImprove}
-								/>
-							</div>
-						)}
-						{centerTab === "paper" && selectedPaper && (
-							<PaperViewer
-								paperId={selectedPaper.id}
-								viewLang={selectedPaper.lang === "en" ? viewLang : "original"}
-							/>
-						)}
-					</div>
+						{/* 右分割线 */}
+						{!layout.rightCollapsed && <Divider {...layout.rightDividerProps} />}
 
-					{/* 右分割线 */}
-					{!layout.rightCollapsed && <Divider {...layout.rightDividerProps} />}
-
-					{/* 右栏 */}
-					{layout.rightCollapsed ? (
-						<CollapsedHandle direction="right" onClick={layout.toggleRight} />
-					) : (
-						<div
-							style={{ width: layout.rightWidth }}
-							className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
-						>
-							{loading && (
-								<div className="h-full flex items-center justify-center">
-									<Loader2 className="w-6 h-6 text-zinc-400 animate-spin" />
-								</div>
-							)}
-							{!loading && activeThreadId && chatReady && (
+						{/* 右栏 */}
+						{layout.rightCollapsed ? (
+							<CollapsedHandle direction="right" onClick={layout.toggleRight} />
+						) : (
+							<div
+								style={{ width: layout.rightWidth }}
+								className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50"
+							>
 								<ErrorBoundary>
 									<Chat
-										key={activeThreadId}
-										threadId={activeThreadId}
-										initialMessages={initialMessages}
-										onTitleUpdate={handleTitleUpdate}
 										recipe={recipe}
 										onRecipeUpdate={handleRecipeUpdate}
 										onLoadingChange={setIsAiLoading}
@@ -368,10 +308,10 @@ function App() {
 										}}
 									/>
 								</ErrorBoundary>
-							)}
-						</div>
-					)}
-				</div>
+							</div>
+						)}
+					</div>
+				</RuntimeProvider>
 			</Show>
 		</main>
 	);

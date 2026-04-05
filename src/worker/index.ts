@@ -80,6 +80,39 @@ app.get("/api/threads/:id/messages", async (c) => {
 	return c.json(rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts })));
 });
 
+app.post("/api/threads/:id/generate-title", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const { text } = await c.req
+		.json<{ text?: string }>()
+		.catch(() => ({ text: undefined }));
+	if (!text) return c.json({ title: "新对话" });
+
+	const db = createDb(c.env.DB);
+	const threadId = c.req.param("id");
+
+	try {
+		const title = await generateLLMTitle(
+			c.env,
+			`为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${text}`,
+		);
+
+		if (title) {
+			await updateThreadTitle(db, threadId, userId, title);
+		}
+
+		return c.json({ title: title || text.slice(0, 50) });
+	} catch (e) {
+		log.error({
+			module: "chat",
+			msg: "generate-title failed",
+			error: String(e),
+		});
+		return c.json({ title: text.slice(0, 50) });
+	}
+});
+
 // ── Papers ───────────────────────────────────────────────────────────────────
 
 app.get("/api/papers", async (c) => {
@@ -265,18 +298,10 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 			: fileName
 		: null;
 	const hintStr = fullName ? `\n文件名：${fullName}` : "";
-	const titleModel = createTitleModel(c.env);
-	const result = streamText({
-		model: titleModel,
-		prompt: `根据以下资料内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hintStr}\n${excerpt}`,
-		providerOptions: { openrouter: { reasoning: { effort: "none" } } },
-	});
-
-	let title = "";
-	for await (const chunk of result.textStream) {
-		title += chunk;
-	}
-	title = title.trim().replace(/["""''「」『』。，！？、：；]/g, "");
+	const title = await generateLLMTitle(
+		c.env,
+		`根据以下资料内容生成简洁中文标题，6-12个字，无标点无引号，只回复标题：${hintStr}\n${excerpt}`,
+	);
 
 	if (title) {
 		await renameUserPaper(db, userId, paperId, title);
@@ -284,6 +309,21 @@ app.post("/api/papers/:id/generate-title", async (c) => {
 
 	return c.json({ title });
 });
+
+// ── Shared Helpers ──────────────────────────────────────────────────────────
+
+async function generateLLMTitle(env: Env, prompt: string): Promise<string> {
+	const result = streamText({
+		model: createTitleModel(env),
+		prompt,
+		providerOptions: { openrouter: { reasoning: { effort: "none" } } },
+	});
+	let title = "";
+	for await (const chunk of result.textStream) {
+		title += chunk;
+	}
+	return title.trim().replace(/["""''「」『』。，！？、：；]/g, "");
+}
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
@@ -315,17 +355,6 @@ function resolveDataUrls(messages: WireMessage[]): WireMessage[] {
 		);
 		return { ...msg, parts };
 	});
-}
-
-function extractLastUserText(messages: WireMessage[]): string {
-	const last = [...messages].reverse().find((m) => m.role === "user");
-	if (!last?.parts) return last?.content ?? "";
-	return (
-		last.parts
-			.filter((p: { type: string }) => p.type === "text")
-			.map((p: { text: string }) => p.text)
-			.join(" ") ?? ""
-	);
 }
 
 // ── Chat (AI SDK streamText + Assistant-UI) ──────────────────────────────────
@@ -393,14 +422,7 @@ app.post("/api/chat", async (c) => {
 			}
 		}
 
-		// ── Determine if title generation is needed ──────────────────────────
-		const userMessages = messages.filter((m) => m.role === "user");
-		const isFirstMessage = userMessages.length === 1;
-		const firstUserText = isFirstMessage
-			? extractLastUserText(userMessages).slice(0, 200)
-			: "";
-
-		// ── Stream with concurrent title generation ──────────────────────────
+		// ── Stream chat response ─────────────────────────────────────────────
 		const wrappedModel = createModel(c.env);
 
 		let resolveFinish!: () => void;
@@ -440,49 +462,7 @@ app.post("/api/chat", async (c) => {
 					}),
 				});
 
-				let titlePromise: Promise<void> | null = null;
-
-				if (firstUserText && threadId && userId) {
-					titlePromise = (async () => {
-						try {
-							const titleResult = streamText({
-								model: createTitleModel(c.env),
-								prompt: `为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${firstUserText}`,
-								providerOptions: {
-									openrouter: {
-										reasoning: { effort: "none" },
-									},
-								},
-							});
-
-							let fullTitle = "";
-							for await (const chunk of titleResult.textStream) {
-								fullTitle += chunk;
-								writer.write({
-									type: "data-title-delta",
-									data: chunk,
-								});
-							}
-
-							const cleaned = fullTitle
-								.trim()
-								.replace(/["""''「」『』。，！？、：；]/g, "");
-							if (cleaned) {
-								await updateThreadTitle(db, threadId, userId, cleaned);
-							}
-						} catch (e) {
-							log.error({
-								module: "chat",
-								msg: "title stream failed",
-								error: String(e),
-							});
-						}
-					})();
-				}
-
 				writer.merge(chatResult.toUIMessageStream({ sendReasoning: true }));
-
-				if (titlePromise) await titlePromise;
 			},
 			onFinish: async ({ messages: finishedMessages }) => {
 				try {

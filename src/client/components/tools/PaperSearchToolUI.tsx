@@ -1,14 +1,14 @@
 import type { ToolCallMessagePartProps } from "@assistant-ui/react";
 import { BookOpen, Loader2, Search, Sparkles, X } from "lucide-react";
-import { type FC, useContext, useState } from "react";
-import { AddToolResultCtx } from "../../Chat";
+import { type FC, useState } from "react";
 
-// ── Suggest Search (blocks agent until user responds via addToolResult) ──────
+// ── Suggest Search (blocks agent until user responds via addResult) ──────
 
 export const SuggestSearchToolUI: FC<ToolCallMessagePartProps> = ({
 	toolCallId,
 	args,
 	result,
+	addResult,
 }) => {
 	const a = args as { queries?: string[]; defaultTopK?: number };
 
@@ -44,18 +44,19 @@ export const SuggestSearchToolUI: FC<ToolCallMessagePartProps> = ({
 			toolCallId={toolCallId}
 			queries={a.queries ?? []}
 			defaultTopK={a.defaultTopK ?? 5}
+			addResult={addResult}
 		/>
 	);
 };
 
-// ── Search Card (calls addToolResult to unblock the agent) ──────────────────
+// ── Search Card (calls addResult to unblock the agent) ──────────────────
 
 const SearchCard: FC<{
 	toolCallId: string;
 	queries: string[];
 	defaultTopK: number;
-}> = ({ toolCallId, queries, defaultTopK }) => {
-	const addToolResult = useContext(AddToolResultCtx);
+	addResult: (result: unknown) => void;
+}> = ({ toolCallId, queries, defaultTopK, addResult }) => {
 	const [selected, setSelected] = useState<number | null>(null);
 	const [custom, setCustom] = useState("");
 	const [topK, setTopK] = useState(defaultTopK);
@@ -68,9 +69,8 @@ const SearchCard: FC<{
 			: null;
 	const canSubmit = !!activeQuery && activeQuery.length > 0;
 
-	// Like Mastra's `respond()` — sends tool result back to the agent
 	const respond = (output: Record<string, unknown>) => {
-		addToolResult?.({ tool: "rag_suggest", toolCallId, output });
+		addResult(output);
 	};
 
 	return (
