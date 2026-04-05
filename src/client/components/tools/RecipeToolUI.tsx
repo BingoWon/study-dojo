@@ -8,20 +8,9 @@ type RecipeArgs = Partial<Recipe>;
 
 export const RecipeToolUI = makeAssistantToolUI<RecipeArgs, RecipeArgs>({
 	toolName: "update_recipe",
-	render: ({ args, argsText, result, status }) => {
+	render: ({ args, result, status, addResult }) => {
 		const onRecipeUpdate = useContext(RecipeUpdateCtx);
 		const { status: argsStatus, propStatus } = useToolArgsStatus<RecipeArgs>();
-
-		// DEBUG
-		console.log("[RecipeToolUI]", {
-			statusType: status.type,
-			argsStatus,
-			propStatus,
-			argsKeys: args ? Object.keys(args) : [],
-			argsTextLen: argsText?.length,
-			argsTextPreview: argsText?.slice(0, 100),
-			hasResult: !!result,
-		});
 
 		// Stream partial args to RecipePanel in real-time
 		const prevArgsRef = useRef<string>("");
@@ -34,7 +23,16 @@ export const RecipeToolUI = makeAssistantToolUI<RecipeArgs, RecipeArgs>({
 			}
 		}, [args, onRecipeUpdate]);
 
-		if (status.type === "running") {
+		// Auto-provide result when args are fully streamed (no server execute)
+		const providedRef = useRef(false);
+		useEffect(() => {
+			if (argsStatus === "complete" && args && !result && !providedRef.current) {
+				providedRef.current = true;
+				addResult(args);
+			}
+		}, [argsStatus, args, result, addResult]);
+
+		if (status.type === "running" || (argsStatus !== "complete" && !result)) {
 			const steps: string[] = [];
 			if (propStatus.title === "complete") steps.push("标题");
 			if (propStatus.skill_level === "complete") steps.push("难度");

@@ -43,11 +43,21 @@ export function useUrlSync(
 
 		const urlRemoteId = match[1];
 
+		// DEBUG
+		console.log("[useUrlSync] restore attempt", {
+			urlRemoteId,
+			threadItemCount: threadItems?.length,
+			threadIdCount: threadIds?.length,
+			mainThreadId,
+			threadItemRemoteIds: threadItems?.map((t) => t.remoteId),
+			threadIds: threadIds?.slice(0, 5),
+		});
+
 		// Find the thread with this remoteId
 		const found = threadItems?.find((t) => t.remoteId === urlRemoteId);
 		if (!found) {
-			// Also try matching directly against threadIds (remoteId might equal id)
 			const directMatch = threadIds?.includes(urlRemoteId);
+			console.log("[useUrlSync] not found in items, direct match:", directMatch);
 			if (directMatch) {
 				if (urlRemoteId !== mainThreadId) {
 					aui.threads().switchToThread(urlRemoteId);
@@ -58,6 +68,7 @@ export function useUrlSync(
 			return;
 		}
 
+		console.log("[useUrlSync] found:", { foundId: found.id, foundRemoteId: found.remoteId });
 		if (found.id !== mainThreadId) {
 			aui.threads().switchToThread(found.id);
 		}

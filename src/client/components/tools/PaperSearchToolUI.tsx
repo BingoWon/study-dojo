@@ -15,19 +15,8 @@ export const SuggestSearchToolUI = makeAssistantToolUI<
 	SuggestResult
 >({
 	toolName: "rag_suggest",
-	render: ({ args, argsText, result, addResult, status }) => {
-		const { status: argsStatus, propStatus } = useToolArgsStatus<SuggestArgs>();
-
-		// DEBUG
-		console.log("[SuggestSearchToolUI]", {
-			statusType: status.type,
-			argsStatus,
-			propStatus,
-			queriesLen: args?.queries?.length,
-			argsTextLen: argsText?.length,
-			argsTextPreview: argsText?.slice(0, 100),
-			hasResult: !!result,
-		});
+	render: ({ args, result, addResult, status }) => {
+		const { propStatus } = useToolArgsStatus<SuggestArgs>();
 
 		// Already resolved — compact confirmation
 		if (result) {
