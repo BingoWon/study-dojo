@@ -432,7 +432,7 @@ export function Chat({
 				<AssistantRuntimeProvider runtime={runtime}>
 					<div className="flex h-full w-full flex-col relative overflow-hidden font-sans">
 						<ThreadPrimitive.Root className="flex flex-col h-full w-full relative z-10">
-							<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-3 py-6 scroll-smooth">
+							<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-3 pt-14 pb-6 scroll-smooth">
 								<ThreadPrimitive.Empty>
 									<RecipeEmptyState
 										onSend={(text) =>

@@ -159,10 +159,14 @@ function App() {
 				style={{ background: "rgba(255, 172, 77, 0.2)", filter: "blur(103px)" }}
 			/>
 
-			<header className="absolute top-0 right-0 p-4 z-50 flex items-center justify-end gap-3">
+			<header className="absolute top-0 right-0 p-3 z-50 flex items-center justify-end gap-2">
 				<ThemeToggle />
 				<Show when="signed-in">
-					<UserButton />
+					<UserButton
+						appearance={{
+							elements: { avatarBox: "h-9 w-9" },
+						}}
+					/>
 				</Show>
 			</header>
 
