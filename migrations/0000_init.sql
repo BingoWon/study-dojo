@@ -2,6 +2,7 @@ CREATE TABLE `threads` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`title` text DEFAULT '新对话' NOT NULL,
+	`persona` text DEFAULT 'professor' NOT NULL,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL,
 	`updated_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );

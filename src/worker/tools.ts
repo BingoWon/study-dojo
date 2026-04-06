@@ -16,26 +16,6 @@ type RagEnv = {
 
 /** Static tools available without request context. */
 export const staticTools = {
-	get_current_time: tool({
-		description:
-			"获取当前日期和时间。当用户询问现在几点或今天日期时调用此工具。",
-		inputSchema: zodSchema(
-			z.object({
-				timezone: z
-					.string()
-					.optional()
-					.describe("IANA 时区标识符，如 'Asia/Shanghai'，默认为 UTC"),
-			}),
-		),
-		execute: async ({ timezone = "Asia/Shanghai" }: { timezone?: string }) => {
-			const now = new Date();
-			return {
-				utc: now.toISOString(),
-				local: now.toLocaleString("zh-CN", { timeZone: timezone }),
-				timezone,
-			};
-		},
-	}),
 	update_recipe: tool({
 		description:
 			"更新食谱卡片。当你创建或修改食谱时必须调用此工具。将完整的食谱数据传入，前端会实时渲染。",

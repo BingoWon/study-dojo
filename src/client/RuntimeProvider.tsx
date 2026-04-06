@@ -5,6 +5,7 @@ import {
 	type RemoteThreadListAdapter,
 	RuntimeAdapterProvider,
 	useAui,
+	useAuiState,
 	useRemoteThreadListRuntime,
 } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
@@ -14,13 +15,16 @@ import {
 } from "ai";
 import { createAssistantStream } from "assistant-stream";
 import {
+	createContext,
 	type FC,
 	type ReactNode,
+	useContext,
 	useEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
+import type { PersonaId } from "../../src/worker/model";
 import { AcademicSearchToolUI } from "./components/tools/AcademicSearchToolUI";
 import { AskUserToolUI } from "./components/tools/AskUserToolUI";
 import {
@@ -35,6 +39,24 @@ import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ElevenLabsScribeAdapter } from "./lib/elevenlabs-scribe-adapter";
 import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
+
+// ── Persona Context (per-thread persona, set at thread creation) ──────────
+
+const PersonaCtx = createContext<{
+	persona: PersonaId;
+	setPersona: (id: PersonaId) => void;
+}>({ persona: "professor", setPersona: () => {} });
+
+export const usePersona = () => useContext(PersonaCtx);
+
+// ── Per-persona voice IDs (must match server-side personas/*.ts) ───────────
+
+const PERSONA_VOICES: Record<PersonaId, string> = {
+	blank_f: "bhJUNIXWQQ94l8eI2VUf",
+	blank_m: "DowyQ68vDpgFYdWVGjc3",
+	professor: "FqHwwZfMdkoU9y0kGIhh",
+	keli: "EXAVITQu4vr4xnSDxMaL", // placeholder — needs custom voice
+};
 
 // ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
 
@@ -89,6 +111,10 @@ const attachmentAdapter: AttachmentAdapter = {
 
 // ── Thread List Adapter (backed by /api/threads) ────────────────────────────
 
+// ── Thread persona mapping (remoteId → persona) ──────────────────────────
+
+const threadPersonaMap = new Map<string, PersonaId>();
+
 const threadListAdapter: RemoteThreadListAdapter = {
 	async list() {
 		const res = await fetch("/api/threads");
@@ -96,7 +122,11 @@ const threadListAdapter: RemoteThreadListAdapter = {
 		const threads = (await res.json()) as {
 			id: string;
 			title: string;
+			persona: string;
 		}[];
+		for (const t of threads) {
+			threadPersonaMap.set(t.id, (t.persona ?? "professor") as PersonaId);
+		}
 		return {
 			threads: threads.map((t) => ({
 				remoteId: t.id,
@@ -190,6 +220,11 @@ function ThreadAdapterProvider({ children }: { children: ReactNode }) {
 
 function useMyRuntime() {
 	const aui = useAui();
+	const { persona } = usePersona();
+
+	// Sync TTS voice to current persona
+	ttsAdapter.voiceId = PERSONA_VOICES[persona];
+
 	const stateRef = useRef(aui.threadListItem().getState());
 	stateRef.current = aui.threadListItem().getState();
 
@@ -217,6 +252,9 @@ function useMyRuntime() {
 	// yet, causing stateRef.current.remoteId to still be undefined and the
 	// local __LOCALID_xxx to be sent as x-thread-id — which creates a
 	// duplicate thread on the backend and splits the conversation.
+	const personaRef = useRef(persona);
+	personaRef.current = persona;
+
 	const transport = useMemo(
 		() =>
 			new DefaultChatTransport({
@@ -226,6 +264,8 @@ function useMyRuntime() {
 					const threadId = freshState.remoteId ?? freshState.id;
 					return {
 						"x-thread-id": threadId,
+						"x-persona": personaRef.current,
+						"x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
 						"x-active-doc": sessionStorage.getItem("center:activeTab") ?? "",
 					};
 				},
@@ -259,25 +299,44 @@ function useMyRuntime() {
 // ── Root Provider ───────────────────────────────────────────────────────────
 
 export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
+	const [persona, setPersona] = useState<PersonaId>("professor");
+	const personaCtx = useMemo(() => ({ persona, setPersona }), [persona]);
+
 	const runtime = useRemoteThreadListRuntime({
 		runtimeHook: useMyRuntime,
 		adapter: threadListAdapter,
 	});
 
 	return (
-		<AssistantRuntimeProvider runtime={runtime}>
-			{/* Each tool UI matches a backend tool by toolName */}
-			<AskUserToolUI />
-			<SearchToolUI />
-			<AcademicSearchToolUI />
-			<DocSuggestToolUI />
-			<DocSearchToolUI />
-			<OpenDocToolUI />
-			<HighlightDocToolUI />
-			<ReadDocToolUI />
-			<RecipeToolUI />
-			<SaveMemoryToolUI />
-			{children}
-		</AssistantRuntimeProvider>
+		<PersonaCtx value={personaCtx}>
+			<AssistantRuntimeProvider runtime={runtime}>
+				<PersonaSync />
+				{/* Each tool UI matches a backend tool by toolName */}
+				<AskUserToolUI />
+				<SearchToolUI />
+				<AcademicSearchToolUI />
+				<DocSuggestToolUI />
+				<DocSearchToolUI />
+				<OpenDocToolUI />
+				<HighlightDocToolUI />
+				<ReadDocToolUI />
+				<RecipeToolUI />
+				<SaveMemoryToolUI />
+				{children}
+			</AssistantRuntimeProvider>
+		</PersonaCtx>
 	);
 };
+
+/** Syncs persona state when the active thread changes. */
+function PersonaSync() {
+	const { setPersona } = usePersona();
+	const remoteId = useAuiState((s) => s.threadListItem.remoteId);
+
+	useEffect(() => {
+		const mapped = remoteId ? threadPersonaMap.get(remoteId) : undefined;
+		if (mapped) setPersona(mapped);
+	}, [remoteId, setPersona]);
+
+	return null;
+}

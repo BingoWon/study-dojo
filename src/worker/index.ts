@@ -27,7 +27,13 @@ import {
 	listMemories,
 	searchMemories,
 } from "./memory";
-import { createModel, createTitleModel, SYSTEM_PROMPT } from "./model";
+import {
+	createModel,
+	createTitleModel,
+	DEFAULT_PERSONA,
+	getSystemPrompt,
+	isValidPersona,
+} from "./model";
 import {
 	checkDocByHash,
 	classifyFile,
@@ -479,6 +485,8 @@ app.post("/api/chat", async (c) => {
 			messages: WireMessage[];
 		}>();
 		const threadId = c.req.header("x-thread-id") || undefined;
+		const personaRaw = c.req.header("x-persona") || DEFAULT_PERSONA;
+		const persona = isValidPersona(personaRaw) ? personaRaw : DEFAULT_PERSONA;
 		const userId = await requireUserId(c);
 
 		if (!c.env.LLM_API_KEY)
@@ -503,7 +511,7 @@ app.post("/api/chat", async (c) => {
 		// ── Persist user message ──────────────────────────────────────────────
 		if (threadId && userId && lastUserMsg) {
 			try {
-				await ensureThread(db, threadId, userId);
+				await ensureThread(db, threadId, userId, persona);
 				const parts = lastUserMsg.parts?.length
 					? lastUserMsg.parts
 					: [{ type: "text" as const, text: lastUserMsg.content ?? "" }];
@@ -571,8 +579,12 @@ app.post("/api/chat", async (c) => {
 		}
 
 		// ── Build system prompt ──────────────────────────────────────────────
+		const tz = c.req.header("x-timezone") || "Asia/Shanghai";
+		const now = new Date();
+		const timeStr = now.toLocaleString("zh-CN", { timeZone: tz });
 		let systemPrompt =
-			SYSTEM_PROMPT + formatMemoriesForPrompt(retrievedMemories);
+			`${getSystemPrompt(persona)}\n\n当前时间：${timeStr}` +
+			formatMemoriesForPrompt(retrievedMemories);
 		if (docList.length > 0) {
 			const readyDocs = docList.filter((d) => d.status === "ready");
 			if (readyDocs.length > 0) {

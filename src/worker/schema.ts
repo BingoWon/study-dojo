@@ -10,6 +10,7 @@ export const threads = sqliteTable("threads", {
 	id: text("id").primaryKey(),
 	userId: text("user_id").notNull(),
 	title: text("title").notNull().default("新对话"),
+	persona: text("persona").notNull().default("professor"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),

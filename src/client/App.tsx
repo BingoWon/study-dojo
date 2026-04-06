@@ -241,28 +241,15 @@ function App() {
 				</div>
 				<div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full w-full z-10">
 					<div className="max-w-md w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-						<div className="w-20 h-20 bg-blue-500/10 dark:bg-blue-500/20 text-blue-500 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ring-1 ring-blue-500/20">
-							<svg
-								className="w-10 h-10"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								role="img"
-								aria-label="AI 食谱助手"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M13 10V3L4 14h7v7l9-11h-7z"
-								/>
-							</svg>
+						<div className="w-20 h-20 bg-purple-500/10 dark:bg-purple-500/20 text-purple-500 dark:text-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ring-1 ring-purple-500/20 text-4xl">
+							⚡
 						</div>
 						<h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-							AI 食谱助手
+							暴躁教授
 						</h1>
 						<p className="text-zinc-500 dark:text-zinc-400 text-lg leading-relaxed">
-							智能食谱创建器，准备就绪。登录以保存您的对话历史并体验所有高级功能。
+							AI
+							论文陪读导师，多角色人设，陪你在知识的海洋里畅游。登录以开始你的学术之旅。
 						</p>
 						<div className="flex flex-col sm:flex-row gap-3 pt-6 justify-center">
 							<SignInButton mode="modal">

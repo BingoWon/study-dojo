@@ -31,12 +31,14 @@ import {
 	X,
 } from "lucide-react";
 import { createContext, type FC, useEffect } from "react";
+import type { PersonaId } from "../../src/worker/model";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import type { Recipe } from "./components/RecipePanel";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
+import { usePersona } from "./RuntimeProvider";
 
 // ── Recipe Update Context ────────────────────────────────────────────────────
 
@@ -100,57 +102,164 @@ const ComposerAttachment: FC = () => (
 	</AttachmentPrimitive.Root>
 );
 
-// ── Thread Welcome / Empty State ─────────────────────────────────────────────
+// ── Persona Definitions (client-side display config) ────────────────────────
 
-const ThreadWelcome: FC = () => {
-	const aui = useAui();
+const PERSONA_CARDS: {
+	id: PersonaId;
+	emoji: string;
+	name: string;
+	title: string;
+	desc: string;
+	gradient: string;
+	border: string;
+	glow: string;
+}[] = [
+	{
+		id: "blank_f",
+		emoji: "🤖",
+		name: "白板助手",
+		title: "女声",
+		desc: "中立理性的万能助手，精通一切领域",
+		gradient: "from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900",
+		border: "border-zinc-300 dark:border-zinc-600",
+		glow: "shadow-zinc-300/30 dark:shadow-zinc-600/20",
+	},
+	{
+		id: "blank_m",
+		emoji: "🤖",
+		name: "白板助手",
+		title: "男声",
+		desc: "中立理性的万能助手，精通一切领域",
+		gradient: "from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900",
+		border: "border-zinc-300 dark:border-zinc-600",
+		glow: "shadow-zinc-300/30 dark:shadow-zinc-600/20",
+	},
+	{
+		id: "professor",
+		emoji: "⚡",
+		name: "暴躁教授",
+		title: "雷电将军",
+		desc: "尖酸刻薄的毒舌学者，永远对你不满意",
+		gradient:
+			"from-purple-100 to-indigo-50 dark:from-purple-950 dark:to-indigo-950",
+		border: "border-purple-300 dark:border-purple-700",
+		glow: "shadow-purple-400/30 dark:shadow-purple-600/20",
+	},
+	{
+		id: "keli",
+		emoji: "💥",
+		name: "可莉教授",
+		title: "爆炸专家",
+		desc: "活泼天真的炼金天才，用蹦蹦炸弹讲学术",
+		gradient: "from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950",
+		border: "border-red-300 dark:border-red-700",
+		glow: "shadow-red-400/30 dark:shadow-red-600/20",
+	},
+];
 
-	const send = (text: string) => {
-		aui.thread().append({
-			role: "user",
-			content: [{ type: "text", text }],
-		});
-	};
+// ── Persona Selection (replaces old ThreadWelcome) ──────────────────────────
+
+const PersonaSelect: FC = () => {
+	const { persona, setPersona } = usePersona();
 
 	return (
-		<div className="mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-			<div className="flex w-full flex-grow flex-col items-center justify-center">
-				<div className="flex size-full flex-col justify-center px-8">
-					<div className="text-4xl mb-4">🍳</div>
-					<div className="text-2xl font-semibold text-zinc-800 dark:text-zinc-100">
-						AI 食谱助手
-					</div>
-					<div className="text-lg text-zinc-500 dark:text-zinc-400">
-						告诉我你想做什么菜
-					</div>
+		<div className="mx-auto my-auto flex w-full max-w-md flex-grow flex-col items-center justify-center gap-6 px-4">
+			<div className="text-center">
+				<div className="text-sm font-medium tracking-widest uppercase text-zinc-400 dark:text-zinc-500 mb-2">
+					选择你的导师
+				</div>
+				<div className="text-xl font-bold text-zinc-800 dark:text-zinc-100">
+					开始论文陪读之旅
 				</div>
 			</div>
-			<div className="grid w-full gap-2 pb-4 md:grid-cols-3">
-				{[
-					{ title: "意大利面", desc: "做一道经典的意大利面" },
-					{ title: "中式炒菜", desc: "做一道简单的家常炒菜" },
-					{ title: "健康沙拉", desc: "做一份低卡健康沙拉" },
-				].map((item) => (
-					<ThreadPrimitive.Suggestion
-						key={item.title}
-						prompt={item.desc}
-						asChild
-					>
-						<Button
-							variant="ghost"
-							className="h-auto w-full flex-col items-start justify-start gap-1 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-5 py-4 text-left text-sm"
-							onClick={() => send(item.desc)}
+
+			<div className="flex w-full flex-col gap-3">
+				{PERSONA_CARDS.map((card) => {
+					const selected = persona === card.id;
+					return (
+						<button
+							key={card.id}
+							type="button"
+							onClick={() => setPersona(card.id)}
+							className={`
+								group relative w-full flex items-center gap-4 rounded-2xl p-4
+								bg-gradient-to-r ${card.gradient}
+								border-2 transition-all duration-200 cursor-pointer
+								${
+									selected
+										? `${card.border} shadow-lg ${card.glow} scale-[1.02]`
+										: "border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 hover:shadow-md"
+								}
+							`}
 						>
-							<span className="font-medium text-zinc-800 dark:text-zinc-200">
-								🍽️ {item.title}
-							</span>
-							<span className="text-zinc-500 dark:text-zinc-400">
-								{item.desc}
-							</span>
-						</Button>
-					</ThreadPrimitive.Suggestion>
-				))}
+							{/* Selection indicator */}
+							<div
+								className={`
+									absolute -left-px top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full
+									transition-all duration-200
+									${selected ? "bg-current opacity-100" : "opacity-0"}
+								`}
+								style={{
+									color:
+										card.id === "professor"
+											? "#a855f7"
+											: card.id === "keli"
+												? "#ef4444"
+												: "#71717a",
+								}}
+							/>
+
+							{/* Emoji avatar */}
+							<div
+								className={`
+									flex-shrink-0 flex items-center justify-center
+									w-14 h-14 rounded-xl text-3xl
+									transition-transform duration-200
+									${selected ? "scale-110" : "group-hover:scale-105"}
+									bg-white/60 dark:bg-white/5 backdrop-blur-sm
+									ring-1 ring-black/5 dark:ring-white/10
+								`}
+							>
+								{card.emoji}
+							</div>
+
+							{/* Info */}
+							<div className="flex-1 text-left min-w-0">
+								<div className="flex items-center gap-2">
+									<span className="font-bold text-zinc-900 dark:text-zinc-100">
+										{card.name}
+									</span>
+									<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
+										{card.title}
+									</span>
+								</div>
+								<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+									{card.desc}
+								</p>
+							</div>
+
+							{/* Check mark */}
+							<div
+								className={`
+									flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center
+									transition-all duration-200
+									${
+										selected
+											? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 scale-100"
+											: "bg-zinc-200 dark:bg-zinc-700 scale-90 opacity-0 group-hover:opacity-50"
+									}
+								`}
+							>
+								<Check className="w-3.5 h-3.5" />
+							</div>
+						</button>
+					);
+				})}
 			</div>
+
+			<p className="text-[11px] text-zinc-400 dark:text-zinc-600 text-center">
+				在下方输入消息开始对话 · 角色将与本次会话绑定
+			</p>
 		</div>
 	);
 };
@@ -535,7 +644,7 @@ export function Chat({
 									s.thread.isEmpty && !s.threadListItem.remoteId
 								}
 							>
-								<ThreadWelcome />
+								<PersonaSelect />
 							</AuiIf>
 
 							<ThreadPrimitive.Messages

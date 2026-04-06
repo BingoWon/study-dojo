@@ -3,8 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-	--color-divider: #eaeaed;
-	--color-divider-dark: #2d2d3d;
+	--color-divider: #e4e4e7;
+	--color-divider-dark: #3f3f50;
 }
 
 /* Hide scrollbar utility */

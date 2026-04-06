@@ -40,9 +40,12 @@ function stripMarkdown(md: string): string {
 /**
  * ElevenLabs TTS adapter — reads AI messages aloud via the /api/tts proxy.
  * Strips markdown before synthesis for clean spoken output.
+ *
+ * Supports per-persona voice: set `voiceId` dynamically before speak() calls.
  */
 export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 	private endpoint: string;
+	voiceId: string | undefined;
 
 	constructor(options?: { endpoint?: string }) {
 		this.endpoint = options?.endpoint ?? "/api/tts";
@@ -103,7 +106,7 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 			const res = await fetch(this.endpoint, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text }),
+				body: JSON.stringify({ text, voiceId: this.voiceId }),
 				signal,
 			});
 

@@ -454,7 +454,7 @@ const MemoryPanel: FC = () => {
 						value={draft}
 						onChange={(e) => setDraft(e.target.value)}
 						onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-						placeholder="添加记忆，如：我不吃辣"
+						placeholder="添加记忆，如：我喜欢你讲大白话"
 						className="flex-1 text-sm bg-transparent outline-none text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
 					/>
 					<button

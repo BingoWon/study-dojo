@@ -15,6 +15,7 @@ export async function getThreadsByUserId(db: DbClient, userId: string) {
 		.select({
 			id: threads.id,
 			title: threads.title,
+			persona: threads.persona,
 			createdAt: threads.createdAt,
 			updatedAt: threads.updatedAt,
 		})
@@ -23,11 +24,23 @@ export async function getThreadsByUserId(db: DbClient, userId: string) {
 		.orderBy(desc(threads.updatedAt));
 }
 
-export async function ensureThread(db: DbClient, id: string, userId: string) {
+export async function ensureThread(
+	db: DbClient,
+	id: string,
+	userId: string,
+	persona?: string,
+) {
 	const now = Math.floor(Date.now() / 1000);
 	await db
 		.insert(threads)
-		.values({ id, userId, title: "新对话", createdAt: now, updatedAt: now })
+		.values({
+			id,
+			userId,
+			title: "新对话",
+			persona: persona ?? "professor",
+			createdAt: now,
+			updatedAt: now,
+		})
 		.onConflictDoNothing({ target: threads.id });
 }
 
