@@ -1,24 +1,52 @@
 import type { DictationAdapter } from "@assistant-ui/react";
 import { RealtimeEvents, Scribe } from "@elevenlabs/client";
+import * as OpenCC from "opencc-js";
 
 /**
  * ElevenLabs Scribe v2 Realtime — speech-to-text dictation adapter.
  * Transcribes user speech into the composer input in real time (~150ms latency).
+ *
+ * ElevenLabs does not distinguish Simplified/Traditional Chinese — the model
+ * may output Traditional characters for Mandarin input. When `toSimplified`
+ * is enabled, transcripts are post-processed with OpenCC (word-level T→S
+ * conversion, not naïve char substitution).
  */
+
+// Lazy-init converter so the dictionary is only loaded once
+let t2sConverter: (text: string) => string;
+function getT2SConverter() {
+	if (!t2sConverter) {
+		t2sConverter = OpenCC.ConverterFactory(
+			OpenCC.Locale.from.tw,
+			OpenCC.Locale.to.cn,
+		);
+	}
+	return t2sConverter;
+}
+
 export class ElevenLabsScribeAdapter implements DictationAdapter {
 	private tokenEndpoint: string;
 	private languageCode: string | undefined;
+	private convertToSimplified: boolean;
 	public disableInputDuringDictation: boolean;
 
 	constructor(options: {
 		tokenEndpoint: string;
 		languageCode?: string;
+		/** Convert Traditional Chinese → Simplified via OpenCC. @default false */
+		toSimplified?: boolean;
 		disableInputDuringDictation?: boolean;
 	}) {
 		this.tokenEndpoint = options.tokenEndpoint;
 		this.languageCode = options.languageCode;
+		this.convertToSimplified = options.toSimplified ?? false;
 		this.disableInputDuringDictation =
 			options.disableInputDuringDictation ?? true;
+	}
+
+	private postProcess(text: string): string {
+		if (!this.convertToSimplified) return text;
+		return getT2SConverter()(text);
 	}
 
 	listen(): DictationAdapter.Session {
@@ -138,16 +166,18 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 
 			connection.on(RealtimeEvents.PARTIAL_TRANSCRIPT, (data) => {
 				if (data.text) {
+					const text = this.postProcess(data.text);
 					for (const cb of callbacks.speech)
-						cb({ transcript: data.text, isFinal: false });
+						cb({ transcript: text, isFinal: false });
 				}
 			});
 
 			connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT, (data) => {
 				if (data.text?.trim()) {
-					refs.setFullTranscript(`${refs.getFullTranscript()}${data.text} `);
+					const text = this.postProcess(data.text);
+					refs.setFullTranscript(`${refs.getFullTranscript()}${text} `);
 					for (const cb of callbacks.speech)
-						cb({ transcript: data.text, isFinal: true });
+						cb({ transcript: text, isFinal: true });
 				}
 			});
 

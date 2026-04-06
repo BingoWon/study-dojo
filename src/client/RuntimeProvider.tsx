@@ -40,7 +40,8 @@ import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
 
 const scribeAdapter = new ElevenLabsScribeAdapter({
 	tokenEndpoint: "/api/scribe-token",
-	// omit languageCode for auto-detect (defaults to unset → server decides)
+	languageCode: "zh",
+	toSimplified: true, // convert Traditional → Simplified Chinese
 });
 
 const ttsAdapter = new ElevenLabsTTSAdapter({ endpoint: "/api/tts" });

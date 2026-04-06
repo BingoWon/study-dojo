@@ -140,8 +140,9 @@ app.post("/api/tts", async (c) => {
 			},
 			body: JSON.stringify({
 				text,
-				model_id: "eleven_turbo_v2_5",
+				model_id: "eleven_v3",
 				output_format: "mp3_44100_128",
+				language_code: "zh",
 			}),
 		},
 	);

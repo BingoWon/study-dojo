@@ -77,6 +77,9 @@ importers:
       mark.js:
         specifier: ^8.11.1
         version: 8.11.1
+      opencc-js:
+        specifier: ^1.0.5
+        version: 1.0.5
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -4071,6 +4074,9 @@ packages:
         optional: true
       zod:
         optional: true
+
+  opencc-js@1.0.5:
+    resolution: {integrity: sha512-LD+1SoNnZdlRwtYTjnQdFrSVCAaYpuDqL5CkmOaHOkKoKh7mFxUicLTRVNLU5C+Jmi1vXQ3QL4jWdgSaa4sKjg==}
 
   option@0.2.4:
     resolution: {integrity: sha512-pkEqbDyl8ou5cpq+VsnQbe/WlEy5qS7xPzMS1U55OCG9KPvwFD46zDbxQIj3egJSFc3D+XhYOPUzz49zQAVy7A==}
@@ -9130,6 +9136,8 @@ snapshots:
     optionalDependencies:
       ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       zod: 4.3.6
+
+  opencc-js@1.0.5: {}
 
   option@0.2.4: {}
 
