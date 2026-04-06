@@ -10,7 +10,6 @@ import { ArrowDown, X } from "lucide-react";
 import { type FC, useEffect, useRef } from "react";
 import { PERSONAS } from "../../worker/model";
 import { usePersona } from "../RuntimeProvider";
-import { MarkdownText } from "./ui/markdown-text";
 import { TooltipIconButton } from "./ui/tooltip-icon-button";
 import { VoiceControlCenter } from "./voice/VoiceOrb";
 
@@ -121,6 +120,11 @@ const VoiceWelcome: FC<{ docTitle: string }> = ({ docTitle }) => {
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
+/** Strip ElevenLabs mood/action tags like [sigh], [scoff], [laughs] */
+const CleanText: FC<{ text: string }> = ({ text }) => (
+	<>{text.replace(/\[[\w\s]+\]/g, "").trim()}</>
+);
+
 const ThreadMessage: FC = () => {
 	const role = useAuiState((s) => s.message.role);
 	if (role === "user") return <UserMessage />;
@@ -133,7 +137,7 @@ const AssistantMessage: FC = () => (
 		data-role="assistant"
 	>
 		<div className="break-words px-2 leading-relaxed text-zinc-900 dark:text-zinc-100">
-			<MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+			<MessagePrimitive.Parts components={{ Text: CleanText }} />
 		</div>
 	</MessagePrimitive.Root>
 );
@@ -144,7 +148,7 @@ const UserMessage: FC = () => (
 		data-role="user"
 	>
 		<div className="rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-2.5 break-words text-zinc-900 dark:text-zinc-100">
-			<MessagePrimitive.Parts />
+			<MessagePrimitive.Parts components={{ Text: CleanText }} />
 		</div>
 	</MessagePrimitive.Root>
 );

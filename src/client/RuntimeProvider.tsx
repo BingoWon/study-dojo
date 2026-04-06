@@ -427,8 +427,15 @@ ${truncated}${chatSummary ? `\n\n# 之前的文字对话记录（供参考）\n$
 	);
 
 	const exitVoiceMode = useCallback(() => {
+		// Disconnect voice session before switching mode to prevent reconnect race
+		try {
+			const voice = runtime.thread.getState().voice;
+			if (voice && voice.status.type !== "ended") {
+				runtime.thread.disconnectVoice();
+			}
+		} catch {}
 		setVoiceMode({ active: false, docId: null, docTitle: null });
-	}, []);
+	}, [runtime]);
 
 	const voiceModeCtx = useMemo(
 		() => ({ voiceMode, enterVoiceMode, exitVoiceMode }),
@@ -474,7 +481,8 @@ function PersonaSync() {
 	return null;
 }
 
-/** Auto-speaks last assistant message when generation finishes. */
+/** Auto-speaks last assistant message when generation finishes.
+ *  Uses aui.thread().speak(messageId) so the message UI shows speech state. */
 function AutoSpeakWatcher() {
 	const { autoTTS } = useAutoTTS();
 	const { voiceMode } = useVoiceMode();
@@ -483,23 +491,19 @@ function AutoSpeakWatcher() {
 	const wasRunning = useRef(false);
 
 	useEffect(() => {
-		// Skip auto-TTS when in voice mode (voice mode has its own audio)
 		if (wasRunning.current && !isRunning && autoTTS && !voiceMode.active) {
-			// Generation just finished — speak the last assistant message
-			const messages = aui.thread().getState().messages;
-			const last = [...messages].reverse().find((m) => m.role === "assistant");
-			if (last) {
-				const text = last.content
-					.filter((p): p is { type: "text"; text: string } => p.type === "text")
-					.map((p) => p.text)
-					.join("\n");
-				if (text.trim()) {
-					ttsAdapter.speak(text);
-				}
-			}
+			// Generation finished — auto-speak last assistant message
+			const msgs = aui.thread().getState().messages;
+			const last = [...msgs].reverse().find((m) => m.role === "assistant");
+			if (last) aui.thread().message({ id: last.id }).speak();
+		}
+		if (!wasRunning.current && isRunning) {
+			// New generation started (user sent message) — stop current speech
+			const speech = aui.thread().getState().speech;
+			if (speech) aui.thread().stopSpeaking();
 		}
 		wasRunning.current = isRunning;
-	}, [isRunning, autoTTS, aui, voiceMode.active]);
+	}, [isRunning, autoTTS, voiceMode.active, aui]);
 
 	return null;
 }
