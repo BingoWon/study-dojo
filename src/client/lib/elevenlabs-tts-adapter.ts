@@ -1,8 +1,45 @@
 import type { SpeechSynthesisAdapter } from "@assistant-ui/react";
 
 /**
+ * Strip markdown syntax so TTS reads clean prose, not "asterisk asterisk bold".
+ */
+function stripMarkdown(md: string): string {
+	return (
+		md
+			// Code blocks (``` ... ```)
+			.replace(/```[\s\S]*?```/g, "")
+			// Inline code
+			.replace(/`([^`]+)`/g, "$1")
+			// Images ![alt](url)
+			.replace(/!\[.*?\]\(.*?\)/g, "")
+			// Links [text](url) → text
+			.replace(/\[([^\]]+)\]\(.*?\)/g, "$1")
+			// Headings
+			.replace(/^#{1,6}\s+/gm, "")
+			// Bold / italic
+			.replace(/\*{1,3}(.+?)\*{1,3}/g, "$1")
+			.replace(/_{1,3}(.+?)_{1,3}/g, "$1")
+			// Strikethrough
+			.replace(/~~(.+?)~~/g, "$1")
+			// Blockquotes
+			.replace(/^>\s+/gm, "")
+			// Unordered list bullets
+			.replace(/^[-*+]\s+/gm, "")
+			// Ordered list numbers
+			.replace(/^\d+\.\s+/gm, "")
+			// Horizontal rules
+			.replace(/^[-*_]{3,}\s*$/gm, "")
+			// HTML tags
+			.replace(/<[^>]+>/g, "")
+			// Collapse multiple blank lines
+			.replace(/\n{3,}/g, "\n\n")
+			.trim()
+	);
+}
+
+/**
  * ElevenLabs TTS adapter — reads AI messages aloud via the /api/tts proxy.
- * Uses the streaming TTS endpoint for low first-byte latency.
+ * Strips markdown before synthesis for clean spoken output.
  */
 export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 	private endpoint: string;
@@ -14,6 +51,11 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 	speak(text: string): SpeechSynthesisAdapter.Utterance {
 		const subscribers = new Set<() => void>();
 		const controller = new AbortController();
+		let revoked = false;
+
+		const notify = () => {
+			for (const cb of subscribers) cb();
+		};
 
 		const utterance: SpeechSynthesisAdapter.Utterance = {
 			status: { type: "starting" },
@@ -21,7 +63,7 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 			cancel: () => {
 				controller.abort();
 				utterance.status = { type: "ended", reason: "cancelled" };
-				for (const cb of subscribers) cb();
+				notify();
 			},
 
 			subscribe: (callback) => {
@@ -36,7 +78,16 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 			},
 		};
 
-		this.playAudio(text, controller.signal, utterance, subscribers);
+		this.playAudio(
+			stripMarkdown(text),
+			controller.signal,
+			utterance,
+			notify,
+			() => revoked,
+			() => {
+				revoked = true;
+			},
+		);
 		return utterance;
 	}
 
@@ -44,7 +95,9 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 		text: string,
 		signal: AbortSignal,
 		utterance: SpeechSynthesisAdapter.Utterance,
-		subscribers: Set<() => void>,
+		notify: () => void,
+		isRevoked: () => boolean,
+		setRevoked: () => void,
 	) {
 		try {
 			const res = await fetch(this.endpoint, {
@@ -57,38 +110,50 @@ export class ElevenLabsTTSAdapter implements SpeechSynthesisAdapter {
 			if (!res.ok) throw new Error(`TTS failed: ${res.statusText}`);
 
 			const blob = await res.blob();
-			if (signal.aborted) return;
+			if (signal.aborted || blob.size === 0) return;
 
 			const url = URL.createObjectURL(blob);
+
+			const revokeOnce = () => {
+				if (!isRevoked()) {
+					setRevoked();
+					URL.revokeObjectURL(url);
+				}
+			};
+
 			const audio = new Audio(url);
 
 			audio.addEventListener("playing", () => {
 				utterance.status = { type: "running" };
-				for (const cb of subscribers) cb();
+				notify();
 			});
 
 			audio.addEventListener("ended", () => {
-				URL.revokeObjectURL(url);
+				revokeOnce();
 				utterance.status = { type: "ended", reason: "finished" };
-				for (const cb of subscribers) cb();
+				notify();
 			});
 
 			audio.addEventListener("error", () => {
-				URL.revokeObjectURL(url);
+				revokeOnce();
 				utterance.status = { type: "ended", reason: "error" };
-				for (const cb of subscribers) cb();
+				notify();
 			});
 
-			signal.addEventListener("abort", () => {
-				audio.pause();
-				URL.revokeObjectURL(url);
-			});
+			signal.addEventListener(
+				"abort",
+				() => {
+					audio.pause();
+					revokeOnce();
+				},
+				{ once: true },
+			);
 
 			await audio.play();
 		} catch (error) {
 			if (signal.aborted) return;
 			utterance.status = { type: "ended", reason: "error", error };
-			for (const cb of subscribers) cb();
+			notify();
 		}
 	}
 }

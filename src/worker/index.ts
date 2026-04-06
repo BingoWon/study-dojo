@@ -108,7 +108,7 @@ app.post("/api/scribe-token", async (c) => {
 		"https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
 		{ method: "POST", headers: { "xi-api-key": apiKey } },
 	);
-	if (!res.ok) return c.json({ error: await res.text() }, res.status as 400);
+	if (!res.ok) return c.json({ error: "语音识别服务暂不可用" }, 502);
 
 	const data = (await res.json()) as { token: string };
 	return c.json({ token: data.token });
@@ -129,7 +129,7 @@ app.post("/api/tts", async (c) => {
 	}>();
 	if (!text?.trim()) return c.json({ error: "text is required" }, 400);
 
-	const voice = voiceId || "JBFqnCBsd6RMkjVDRZzb"; // George — warm male
+	const voice = voiceId || c.env.ELEVENLABS_VOICE_ID || "JBFqnCBsd6RMkjVDRZzb";
 	const res = await fetch(
 		`https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream`,
 		{
@@ -147,7 +147,7 @@ app.post("/api/tts", async (c) => {
 		},
 	);
 
-	if (!res.ok) return c.json({ error: await res.text() }, res.status as 400);
+	if (!res.ok) return c.json({ error: "语音合成服务暂不可用" }, 502);
 
 	return new Response(res.body, {
 		headers: { "Content-Type": "audio/mpeg" },

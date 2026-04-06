@@ -4,15 +4,12 @@ import * as OpenCC from "opencc-js";
 
 /**
  * ElevenLabs Scribe v2 Realtime — speech-to-text dictation adapter.
- * Transcribes user speech into the composer input in real time (~150ms latency).
  *
- * ElevenLabs does not distinguish Simplified/Traditional Chinese — the model
- * may output Traditional characters for Mandarin input. When `toSimplified`
- * is enabled, transcripts are post-processed with OpenCC (word-level T→S
- * conversion, not naïve char substitution).
+ * ElevenLabs does not distinguish Simplified/Traditional Chinese. When
+ * `toSimplified` is enabled, transcripts are post-processed with OpenCC
+ * (word-level T→S conversion, not naïve char substitution).
  */
 
-// Lazy-init converter so the dictionary is only loaded once
 let t2sConverter: (text: string) => string;
 function getT2SConverter() {
 	if (!t2sConverter) {
@@ -56,11 +53,19 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 			speech: new Set<(r: DictationAdapter.Result) => void>(),
 		};
 
+		// Mutable state — the session object exposes it via property descriptor
+		let status: DictationAdapter.Status = { type: "starting" };
 		let connection: ReturnType<typeof Scribe.connect> | null = null;
-		let fullTranscript = "";
+		const transcriptParts: string[] = [];
+
+		const setStatus = (s: DictationAdapter.Status) => {
+			status = s;
+		};
 
 		const session: DictationAdapter.Session = {
-			status: { type: "starting" },
+			get status() {
+				return status;
+			},
 
 			stop: async () => {
 				if (connection) {
@@ -69,12 +74,10 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 					connection.close();
 					connection = null;
 				}
-				(session as { status: DictationAdapter.Status }).status = {
-					type: "ended",
-					reason: "stopped",
-				};
-				if (fullTranscript) {
-					for (const cb of callbacks.end) cb({ transcript: fullTranscript });
+				setStatus({ type: "ended", reason: "stopped" });
+				const full = transcriptParts.join(" ").trim();
+				if (full) {
+					for (const cb of callbacks.end) cb({ transcript: full });
 				}
 			},
 
@@ -83,10 +86,7 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 					connection.close();
 					connection = null;
 				}
-				(session as { status: DictationAdapter.Status }).status = {
-					type: "ended",
-					reason: "cancelled",
-				};
+				setStatus({ type: "ended", reason: "cancelled" });
 			},
 
 			onSpeechStart: (cb) => {
@@ -109,13 +109,9 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 			},
 		};
 
-		this.connect(session, callbacks, {
+		this.connect(callbacks, transcriptParts, setStatus, () => status, {
 			setConnection: (c) => {
 				connection = c;
-			},
-			getFullTranscript: () => fullTranscript,
-			setFullTranscript: (t) => {
-				fullTranscript = t;
 			},
 		});
 
@@ -123,16 +119,16 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 	}
 
 	private async connect(
-		session: DictationAdapter.Session,
 		callbacks: {
 			start: Set<() => void>;
 			end: Set<(r: DictationAdapter.Result) => void>;
 			speech: Set<(r: DictationAdapter.Result) => void>;
 		},
+		transcriptParts: string[],
+		setStatus: (s: DictationAdapter.Status) => void,
+		getStatus: () => DictationAdapter.Status,
 		refs: {
 			setConnection: (c: ReturnType<typeof Scribe.connect>) => void;
-			getFullTranscript: () => string;
-			setFullTranscript: (t: string) => void;
 		},
 	) {
 		try {
@@ -141,9 +137,7 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 				throw new Error(`Token fetch failed: ${tokenRes.statusText}`);
 			const { token } = (await tokenRes.json()) as { token: string };
 
-			const currentStatus = (session as { status: DictationAdapter.Status })
-				.status;
-			if (currentStatus.type === "ended") return;
+			if (getStatus().type === "ended") return;
 
 			const connection = Scribe.connect({
 				token,
@@ -158,9 +152,7 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 			refs.setConnection(connection);
 
 			connection.on(RealtimeEvents.SESSION_STARTED, () => {
-				(session as { status: DictationAdapter.Status }).status = {
-					type: "running",
-				};
+				setStatus({ type: "running" });
 				for (const cb of callbacks.start) cb();
 			});
 
@@ -175,47 +167,34 @@ export class ElevenLabsScribeAdapter implements DictationAdapter {
 			connection.on(RealtimeEvents.COMMITTED_TRANSCRIPT, (data) => {
 				if (data.text?.trim()) {
 					const text = this.postProcess(data.text);
-					refs.setFullTranscript(`${refs.getFullTranscript()}${text} `);
+					transcriptParts.push(text);
 					for (const cb of callbacks.speech)
 						cb({ transcript: text, isFinal: true });
 				}
 			});
 
 			connection.on(RealtimeEvents.CLOSE, () => {
-				const s = (session as { status: DictationAdapter.Status }).status;
-				if (s.type !== "ended") {
-					(session as { status: DictationAdapter.Status }).status = {
-						type: "ended",
-						reason: "stopped",
-					};
+				if (getStatus().type !== "ended") {
+					setStatus({ type: "ended", reason: "stopped" });
 				}
-				const transcript = refs.getFullTranscript().trim();
-				if (transcript) {
-					for (const cb of callbacks.end) cb({ transcript });
+				const full = transcriptParts.join(" ").trim();
+				if (full) {
+					for (const cb of callbacks.end) cb({ transcript: full });
 				}
 			});
 
 			connection.on(RealtimeEvents.ERROR, (error) => {
 				console.error("[Scribe] Error:", error);
-				(session as { status: DictationAdapter.Status }).status = {
-					type: "ended",
-					reason: "error",
-				};
+				setStatus({ type: "ended", reason: "error" });
 			});
 
 			connection.on(RealtimeEvents.AUTH_ERROR, (data) => {
 				console.error("[Scribe] Auth error:", data.error);
-				(session as { status: DictationAdapter.Status }).status = {
-					type: "ended",
-					reason: "error",
-				};
+				setStatus({ type: "ended", reason: "error" });
 			});
 		} catch (error) {
 			console.error("[Scribe] Connection failed:", error);
-			(session as { status: DictationAdapter.Status }).status = {
-				type: "ended",
-				reason: "error",
-			};
+			setStatus({ type: "ended", reason: "error" });
 		}
 	}
 }
