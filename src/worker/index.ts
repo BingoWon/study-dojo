@@ -95,6 +95,64 @@ app.get("/api/threads/:id/messages", async (c) => {
 	return c.json(rows.map((r) => ({ id: r.id, role: r.role, parts: r.parts })));
 });
 
+// ── ElevenLabs Scribe token (STT) ───────────────────────────────────────────
+app.post("/api/scribe-token", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const apiKey = c.env.ELEVENLABS_API_KEY;
+	if (!apiKey)
+		return c.json({ error: "ELEVENLABS_API_KEY not configured" }, 500);
+
+	const res = await fetch(
+		"https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
+		{ method: "POST", headers: { "xi-api-key": apiKey } },
+	);
+	if (!res.ok) return c.json({ error: await res.text() }, res.status as 400);
+
+	const data = (await res.json()) as { token: string };
+	return c.json({ token: data.token });
+});
+
+// ── ElevenLabs TTS (text-to-speech) ─────────────────────────────────────────
+app.post("/api/tts", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+
+	const apiKey = c.env.ELEVENLABS_API_KEY;
+	if (!apiKey)
+		return c.json({ error: "ELEVENLABS_API_KEY not configured" }, 500);
+
+	const { text, voiceId } = await c.req.json<{
+		text: string;
+		voiceId?: string;
+	}>();
+	if (!text?.trim()) return c.json({ error: "text is required" }, 400);
+
+	const voice = voiceId || "JBFqnCBsd6RMkjVDRZzb"; // George — warm male
+	const res = await fetch(
+		`https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream`,
+		{
+			method: "POST",
+			headers: {
+				"xi-api-key": apiKey,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				text,
+				model_id: "eleven_turbo_v2_5",
+				output_format: "mp3_44100_128",
+			}),
+		},
+	);
+
+	if (!res.ok) return c.json({ error: await res.text() }, res.status as 400);
+
+	return new Response(res.body, {
+		headers: { "Content-Type": "audio/mpeg" },
+	});
+});
+
 app.post("/api/threads/:id/generate-title", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);

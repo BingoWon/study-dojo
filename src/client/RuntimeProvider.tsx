@@ -33,6 +33,17 @@ import { ReadDocToolUI } from "./components/tools/ReadDocToolUI";
 import { RecipeToolUI } from "./components/tools/RecipeToolUI";
 import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
+import { ElevenLabsScribeAdapter } from "./lib/elevenlabs-scribe-adapter";
+import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
+
+// ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
+
+const scribeAdapter = new ElevenLabsScribeAdapter({
+	tokenEndpoint: "/api/scribe-token",
+	languageCode: "multi", // auto-detect language
+});
+
+const ttsAdapter = new ElevenLabsTTSAdapter({ endpoint: "/api/tts" });
 
 // ── Attachment Adapter ──────────────────────────────────────────────────────
 
@@ -236,7 +247,12 @@ function useMyRuntime() {
 		}
 	}, [loadedMessages, chat.setMessages]);
 
-	return useAISDKRuntime(chat);
+	return useAISDKRuntime(chat, {
+		adapters: {
+			dictation: scribeAdapter,
+			speech: ttsAdapter,
+		},
+	});
 }
 
 // ── Root Provider ───────────────────────────────────────────────────────────

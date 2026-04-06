@@ -21,10 +21,13 @@ import {
 	Copy,
 	Download,
 	Loader2,
+	Mic,
 	Paperclip,
 	Pencil,
 	RefreshCw,
 	Square,
+	Volume2,
+	VolumeOff,
 	X,
 } from "lucide-react";
 import { createContext, type FC, useEffect } from "react";
@@ -177,12 +180,38 @@ const Composer: FC = () => (
 
 const ComposerAction: FC = () => (
 	<div className="relative mx-2 mb-2 flex items-center justify-between">
-		<ComposerPrimitive.AddAttachment
-			className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
-			title="添加附件"
-		>
-			<Paperclip className="h-4 w-4" />
-		</ComposerPrimitive.AddAttachment>
+		<div className="flex items-center gap-1">
+			<ComposerPrimitive.AddAttachment
+				className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
+				title="添加附件"
+			>
+				<Paperclip className="h-4 w-4" />
+			</ComposerPrimitive.AddAttachment>
+
+			{/* Dictation: mic button (hidden when no adapter or already dictating) */}
+			<AuiIf condition={(s) => s.composer.dictation == null}>
+				<ComposerPrimitive.Dictate asChild>
+					<TooltipIconButton
+						tooltip="语音输入"
+						className="size-8 rounded-full text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300"
+					>
+						<Mic className="h-4 w-4" />
+					</TooltipIconButton>
+				</ComposerPrimitive.Dictate>
+			</AuiIf>
+
+			{/* Dictation: stop button (shown only while dictating) */}
+			<AuiIf condition={(s) => s.composer.dictation != null}>
+				<ComposerPrimitive.StopDictation asChild>
+					<TooltipIconButton
+						tooltip="停止语音输入"
+						className="size-8 rounded-full text-red-500 animate-pulse"
+					>
+						<Square className="h-3 w-3 fill-current" />
+					</TooltipIconButton>
+				</ComposerPrimitive.StopDictation>
+			</AuiIf>
+		</div>
 
 		<AuiIf condition={(s) => !s.thread.isRunning}>
 			<ComposerPrimitive.Send asChild>
@@ -357,6 +386,16 @@ const AssistantActionBar: FC = () => (
 		autohide="not-last"
 		className="-ml-1 flex gap-1 text-zinc-400 dark:text-zinc-500"
 	>
+		<ActionBarPrimitive.Speak asChild>
+			<TooltipIconButton tooltip="朗读">
+				<Volume2 className="h-4 w-4" />
+			</TooltipIconButton>
+		</ActionBarPrimitive.Speak>
+		<ActionBarPrimitive.StopSpeaking asChild>
+			<TooltipIconButton tooltip="停止朗读">
+				<VolumeOff className="h-4 w-4" />
+			</TooltipIconButton>
+		</ActionBarPrimitive.StopSpeaking>
 		<ActionBarPrimitive.Copy asChild>
 			<TooltipIconButton tooltip="复制">
 				<AuiIf condition={(s) => s.message.isCopied}>

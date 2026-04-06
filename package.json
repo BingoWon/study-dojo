@@ -21,6 +21,7 @@
 		"@assistant-ui/react-markdown": "^0.12.8",
 		"@clerk/clerk-js": "^6.4.0",
 		"@clerk/react": "^6.1.4",
+		"@elevenlabs/client": "^1.1.1",
 		"@exalabs/ai-sdk": "^2.0.1",
 		"@langchain/cloudflare": "^1.0.4",
 		"@langchain/core": "^1.1.38",
