@@ -386,16 +386,20 @@ const AssistantActionBar: FC = () => (
 		autohide="not-last"
 		className="-ml-1 flex gap-1 text-zinc-400 dark:text-zinc-500"
 	>
-		<ActionBarPrimitive.Speak asChild>
-			<TooltipIconButton tooltip="朗读">
-				<Volume2 className="h-4 w-4" />
-			</TooltipIconButton>
-		</ActionBarPrimitive.Speak>
-		<ActionBarPrimitive.StopSpeaking asChild>
-			<TooltipIconButton tooltip="停止朗读">
-				<VolumeOff className="h-4 w-4" />
-			</TooltipIconButton>
-		</ActionBarPrimitive.StopSpeaking>
+		<AuiIf condition={(s) => !s.message.speech}>
+			<ActionBarPrimitive.Speak asChild>
+				<TooltipIconButton tooltip="朗读">
+					<Volume2 className="h-4 w-4" />
+				</TooltipIconButton>
+			</ActionBarPrimitive.Speak>
+		</AuiIf>
+		<AuiIf condition={(s) => !!s.message.speech}>
+			<ActionBarPrimitive.StopSpeaking asChild>
+				<TooltipIconButton tooltip="停止朗读">
+					<VolumeOff className="h-4 w-4" />
+				</TooltipIconButton>
+			</ActionBarPrimitive.StopSpeaking>
+		</AuiIf>
 		<ActionBarPrimitive.Copy asChild>
 			<TooltipIconButton tooltip="复制">
 				<AuiIf condition={(s) => s.message.isCopied}>
