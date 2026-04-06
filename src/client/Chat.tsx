@@ -116,23 +116,23 @@ const PERSONA_CARDS: {
 }[] = [
 	{
 		id: "blank_f",
-		emoji: "🤖",
-		name: "白板助手",
-		title: "女声",
-		desc: "中立理性的万能助手，精通一切领域",
-		gradient: "from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900",
-		border: "border-zinc-300 dark:border-zinc-600",
-		glow: "shadow-zinc-300/30 dark:shadow-zinc-600/20",
+		emoji: "🌸",
+		name: "温柔学姐",
+		title: "耐心导师",
+		desc: "温暖亲切，用生活化比喻把复杂论文讲明白",
+		gradient: "from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-950",
+		border: "border-pink-300 dark:border-pink-700",
+		glow: "shadow-pink-400/30 dark:shadow-pink-600/20",
 	},
 	{
 		id: "blank_m",
-		emoji: "🤖",
-		name: "白板助手",
-		title: "男声",
-		desc: "中立理性的万能助手，精通一切领域",
-		gradient: "from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900",
-		border: "border-zinc-300 dark:border-zinc-600",
-		glow: "shadow-zinc-300/30 dark:shadow-zinc-600/20",
+		emoji: "📐",
+		name: "学术老哥",
+		title: "务实派",
+		desc: "直来直去，一句话帮你抓住论文核心",
+		gradient: "from-sky-50 to-cyan-50 dark:from-sky-950 dark:to-cyan-950",
+		border: "border-sky-300 dark:border-sky-700",
+		glow: "shadow-sky-400/30 dark:shadow-sky-600/20",
 	},
 	{
 		id: "professor",
@@ -201,11 +201,13 @@ const PersonaSelect: FC = () => {
 								`}
 								style={{
 									color:
-										card.id === "professor"
-											? "#a855f7"
-											: card.id === "keli"
-												? "#ef4444"
-												: "#71717a",
+										card.id === "blank_f"
+											? "#ec4899"
+											: card.id === "blank_m"
+												? "#0ea5e9"
+												: card.id === "professor"
+													? "#a855f7"
+													: "#ef4444",
 								}}
 							/>
 

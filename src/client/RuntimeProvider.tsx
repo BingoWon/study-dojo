@@ -55,7 +55,7 @@ const PERSONA_VOICES: Record<PersonaId, string> = {
 	blank_f: "bhJUNIXWQQ94l8eI2VUf",
 	blank_m: "DowyQ68vDpgFYdWVGjc3",
 	professor: "FqHwwZfMdkoU9y0kGIhh",
-	keli: "EXAVITQu4vr4xnSDxMaL", // placeholder — needs custom voice
+	keli: "EHsSAXuFWvDRhKxO2tcj",
 };
 
 // ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
