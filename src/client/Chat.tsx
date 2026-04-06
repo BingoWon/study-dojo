@@ -30,7 +30,7 @@ import {
 	VolumeOff,
 	X,
 } from "lucide-react";
-import { createContext, type FC, useEffect } from "react";
+import { createContext, type FC, useEffect, useRef, useState } from "react";
 import type { PersonaId } from "../worker/model";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import type { Recipe } from "./components/RecipePanel";
@@ -260,7 +260,7 @@ const PersonaSelect: FC = () => {
 			</div>
 
 			<p className="text-[11px] text-zinc-400 dark:text-zinc-600 text-center">
-				在下方输入消息开始对话 · 角色将与本次会话绑定
+				在下方输入消息开始对话 · 输入框左下角可随时切换角色
 			</p>
 		</div>
 	);
@@ -268,30 +268,122 @@ const PersonaSelect: FC = () => {
 
 // ── Composer ──────────────────────────────────────────────────────────────────
 
-const Composer: FC = () => (
-	<ComposerPrimitive.Root className="relative flex w-full flex-col">
-		<ComposerPrimitive.AttachmentDropzone className="flex w-full flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-blue-400/40 has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-blue-400/10 data-[dragging=true]:border-blue-400 data-[dragging=true]:border-dashed data-[dragging=true]:bg-blue-50 dark:data-[dragging=true]:bg-blue-950/30">
-			<div className="flex flex-wrap gap-2 px-3 pt-1 pb-0 empty:hidden">
-				<ComposerPrimitive.Attachments
-					components={{ Attachment: ComposerAttachment }}
+const PERSONA_PLACEHOLDERS: Record<PersonaId, string> = {
+	blank_f: "向学姐请教论文问题...",
+	blank_m: "让老哥帮你拆解论文...",
+	professor: "你确定准备好面对教授了？",
+	keli: "和可莉一起探索论文吧！",
+};
+
+const Composer: FC = () => {
+	const { persona } = usePersona();
+	return (
+		<ComposerPrimitive.Root className="relative flex w-full flex-col">
+			<ComposerPrimitive.AttachmentDropzone className="flex w-full flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-blue-400/40 has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-blue-400/10 data-[dragging=true]:border-blue-400 data-[dragging=true]:border-dashed data-[dragging=true]:bg-blue-50 dark:data-[dragging=true]:bg-blue-950/30">
+				<div className="flex flex-wrap gap-2 px-3 pt-1 pb-0 empty:hidden">
+					<ComposerPrimitive.Attachments
+						components={{ Attachment: ComposerAttachment }}
+					/>
+				</div>
+				<ComposerPrimitive.Input
+					placeholder={PERSONA_PLACEHOLDERS[persona]}
+					className="mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0"
+					rows={1}
+					autoFocus
+					spellCheck={false}
+					autoComplete="off"
 				/>
-			</div>
-			<ComposerPrimitive.Input
-				placeholder="输入消息..."
-				className="mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0"
-				rows={1}
-				autoFocus
-				spellCheck={false}
-				autoComplete="off"
-			/>
-			<ComposerAction />
-		</ComposerPrimitive.AttachmentDropzone>
-	</ComposerPrimitive.Root>
-);
+				<ComposerAction />
+			</ComposerPrimitive.AttachmentDropzone>
+		</ComposerPrimitive.Root>
+	);
+};
+
+// ── Persona Switcher (popover in composer) ──────────────────────────────────
+
+const PersonaSwitcher: FC = () => {
+	const [open, setOpen] = useState(false);
+	const ref = useRef<HTMLDivElement>(null);
+	const aui = useAui();
+	const { persona, setPersona } = usePersona();
+	const current = PERSONA_CARDS.find((c) => c.id === persona);
+
+	// Close on outside click
+	useEffect(() => {
+		if (!open) return;
+		const handler = (e: MouseEvent) => {
+			if (ref.current && !ref.current.contains(e.target as Node))
+				setOpen(false);
+		};
+		document.addEventListener("mousedown", handler);
+		return () => document.removeEventListener("mousedown", handler);
+	}, [open]);
+
+	const handleSelect = (id: PersonaId) => {
+		if (id === persona) {
+			setOpen(false);
+			return;
+		}
+		setPersona(id);
+		setOpen(false);
+		// Switching persona = start a new thread
+		aui.threads().switchToNewThread();
+	};
+
+	return (
+		<div ref={ref} className="relative">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 active:scale-95 cursor-pointer text-base"
+				title={`当前角色：${current?.name ?? ""}`}
+			>
+				{current?.emoji ?? "⚡"}
+			</button>
+
+			{open && (
+				<div className="absolute bottom-full left-0 mb-2 w-56 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-xl p-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+					<div className="px-2 py-1.5 text-[10px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+						切换角色（新对话）
+					</div>
+					{PERSONA_CARDS.map((card) => {
+						const active = persona === card.id;
+						return (
+							<button
+								key={card.id}
+								type="button"
+								onClick={() => handleSelect(card.id)}
+								className={`
+									w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors cursor-pointer
+									${active ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700/50"}
+								`}
+							>
+								<span className="text-lg shrink-0">{card.emoji}</span>
+								<div className="min-w-0 flex-1">
+									<div className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+										{card.name}
+									</div>
+									<div className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+										{card.desc}
+									</div>
+								</div>
+								{active && (
+									<Check className="w-3.5 h-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+								)}
+							</button>
+						);
+					})}
+				</div>
+			)}
+		</div>
+	);
+};
 
 const ComposerAction: FC = () => (
 	<div className="relative mx-2 mb-2 flex items-center justify-between">
 		<div className="flex items-center gap-1">
+			<PersonaSwitcher />
+
 			<ComposerPrimitive.AddAttachment
 				className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
 				title="添加附件"
