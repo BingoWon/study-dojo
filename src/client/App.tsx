@@ -6,6 +6,7 @@ import {
 	Globe,
 	Languages,
 	Maximize2,
+	Mic,
 	Minimize2,
 	X,
 } from "lucide-react";
@@ -25,10 +26,11 @@ import {
 	type SidebarTab,
 	ThreadListSidebar,
 } from "./components/ThreadListSidebar";
+import { VoiceThread } from "./components/VoiceThread";
 import { useResizableLayout } from "./hooks/useResizableLayout";
 import { useUrlSync } from "./hooks/useUrlSync";
 import { getFileIcon } from "./lib/file-icons";
-import { RuntimeProvider } from "./RuntimeProvider";
+import { RuntimeProvider, useVoiceMode } from "./RuntimeProvider";
 
 function ssRead<T>(key: string, fallback: T): T {
 	try {
@@ -407,6 +409,12 @@ function App() {
 											viewLang={activeDoc.lang === "en" ? viewLang : "original"}
 										/>
 
+										{/* Voice reading mode */}
+										<VoiceButton
+											docId={activeDoc.id}
+											docTitle={activeDoc.title}
+										/>
+
 										{/* Focus mode */}
 										<button
 											type="button"
@@ -472,7 +480,7 @@ function App() {
 								className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-700/50"
 							>
 								<ErrorBoundary>
-									<Chat
+									<RightPanel
 										recipe={recipe}
 										onRecipeUpdate={handleRecipeUpdate}
 										onDocSelect={handleDocSelect}
@@ -536,6 +544,66 @@ const UrlSync: FC<{
 }> = ({ sidebarTab, setSidebarTab }) => {
 	useUrlSync(sidebarTab, setSidebarTab);
 	return null;
+};
+
+// ── Voice Button (lives inside RuntimeProvider for context access) ──────────
+
+const VoiceButton: FC<{ docId: string; docTitle: string }> = ({
+	docId,
+	docTitle,
+}) => {
+	const { voiceMode, enterVoiceMode, exitVoiceMode } = useVoiceMode();
+	const active = voiceMode.active && voiceMode.docId === docId;
+
+	return (
+		<button
+			type="button"
+			onClick={() =>
+				active ? exitVoiceMode() : enterVoiceMode(docId, docTitle)
+			}
+			className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+				active
+					? "text-purple-500 bg-purple-50 dark:bg-purple-950/30"
+					: "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+			}`}
+			title={active ? "退出语音陪读" : "语音陪读"}
+		>
+			<Mic className="w-3.5 h-3.5" />
+		</button>
+	);
+};
+
+// ── Right Panel (switches between Chat and VoiceThread) ─────────────────────
+
+const RightPanel: FC<{
+	recipe: Recipe;
+	onRecipeUpdate: (partial: Partial<Recipe>) => void;
+	onDocSelect?: (
+		docId: string,
+		title: string,
+		lang?: string | null,
+		fileExt?: string | null,
+	) => void;
+	onHighlight?: (action: HighlightAction) => void;
+	onLoadingChange?: (loading: boolean) => void;
+	registerImprove?: (fn: () => void) => void;
+}> = (props) => {
+	const { voiceMode, exitVoiceMode } = useVoiceMode();
+
+	if (voiceMode.active && voiceMode.docTitle) {
+		return <VoiceThread docTitle={voiceMode.docTitle} onExit={exitVoiceMode} />;
+	}
+
+	return (
+		<Chat
+			recipe={props.recipe}
+			onRecipeUpdate={props.onRecipeUpdate}
+			onDocSelect={props.onDocSelect}
+			onHighlight={props.onHighlight}
+			onLoadingChange={props.onLoadingChange}
+			registerImprove={props.registerImprove}
+		/>
+	);
 };
 
 export default App;

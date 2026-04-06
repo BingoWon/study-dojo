@@ -3,6 +3,8 @@ CREATE TABLE `threads` (
 	`user_id` text NOT NULL,
 	`title` text DEFAULT '新对话' NOT NULL,
 	`persona` text DEFAULT 'professor' NOT NULL,
+	`mode` text DEFAULT 'text' NOT NULL,
+	`doc_id` text,
 	`created_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL,
 	`updated_at` integer DEFAULT (strftime('%s', 'now')) NOT NULL
 );

@@ -167,6 +167,25 @@ app.post("/api/tts", async (c) => {
 	});
 });
 
+// ── ElevenLabs Conversational AI (signed URL for voice mode) ───────────────
+app.get("/api/voice-signed-url", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未���权" }, 401);
+
+	const apiKey = c.env.ELEVENLABS_API_KEY;
+	const agentId = c.env.ELEVENLABS_AGENT_ID;
+	if (!apiKey || !agentId) return c.json({ error: "语音对话服务未���置" }, 500);
+
+	const res = await fetch(
+		`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
+		{ headers: { "xi-api-key": apiKey } },
+	);
+	if (!res.ok) return c.json({ error: "语音对话服务暂不可用" }, 502);
+
+	const data = (await res.json()) as { signed_url: string };
+	return c.json({ signedUrl: data.signed_url });
+});
+
 app.post("/api/threads/:id/generate-title", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
@@ -521,7 +540,7 @@ app.post("/api/chat", async (c) => {
 		// ── Persist user message ──────────────────────────────────────────────
 		if (threadId && userId && lastUserMsg) {
 			try {
-				await ensureThread(db, threadId, userId, persona);
+				await ensureThread(db, threadId, userId, { persona });
 				const parts = lastUserMsg.parts?.length
 					? lastUserMsg.parts
 					: [{ type: "text" as const, text: lastUserMsg.content ?? "" }];

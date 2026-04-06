@@ -12,6 +12,10 @@ export const threads = sqliteTable("threads", {
 	userId: text("user_id").notNull(),
 	title: text("title").notNull().default("新对话"),
 	persona: text("persona").notNull().default(DEFAULT_PERSONA),
+	mode: text("mode", { enum: ["text", "voice"] })
+		.notNull()
+		.default("text"),
+	docId: text("doc_id"),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),

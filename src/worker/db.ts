@@ -17,6 +17,8 @@ export async function getThreadsByUserId(db: DbClient, userId: string) {
 			id: threads.id,
 			title: threads.title,
 			persona: threads.persona,
+			mode: threads.mode,
+			docId: threads.docId,
 			createdAt: threads.createdAt,
 			updatedAt: threads.updatedAt,
 		})
@@ -29,7 +31,7 @@ export async function ensureThread(
 	db: DbClient,
 	id: string,
 	userId: string,
-	persona?: PersonaId,
+	opts?: { persona?: PersonaId; mode?: "text" | "voice"; docId?: string },
 ) {
 	const now = Math.floor(Date.now() / 1000);
 	await db
@@ -38,7 +40,12 @@ export async function ensureThread(
 			id,
 			userId,
 			title: "新对话",
-			persona: persona && isValidPersona(persona) ? persona : DEFAULT_PERSONA,
+			persona:
+				opts?.persona && isValidPersona(opts.persona)
+					? opts.persona
+					: DEFAULT_PERSONA,
+			mode: opts?.mode ?? "text",
+			docId: opts?.docId ?? null,
 			createdAt: now,
 			updatedAt: now,
 		})

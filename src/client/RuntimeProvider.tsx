@@ -40,6 +40,7 @@ import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import { ElevenLabsScribeAdapter } from "./lib/elevenlabs-scribe-adapter";
 import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
+import { ElevenLabsVoiceAdapter } from "./lib/elevenlabs-voice-adapter";
 
 // ── Persona Context (per-thread persona, set at thread creation) ──────────
 
@@ -59,6 +60,26 @@ const AutoTTSCtx = createContext<{
 
 export const useAutoTTS = () => useContext(AutoTTSCtx);
 
+// ── Voice Mode Context ────────────────────────────────────────────────────
+
+export interface VoiceModeState {
+	active: boolean;
+	docId: string | null;
+	docTitle: string | null;
+}
+
+const VoiceModeCtx = createContext<{
+	voiceMode: VoiceModeState;
+	enterVoiceMode: (docId: string, docTitle: string) => void;
+	exitVoiceMode: () => void;
+}>({
+	voiceMode: { active: false, docId: null, docTitle: null },
+	enterVoiceMode: () => {},
+	exitVoiceMode: () => {},
+});
+
+export const useVoiceMode = () => useContext(VoiceModeCtx);
+
 // ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
 
 const scribeAdapter = new ElevenLabsScribeAdapter({
@@ -68,6 +89,10 @@ const scribeAdapter = new ElevenLabsScribeAdapter({
 });
 
 const ttsAdapter = new ElevenLabsTTSAdapter({ endpoint: "/api/tts" });
+
+const voiceAdapter = new ElevenLabsVoiceAdapter({
+	signedUrlEndpoint: "/api/voice-signed-url",
+});
 
 // ── Attachment Adapter ──────────────────────────────────────────────────────
 
@@ -294,10 +319,13 @@ function useMyRuntime() {
 		}
 	}, [loadedMessages, chat.setMessages]);
 
+	const { voiceMode } = useVoiceMode();
+
 	return useAISDKRuntime(chat, {
 		adapters: {
 			dictation: scribeAdapter,
 			speech: ttsAdapter,
+			...(voiceMode.active ? { voice: voiceAdapter } : {}),
 		},
 	});
 }
@@ -328,6 +356,43 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		[autoTTS, setAutoTTS],
 	);
 
+	// ── Voice mode ────────────────────────────────────────────────────────
+	const [voiceMode, setVoiceMode] = useState<VoiceModeState>({
+		active: false,
+		docId: null,
+		docTitle: null,
+	});
+
+	const enterVoiceMode = useCallback(
+		async (docId: string, docTitle: string) => {
+			// Fetch document content for system prompt injection
+			let docContent = "";
+			try {
+				const res = await fetch(`/api/documents/${docId}/markdown`);
+				if (res.ok) docContent = await res.text();
+			} catch {}
+
+			const p = PERSONAS[persona];
+			const truncated = docContent.slice(0, 12000);
+			voiceAdapter.configure({
+				systemPrompt: `${p.prompt}\n\n你正在和学生进行实时语音对话，讨论下面这篇文档。回答简洁口语化，适合语音交流，不要输出 markdown 格式。\n\n## 正在阅读的文档：「${docTitle}」\n\n${truncated}`,
+				voiceId: p.voiceId,
+			});
+
+			setVoiceMode({ active: true, docId, docTitle });
+		},
+		[persona],
+	);
+
+	const exitVoiceMode = useCallback(() => {
+		setVoiceMode({ active: false, docId: null, docTitle: null });
+	}, []);
+
+	const voiceModeCtx = useMemo(
+		() => ({ voiceMode, enterVoiceMode, exitVoiceMode }),
+		[voiceMode, enterVoiceMode, exitVoiceMode],
+	);
+
 	const runtime = useRemoteThreadListRuntime({
 		runtimeHook: useMyRuntime,
 		adapter: threadListAdapter,
@@ -336,22 +401,24 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	return (
 		<PersonaCtx value={personaCtx}>
 			<AutoTTSCtx value={autoTTSCtx}>
-				<AssistantRuntimeProvider runtime={runtime}>
-					<PersonaSync />
-					<AutoSpeakWatcher />
-					{/* Each tool UI matches a backend tool by toolName */}
-					<AskUserToolUI />
-					<SearchToolUI />
-					<AcademicSearchToolUI />
-					<DocSuggestToolUI />
-					<DocSearchToolUI />
-					<OpenDocToolUI />
-					<HighlightDocToolUI />
-					<ReadDocToolUI />
-					<RecipeToolUI />
-					<SaveMemoryToolUI />
-					{children}
-				</AssistantRuntimeProvider>
+				<VoiceModeCtx value={voiceModeCtx}>
+					<AssistantRuntimeProvider runtime={runtime}>
+						<PersonaSync />
+						<AutoSpeakWatcher />
+						{/* Each tool UI matches a backend tool by toolName */}
+						<AskUserToolUI />
+						<SearchToolUI />
+						<AcademicSearchToolUI />
+						<DocSuggestToolUI />
+						<DocSearchToolUI />
+						<OpenDocToolUI />
+						<HighlightDocToolUI />
+						<ReadDocToolUI />
+						<RecipeToolUI />
+						<SaveMemoryToolUI />
+						{children}
+					</AssistantRuntimeProvider>
+				</VoiceModeCtx>
 			</AutoTTSCtx>
 		</PersonaCtx>
 	);
