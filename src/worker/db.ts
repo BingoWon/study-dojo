@@ -1,5 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { DEFAULT_PERSONA, isValidPersona, type PersonaId } from "./model";
 import { messages, threads } from "./schema";
 
 export function createDb(d1: D1Database) {
@@ -28,7 +29,7 @@ export async function ensureThread(
 	db: DbClient,
 	id: string,
 	userId: string,
-	persona?: string,
+	persona?: PersonaId,
 ) {
 	const now = Math.floor(Date.now() / 1000);
 	await db
@@ -37,7 +38,7 @@ export async function ensureThread(
 			id,
 			userId,
 			title: "新对话",
-			persona: persona ?? "professor",
+			persona: persona && isValidPersona(persona) ? persona : DEFAULT_PERSONA,
 			createdAt: now,
 			updatedAt: now,
 		})

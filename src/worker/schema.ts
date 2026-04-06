@@ -5,12 +5,13 @@ import {
 	sqliteTable,
 	text,
 } from "drizzle-orm/sqlite-core";
+import { DEFAULT_PERSONA } from "./model";
 
 export const threads = sqliteTable("threads", {
 	id: text("id").primaryKey(),
 	userId: text("user_id").notNull(),
 	title: text("title").notNull().default("新对话"),
-	persona: text("persona").notNull().default("professor"),
+	persona: text("persona").notNull().default(DEFAULT_PERSONA),
 	createdAt: integer("created_at", { mode: "number" })
 		.notNull()
 		.default(sql`(strftime('%s', 'now'))`),

@@ -24,7 +24,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { PersonaId } from "../../src/worker/model";
+import { DEFAULT_PERSONA, PERSONAS, type PersonaId } from "../worker/model";
 import { AcademicSearchToolUI } from "./components/tools/AcademicSearchToolUI";
 import { AskUserToolUI } from "./components/tools/AskUserToolUI";
 import {
@@ -45,18 +45,9 @@ import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
 const PersonaCtx = createContext<{
 	persona: PersonaId;
 	setPersona: (id: PersonaId) => void;
-}>({ persona: "professor", setPersona: () => {} });
+}>({ persona: DEFAULT_PERSONA, setPersona: () => {} });
 
 export const usePersona = () => useContext(PersonaCtx);
-
-// ── Per-persona voice IDs (must match server-side personas/*.ts) ───────────
-
-const PERSONA_VOICES: Record<PersonaId, string> = {
-	blank_f: "bhJUNIXWQQ94l8eI2VUf",
-	blank_m: "DowyQ68vDpgFYdWVGjc3",
-	professor: "FqHwwZfMdkoU9y0kGIhh",
-	keli: "EHsSAXuFWvDRhKxO2tcj",
-};
 
 // ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
 
@@ -223,7 +214,7 @@ function useMyRuntime() {
 	const { persona } = usePersona();
 
 	// Sync TTS voice to current persona
-	ttsAdapter.voiceId = PERSONA_VOICES[persona];
+	ttsAdapter.voiceId = PERSONAS[persona].voiceId;
 
 	const stateRef = useRef(aui.threadListItem().getState());
 	stateRef.current = aui.threadListItem().getState();
@@ -299,7 +290,7 @@ function useMyRuntime() {
 // ── Root Provider ───────────────────────────────────────────────────────────
 
 export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
-	const [persona, setPersona] = useState<PersonaId>("professor");
+	const [persona, setPersona] = useState<PersonaId>(DEFAULT_PERSONA);
 	const personaCtx = useMemo(() => ({ persona, setPersona }), [persona]);
 
 	const runtime = useRemoteThreadListRuntime({

@@ -486,6 +486,9 @@ app.post("/api/chat", async (c) => {
 		}>();
 		const threadId = c.req.header("x-thread-id") || undefined;
 		const personaRaw = c.req.header("x-persona") || DEFAULT_PERSONA;
+		if (!isValidPersona(personaRaw)) {
+			log.warn({ module: "chat", msg: "invalid persona", persona: personaRaw });
+		}
 		const persona = isValidPersona(personaRaw) ? personaRaw : DEFAULT_PERSONA;
 		const userId = await requireUserId(c);
 
@@ -649,7 +652,13 @@ app.post("/api/chat", async (c) => {
 									.join(" ") ?? "",
 						})),
 					userId,
-				),
+				).catch((e) => {
+					log.error({
+						module: "chat",
+						msg: "memory extraction failed",
+						error: String(e),
+					});
+				}),
 			);
 		}
 

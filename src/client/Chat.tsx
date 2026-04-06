@@ -31,7 +31,7 @@ import {
 	X,
 } from "lucide-react";
 import { createContext, type FC, useEffect } from "react";
-import type { PersonaId } from "../../src/worker/model";
+import type { PersonaId } from "../worker/model";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import type { Recipe } from "./components/RecipePanel";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
