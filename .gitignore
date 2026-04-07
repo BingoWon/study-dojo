@@ -176,3 +176,6 @@ scripts/
 references/
 elevenlabs-voice/
 elevenlabs-scribe/
+
+# Source character PNGs (keep out of git)
+雷电教授/
