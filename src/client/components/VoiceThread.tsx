@@ -6,6 +6,7 @@ import type {
 	VoiceTranscript,
 } from "../lib/elevenlabs-voice-adapter";
 import { startVoiceSession } from "../lib/elevenlabs-voice-adapter";
+import { getNextGreeting } from "../lib/greeting";
 import { usePersona } from "../RuntimeProvider";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { VoiceOrb, type VoiceOrbState } from "./voice/VoiceOrb";
@@ -67,17 +68,7 @@ export const VoiceThread: FC<{
 	useEffect(() => {
 		let cancelled = false;
 
-		// Cycle through firstMessages per persona (stored in localStorage)
-		const storageKey = `voice:firstMsgIdx:${persona}`;
-		let idx = 0;
-		try {
-			const saved = localStorage.getItem(storageKey);
-			if (saved !== null) idx = (Number(saved) + 1) % p.firstMessages.length;
-		} catch {}
-		const firstMessage = p.firstMessages[idx];
-		try {
-			localStorage.setItem(storageKey, String(idx));
-		} catch {}
+		const firstMessage = getNextGreeting(persona, "voice");
 
 		const sessionPromise = startVoiceSession(
 			"/api/voice-signed-url",

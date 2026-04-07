@@ -1,5 +1,5 @@
 import { experimental_useObject as useObject } from "@ai-sdk/react";
-import { Send, Volume2, VolumeOff, X } from "lucide-react";
+import { Mic, Send, Volume2, VolumeOff, X } from "lucide-react";
 import {
 	type FC,
 	useCallback,
@@ -15,6 +15,16 @@ import { getPoses, PERSONAS } from "../../worker/model";
 import { CharacterAvatar } from "../components/CharacterAvatar";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { DialogueTTSPlayer, ttsAdapter } from "../lib/dialogue-tts";
+import { ElevenLabsScribeAdapter } from "../lib/elevenlabs-scribe-adapter";
+import { getNextGreeting } from "../lib/greeting";
+
+// ── Voice input (shared scribe adapter instance for dialogue mode) ─────────
+
+const scribeAdapter = new ElevenLabsScribeAdapter({
+	tokenEndpoint: "/api/scribe-token",
+	languageCode: "zh",
+	toSimplified: true,
+});
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +161,10 @@ export const DialogueThread: FC<{
 		}
 	});
 	const [customInput, setCustomInput] = useState("");
+	const [isDictating, setIsDictating] = useState(false);
+	const dictationRef = useRef<{ stop: () => void; cancel: () => void } | null>(
+		null,
+	);
 	const ttsRef = useRef<DialogueTTSPlayer | null>(null);
 
 	useEffect(() => {
@@ -202,10 +216,13 @@ export const DialogueThread: FC<{
 		[turns, persona, submit],
 	);
 
+	// Show greeting as first assistant turn, then request LLM opening
 	const mountedRef = useRef(false);
 	useEffect(() => {
 		if (mountedRef.current) return;
 		mountedRef.current = true;
+		const greeting = getNextGreeting(persona, "dialogue");
+		setTurns([{ role: "assistant", pose: "neutral", speech: greeting }]);
 		submit({ history: [], persona });
 	}, [submit, persona]);
 
@@ -273,6 +290,34 @@ export const DialogueThread: FC<{
 		player.flush(speech);
 	}, [currentSpeech, turns]);
 
+	// ── Dictation (voice input via ElevenLabs Scribe) ──
+
+	const startDictation = useCallback(() => {
+		if (isDictating || isLoading) return;
+		// Abort any playing TTS when user starts speaking
+		ttsRef.current?.abort();
+		setIsDictating(true);
+		const session = scribeAdapter.listen();
+		dictationRef.current = session;
+		session.onSpeech((result) => {
+			setCustomInput(result.transcript);
+		});
+		session.onSpeechEnd((result) => {
+			setIsDictating(false);
+			dictationRef.current = null;
+			if (result.transcript.trim()) {
+				sendTurn(result.transcript.trim());
+				setCustomInput("");
+			}
+		});
+	}, [isDictating, isLoading, sendTurn]);
+
+	const stopDictation = useCallback(() => {
+		dictationRef.current?.stop();
+		setIsDictating(false);
+		dictationRef.current = null;
+	}, []);
+
 	// ── Shared sub-components ──
 
 	const speechBubble = (
@@ -316,6 +361,19 @@ export const DialogueThread: FC<{
 
 	const inputBar = (
 		<div className="flex items-center gap-2">
+			<button
+				type="button"
+				onClick={isDictating ? stopDictation : startDictation}
+				disabled={isLoading && !isDictating}
+				className={`p-2 rounded-lg transition-all cursor-pointer shrink-0 ${
+					isDictating
+						? "bg-red-500 text-white animate-pulse"
+						: "bg-white/50 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-700/70"
+				} disabled:opacity-30 disabled:pointer-events-none`}
+				title={isDictating ? "停止录音" : "语音输入"}
+			>
+				<Mic className="w-4 h-4" />
+			</button>
 			<input
 				type="text"
 				value={customInput}
@@ -326,8 +384,8 @@ export const DialogueThread: FC<{
 						handleCustomSubmit();
 					}
 				}}
-				placeholder="输入自定义回复..."
-				disabled={isLoading}
+				placeholder={isDictating ? "正在听..." : "输入自定义回复..."}
+				disabled={isLoading || isDictating}
 				className="flex-1 px-3 py-2 rounded-lg text-sm
 					bg-white/50 dark:bg-zinc-800/50 backdrop-blur-sm
 					border border-zinc-200/50 dark:border-zinc-700/50
@@ -338,7 +396,7 @@ export const DialogueThread: FC<{
 			<button
 				type="button"
 				onClick={handleCustomSubmit}
-				disabled={isLoading || !customInput.trim()}
+				disabled={isLoading || isDictating || !customInput.trim()}
 				className="p-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900
 					hover:opacity-90 disabled:opacity-30 disabled:pointer-events-none
 					transition-opacity cursor-pointer"
