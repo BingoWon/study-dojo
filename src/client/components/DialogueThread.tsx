@@ -164,7 +164,13 @@ export const DialogueThread: FC<{
 	const lastPoseRef = useRef("neutral");
 	if (object?.pose) lastPoseRef.current = object.pose;
 	const currentPose = lastPoseRef.current;
-	const currentSpeech = object?.speech ?? "";
+
+	// Speech: show LLM streaming text, or fall back to last assistant turn (greeting)
+	const streamingSpeech = object?.speech ?? "";
+	const lastAssistantSpeech =
+		turns.filter((t) => t.role === "assistant").pop()?.speech ?? "";
+	const currentSpeech = streamingSpeech || lastAssistantSpeech;
+
 	const currentChoices = object?.choices;
 	const hasChoices =
 		currentChoices && currentChoices.length > 0 && currentChoices[0] != null;
@@ -469,25 +475,22 @@ export const DialogueThread: FC<{
 	return (
 		<div id="dialogue-overlay" className="relative pointer-events-auto">
 			{displayMode === "pose" ? (
-				// ── Pose Mode: character left, glass panel right ──
+				// ── Pose Mode: character left, glass panel fills remaining width ──
 				<div className="flex items-end">
 					{/* Character pose: h=2/3 screen, max-w=1/3, flush left+bottom */}
 					<div className="shrink-0 h-[66dvh] max-w-[33vw]">
 						<PoseImage persona={persona} pose={currentPose} />
 					</div>
 
-					{/* Dialogue panel: max-h=50vh, right margin=33vw */}
-					<div
-						className="-ml-4 max-h-[50vh] overflow-y-auto pb-4"
-						style={{ marginRight: "33vw" }}
-					>
+					{/* Dialogue panel: fills remaining width, max-h=50vh */}
+					<div className="flex-1 min-w-0 -ml-4 max-h-[50vh] overflow-y-auto pb-4 pr-6">
 						{dialoguePanel}
 					</div>
 				</div>
 			) : (
-				// ── Avatar Mode: centered, 50% width, avatar inside panel ──
+				// ── Avatar Mode: centered, 60% width ──
 				<div className="flex justify-center pb-4 px-4">
-					<div className="w-1/2 min-w-[360px] max-w-[600px] max-h-[50vh] overflow-y-auto">
+					<div className="w-3/5 min-w-[400px] max-h-[50vh] overflow-y-auto">
 						{dialoguePanel}
 					</div>
 				</div>
