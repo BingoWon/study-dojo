@@ -404,26 +404,31 @@ function useMyRuntime() {
 						"x-auto-tts": autoTTSFlag ? "1" : "0",
 					};
 				},
-				prepareSendMessagesRequest: (req) => {
+			prepareSendMessagesRequest: (req) => {
 					// Consume pending persona switch: prepend marker to last user message text
 					const ps = pendingPersonaSwitch;
-					if (ps && req.trigger === "submit-message") {
-						pendingPersonaSwitch = null;
-						const prefix = `[🔄 角色切换：${ps.from} → ${ps.to}]\n`;
-						const msgs = req.messages.map((m, i, arr) => {
-							if (m.role !== "user" || i !== arr.length - 1) return m;
-							return {
-								...m,
-								parts: m.parts.map((p) =>
-									p.type === "text"
-										? { ...p, text: prefix + p.text }
-										: p,
-								),
-							};
-						});
-						return { body: { ...req.body, messages: msgs } };
+					if (!ps || req.trigger !== "submit-message") {
+						return { body: { ...req.body } };
 					}
-					return { body: { ...req.body, messages: req.messages } };
+					pendingPersonaSwitch = null;
+					const prefix = `[🔄 角色切换：${ps.from} → ${ps.to}]\n`;
+					return {
+						body: {
+							...req.body,
+							messages: req.messages.map((m, i, arr) => {
+								if (m.role !== "user" || i !== arr.length - 1)
+									return m;
+								return {
+									...m,
+									parts: m.parts.map((p) =>
+										p.type === "text"
+											? { ...p, text: prefix + p.text }
+											: p,
+									),
+								};
+							}),
+						},
+					};
 				},
 			}),
 		[aui],
@@ -613,8 +618,12 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
 	/** After voice/dialogue exit, switch to the persisted thread and refresh sidebar + messages. */
 	const switchToPersistedThread = useCallback(async () => {
-		if (!capturedThreadId) return;
+		if (!capturedThreadId) {
+			console.warn("[switchToPersistedThread] no capturedThreadId");
+			return;
+		}
 		const tid = capturedThreadId;
+		console.log("[switchToPersistedThread] switching to", tid);
 		try {
 			await runtime.threads.switchToThread(tid);
 			window.history.replaceState(null, "", `/c/${tid}`);
@@ -626,6 +635,7 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 				core._loadThreadsPromise = null;
 				core.getLoadThreadsPromise();
 			}
+			console.log("[switchToPersistedThread] switchToThread succeeded");
 		} catch (e) {
 			console.error("[switchToPersistedThread] failed:", e);
 			window.history.replaceState(null, "", `/c/${tid}`);
