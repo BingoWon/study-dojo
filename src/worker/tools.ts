@@ -126,7 +126,7 @@ export function createDocTools(opts: {
 
 		doc_rag_search: tool({
 			description:
-				"对用户个人文档库执行 RAG 语义检索（非互联网搜索）。文档按 ~1500 字/块、128 字重叠切分并向量化，返回最相关的 chunk。不传 docIds 则搜索全部文档。",
+				"对用户个人文档库执行 RAG 语义检索（非互联网搜索）。文档按 ~2048 字/块、256 字重叠切分并向量化，返回最相关的 chunk。不传 docIds 则搜索全部文档。",
 			inputSchema: zodSchema(
 				z.object({
 					query: z.string().describe("检索查询"),
@@ -219,7 +219,7 @@ export function createDocTools(opts: {
 
 		read_document: tool({
 			description:
-				"阅读文档内容。文档以分块（chunk）形式存储，每块约 1500 字符。可以按页阅读（每页默认 10 块），也可以一次读取全部。首次调用时不传参数即可获取文档概览和前 10 块内容，根据 totalChunks 决定是否继续读取。",
+				"阅读文档内容。文档以分块（chunk）形式存储，每块约 2048 字符。可以按页阅读（每页默认 10 块），也可以一次读取全部。首次调用时不传参数即可获取文档概览和前 10 块内容，根据 totalChunks 决定是否继续读取。",
 			inputSchema: zodSchema(
 				z.object({
 					docId: z.string().describe("文档 ID"),

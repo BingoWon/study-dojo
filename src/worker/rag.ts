@@ -9,8 +9,8 @@ import { log } from "./log";
 import { chunks as chunksTable, documents, userDocuments } from "./schema";
 import { isChinese, translateMarkdown } from "./translate";
 
-const CHUNK_SIZE = 1500;
-const CHUNK_OVERLAP = 128;
+const CHUNK_SIZE = 2048;
+const CHUNK_OVERLAP = 256;
 const INSERT_BATCH = 15;
 const DEFAULT_DIMENSIONS = 1536;
 const RECALL_MULTIPLIER = 3;
@@ -537,16 +537,31 @@ export async function retrieveContext(
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
-	const filter: Record<string, unknown> =
-		opts.docIds.length === 1
-			? { docId: opts.docIds[0] }
-			: { docId: { $in: opts.docIds } };
-
 	// Stage 1: Broad vector recall (no score threshold — reranker decides quality)
+	// Try filtered query first; fall back to unfiltered if metadata index is missing.
 	let results: [Document, number][];
 	try {
+		const filter: Record<string, unknown> =
+			opts.docIds.length === 1
+				? { docId: opts.docIds[0] }
+				: { docId: { $in: opts.docIds } };
 		results = await store.similaritySearchWithScore(query, recallK, filter);
-	} catch {
+
+		// Vectorize silently returns empty when metadata is not indexed — retry without filter
+		if (results.length === 0) {
+			results = await store.similaritySearchWithScore(query, recallK);
+			// Post-filter: keep only results belonging to the requested docIds
+			const docIdSet = new Set(opts.docIds);
+			results = results.filter(
+				([doc]) => docIdSet.has(doc.metadata.docId as string),
+			);
+		}
+	} catch (e) {
+		log.error({
+			module: "rag",
+			msg: "vector recall failed",
+			error: (e as Error).message,
+		});
 		return "";
 	}
 
