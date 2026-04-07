@@ -81,7 +81,7 @@ dialogue.post("/", async (c) => {
 - pose 字段必须从以下选项中选择最贴切的姿态：${poses.join("、")}
 - choices 字段必须提供 1-3 个用户可能的回复选项，用第一人称口语化短句，像 RPG 对话选项；鼓励在选项开头使用 emoji 增加趣味
 - 保持角色一致性，每句话都要符合你的人设
-- preEffect / postEffect 是视觉特效，用于增强对话的戏剧性和趣味性。可选值：confetti（庆祝）、fireworks（烟花）、stars（星星）、hearts（爱心）、school-pride（双侧彩炮）、flash（闪光）、screen-shake（震动）、bomb（炸弹爆炸）、explosions（密集爆炸）、lightning（闪电）、vortex（漩涡）、glitch（故障）、rain（阴云下雨）、good-job（彩色文字庆祝）、panel-shake（对话框抖动）。积极使用这些特效来配合对话情绪和剧情节奏，不要吝啬使用`;
+- preEffect / postEffect 是可选的视觉特效，可用于配合对话情绪。可选值：confetti（庆祝）、fireworks（烟花）、stars（星星）、hearts（爱心）、school-pride（双侧彩炮）、flash（闪光）、screen-shake（震动）、bomb（炸弹爆炸）、explosions（密集爆炸）、lightning（闪电）、vortex（漩涡）、glitch（故障）、rain（阴云下雨）、good-job（彩色文字庆祝）、panel-shake（对话框抖动）`;
 
 		if (docContext) systemPrompt += docContext;
 		if (chatSummary)

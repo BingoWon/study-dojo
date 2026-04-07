@@ -14,6 +14,7 @@ import {
 import {
 	DEFAULT_PERSONA,
 	DEFAULT_THREAD_TITLE,
+	PERSONAS,
 	resolvePersona,
 } from "../model";
 import { generateLLMTitle, maybeAutoTitle, requireUserId } from "./helpers";
@@ -74,8 +75,11 @@ threads.post("/:id/voice-messages", async (c) => {
 	const db = createDb(c.env.DB);
 	const threadId = c.req.param("id");
 	const persona = c.req.header("x-persona") || DEFAULT_PERSONA;
+	const docTitle = c.req.header("x-doc-title") || undefined;
+	const mode = c.req.header("x-mode") || undefined;
+	const resolvedPersona = resolvePersona(persona);
 	await ensureThread(db, threadId, userId, {
-		persona: resolvePersona(persona),
+		persona: resolvedPersona,
 	});
 
 	const { messages: msgs } = await c.req.json<{
@@ -101,7 +105,16 @@ threads.post("/:id/voice-messages", async (c) => {
 
 		if (needsTitle) {
 			// biome-ignore lint/suspicious/noExplicitAny: wire format
-			maybeAutoTitle(c.executionCtx, c.env, db, threadId, userId, msgs as any);
+			maybeAutoTitle(c.executionCtx, c.env, db, threadId, userId, msgs as any, {
+				persona: PERSONAS[resolvedPersona]?.name,
+				docTitle: docTitle || undefined,
+				mode:
+					mode === "dialogue"
+						? "剧情伴读"
+						: mode === "voice"
+							? "语音伴读"
+							: undefined,
+			});
 		}
 	}
 

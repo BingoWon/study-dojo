@@ -28,8 +28,9 @@ export async function generateLLMTitle(
 	return title.trim().replace(/["""''「」『』。，！？、：；]/g, "");
 }
 
-/** Extract user text from wire messages and auto-generate a thread title
- *  if the text is non-empty. Fire-and-forget via waitUntil. */
+/** Extract user text from wire messages and auto-generate a thread title.
+ *  Accepts optional context (persona, docTitle, mode) to help generate
+ *  meaningful titles when user messages are system markers. */
 export function maybeAutoTitle(
 	ctx: { waitUntil: (p: Promise<unknown>) => void },
 	env: Env,
@@ -37,22 +38,34 @@ export function maybeAutoTitle(
 	threadId: string,
 	userId: string,
 	wireMsgs: { role: string; parts?: { type: string; text?: string }[] }[],
+	context?: { persona?: string; docTitle?: string; mode?: string },
 ) {
-	const firstText = wireMsgs
+	const userTexts = wireMsgs
 		.filter((m) => m.role === "user")
 		.flatMap((m) =>
 			(m.parts ?? []).filter((p) => p.type === "text").map((p) => p.text ?? ""),
 		)
-		.filter((t) => !/^\[.*\]$/.test(t.trim()) && !t.startsWith("🎙"))
-		.join(" ")
-		.trim()
-		.slice(0, 200);
-	if (!firstText) return;
+		.filter((t) => !/^\[.*\]$/.test(t.trim()) && !t.startsWith("🎙"));
+
+	const firstText = userTexts.join(" ").trim().slice(0, 200);
+
+	// Build prompt with available context
+	let prompt: string;
+	if (firstText) {
+		prompt = `为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${firstText}`;
+	} else if (context?.docTitle || context?.persona) {
+		// No real user text (e.g. system markers only) — use context
+		const parts: string[] = [];
+		if (context.mode) parts.push(`模式：${context.mode}`);
+		if (context.persona) parts.push(`角色：${context.persona}`);
+		if (context.docTitle) parts.push(`文档：${context.docTitle}`);
+		prompt = `根据以下信息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${parts.join("，")}`;
+	} else {
+		return;
+	}
+
 	ctx.waitUntil(
-		generateLLMTitle(
-			env,
-			`为以下用户消息生成简洁中文标题，4-8个字，无标点无引号，只回复标题：\n${firstText}`,
-		)
+		generateLLMTitle(env, prompt)
 			.then(async (title) => {
 				if (title) await updateThreadTitle(db, threadId, userId, title);
 			})
