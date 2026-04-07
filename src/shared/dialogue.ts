@@ -35,6 +35,5 @@ export type DialogueTurn = z.infer<ReturnType<typeof buildDialogueTurnSchema>>;
 
 export interface DialogueHistoryEntry {
 	role: "assistant" | "user";
-	pose?: string;
 	speech: string;
 }

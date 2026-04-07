@@ -38,9 +38,8 @@ import {
 	DEFAULT_PERSONA,
 	getPoses,
 	getSystemPrompt,
-	isValidPersona,
 	PERSONAS,
-	type PersonaId,
+	resolvePersona,
 } from "./model";
 import {
 	checkDocByHash,
@@ -91,8 +90,9 @@ app.patch("/api/threads/:id", async (c) => {
 	if (body.title) {
 		await updateThreadTitle(db, threadId, userId, body.title);
 	}
-	if (body.persona && isValidPersona(body.persona)) {
-		await updateThreadPersona(db, threadId, userId, body.persona);
+	if (body.persona) {
+		const resolved = resolvePersona(body.persona);
+		await updateThreadPersona(db, threadId, userId, resolved);
 	}
 	return c.json({ ok: true });
 });
@@ -629,10 +629,7 @@ app.post("/api/chat", async (c) => {
 		}>();
 		const threadId = c.req.header("x-thread-id") || undefined;
 		const personaRaw = c.req.header("x-persona") || DEFAULT_PERSONA;
-		if (!isValidPersona(personaRaw)) {
-			log.warn({ module: "chat", msg: "invalid persona", persona: personaRaw });
-		}
-		const persona = isValidPersona(personaRaw) ? personaRaw : DEFAULT_PERSONA;
+		const persona = resolvePersona(personaRaw);
 		const userId = await requireUserId(c);
 
 		if (!c.env.LLM_API_KEY)
@@ -945,10 +942,7 @@ app.post("/api/chat", async (c) => {
 
 /** Returns available poses for a persona (used by frontend). */
 app.get("/api/dialogue/poses/:persona", (c) => {
-	const personaRaw = c.req.param("persona");
-	const persona: PersonaId = isValidPersona(personaRaw)
-		? personaRaw
-		: DEFAULT_PERSONA;
+	const persona = resolvePersona(c.req.param("persona"));
 	return c.json(getPoses(persona));
 });
 
@@ -962,9 +956,7 @@ app.post("/api/dialogue", async (c) => {
 			persona: string;
 		}>();
 
-		const persona: PersonaId = isValidPersona(personaRaw)
-			? personaRaw
-			: DEFAULT_PERSONA;
+		const persona = resolvePersona(personaRaw);
 		const p = PERSONAS[persona];
 		const poses = getPoses(persona);
 

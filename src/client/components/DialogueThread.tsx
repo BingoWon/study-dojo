@@ -1,10 +1,17 @@
 import { experimental_useObject as useObject } from "@ai-sdk/react";
 import { Send, Volume2, VolumeOff, X } from "lucide-react";
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
-import type { DialogueHistoryEntry, Effect } from "../../shared/dialogue";
+import {
+	type FC,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import type { Effect } from "../../shared/dialogue";
 import { buildDialogueTurnSchema } from "../../shared/dialogue";
 import type { PersonaId } from "../../worker/model";
-import { PERSONAS } from "../../worker/model";
+import { getPoses, PERSONAS } from "../../worker/model";
 import { CharacterAvatar } from "../components/CharacterAvatar";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { DialogueTTSPlayer, ttsAdapter } from "../lib/dialogue-tts";
@@ -63,7 +70,6 @@ const PoseImage: FC<{
 	persona: PersonaId;
 	pose: string;
 }> = ({ persona, pose }) => {
-	const p = PERSONAS[persona];
 	const src = `/characters/${persona}/poses/${pose}.webp`;
 	const [errSrc, setErrSrc] = useState("");
 	const err = errSrc === src;
@@ -71,7 +77,7 @@ const PoseImage: FC<{
 	if (err) {
 		return (
 			<div className="w-full h-full flex items-center justify-center">
-				<span className="text-6xl">{p.emoji}</span>
+				<CharacterAvatar persona={persona} pose={pose} size="xl" />
 			</div>
 		);
 	}
@@ -79,44 +85,11 @@ const PoseImage: FC<{
 	return (
 		<img
 			src={src}
-			alt={`${p.name} – ${pose}`}
+			alt={`${PERSONAS[persona].name} – ${pose}`}
 			className="h-full w-auto max-w-full object-contain object-bottom select-none"
 			draggable={false}
 			onError={() => setErrSrc(src)}
 		/>
-	);
-};
-
-// ── Avatar (circular cropped head, used in avatar mode) ───────────────────
-
-const Avatar: FC<{
-	persona: PersonaId;
-	pose: string;
-	size?: "sm" | "md";
-}> = ({ persona, pose, size = "md" }) => {
-	const p = PERSONAS[persona];
-	const src = `/characters/${persona}/avatars/${pose}.webp`;
-	const [errSrc, setErrSrc] = useState("");
-	const err = errSrc === src;
-	const dim = size === "sm" ? "w-10 h-10" : "w-14 h-14";
-
-	return (
-		<div
-			className={`${dim} rounded-full bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-700 ring-2 ring-white/80 dark:ring-zinc-700/80 shadow-md overflow-hidden shrink-0 flex items-center justify-center`}
-		>
-			{err ? (
-				<span className={size === "sm" ? "text-lg" : "text-2xl"}>
-					{p.emoji}
-				</span>
-			) : (
-				<img
-					src={src}
-					alt={`${p.name} – ${pose}`}
-					className="w-full h-full object-cover"
-					onError={() => setErrSrc(src)}
-				/>
-			)}
-		</div>
 	);
 };
 
@@ -191,7 +164,6 @@ export const DialogueThread: FC<{
 	const p = PERSONAS[persona];
 
 	const [turns, setTurns] = useState<CompletedTurn[]>([]);
-	const [poses, setPoses] = useState<string[]>(["neutral"]);
 	const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
 		try {
 			return (
@@ -223,17 +195,12 @@ export const DialogueThread: FC<{
 	ttsAdapter.voiceSpeed = p.voiceSpeed;
 	ttsAdapter.voiceStability = p.voiceStability;
 
-	// Fetch per-persona poses
-	useEffect(() => {
-		fetch(`/api/dialogue/poses/${persona}`)
-			.then((r) => (r.ok ? r.json() : null))
-			.then((data) => {
-				if (Array.isArray(data) && data.length > 0) setPoses(data);
-			})
-			.catch(() => {});
-	}, [persona]);
-
-	const schema = buildDialogueTurnSchema(poses as [string, ...string[]]);
+	// Build schema from persona poses (computed client-side, no API call needed)
+	const poses = useMemo(() => getPoses(persona), [persona]);
+	const schema = useMemo(
+		() => buildDialogueTurnSchema(poses as [string, ...string[]]),
+		[poses],
+	);
 
 	const { object, submit, isLoading, error } = useObject({
 		api: "/api/dialogue",
@@ -256,9 +223,8 @@ export const DialogueThread: FC<{
 			const userTurn: CompletedTurn = { role: "user", speech: userSpeech };
 			const newTurns = [...turns, userTurn];
 			setTurns(newTurns);
-			const history: DialogueHistoryEntry[] = newTurns.map((t) => ({
+			const history = newTurns.map((t) => ({
 				role: t.role,
-				pose: t.pose,
 				speech: t.speech,
 			}));
 			submit({ history, persona });
@@ -581,7 +547,12 @@ const AvatarLayout: FC<LayoutProps> = ({
 		<div className="flex gap-3 items-start">
 			{/* Avatar */}
 			<div className="shrink-0 pt-1">
-				<Avatar persona={persona} pose={pose} />
+				<CharacterAvatar
+					persona={persona}
+					pose={pose}
+					size="lg"
+					className="ring-2 ring-white/80 dark:ring-zinc-700/80 shadow-md"
+				/>
 				<div className="text-center mt-1">
 					<div className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 truncate w-14">
 						{name}

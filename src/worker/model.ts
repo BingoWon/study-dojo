@@ -82,8 +82,21 @@ export const PERSONAS: Record<PersonaId, Persona> = {
 
 export const DEFAULT_PERSONA: PersonaId = "raiden";
 
+/** Map legacy persona IDs from older threads to current IDs. */
+const LEGACY_PERSONA_MAP: Record<string, PersonaId> = {
+	professor: "raiden",
+	blank_f: "shiyu",
+	blank_m: "yixuan",
+};
+
 export function isValidPersona(id: string): id is PersonaId {
 	return id in PERSONAS;
+}
+
+/** Resolve a persona ID, mapping legacy values to current ones. */
+export function resolvePersona(id: string): PersonaId {
+	if (isValidPersona(id)) return id;
+	return LEGACY_PERSONA_MAP[id] ?? DEFAULT_PERSONA;
 }
 
 export function getSystemPrompt(personaId: PersonaId): string {

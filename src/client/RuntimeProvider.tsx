@@ -25,7 +25,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { DEFAULT_PERSONA, PERSONAS, type PersonaId } from "../worker/model";
+import {
+	DEFAULT_PERSONA,
+	PERSONAS,
+	type PersonaId,
+	resolvePersona,
+} from "../worker/model";
 import { AcademicSearchToolUI } from "./components/tools/AcademicSearchToolUI";
 import { AskUserToolUI } from "./components/tools/AskUserToolUI";
 import {
@@ -189,7 +194,7 @@ const threadListAdapter: RemoteThreadListAdapter = {
 			persona: string;
 		}[];
 		for (const t of threads) {
-			threadPersonaMap.set(t.id, (t.persona ?? "raiden") as PersonaId);
+			threadPersonaMap.set(t.id, resolvePersona(t.persona ?? "raiden"));
 		}
 		return {
 			threads: threads.map((t) => ({

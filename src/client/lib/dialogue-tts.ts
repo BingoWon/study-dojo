@@ -6,7 +6,8 @@
 import { ElevenLabsTTSAdapter } from "./elevenlabs-tts-adapter";
 import { CHUNK_GAP_MS, fetchTTSBlob, playBlob, SENTENCE_RE } from "./tts-utils";
 
-/** Module-scope TTS adapter instance for dialogue mode. */
+/** Separate TTS adapter for dialogue mode (intentionally independent from
+ *  RuntimeProvider's adapter — each mode manages its own voice lifecycle). */
 export const ttsAdapter = new ElevenLabsTTSAdapter({ endpoint: "/api/tts" });
 
 /**
