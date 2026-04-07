@@ -740,8 +740,10 @@ function AutoSpeakWatcher() {
 			} else {
 				ttsRef.current = null;
 			}
-			const speech = aui.thread().getState().speech;
-			if (speech) aui.thread().stopSpeaking();
+			try {
+				const speech = aui.thread().getState().speech;
+				if (speech) aui.thread().stopSpeaking();
+			} catch {}
 		}
 
 		// ── Transition: running → idle (generation finished) ──
