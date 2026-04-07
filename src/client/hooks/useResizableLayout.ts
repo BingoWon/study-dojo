@@ -194,6 +194,31 @@ export function useResizableLayout(
 		}
 	}, [focused, leftWidth, rightWidth, leftCollapsed, rightCollapsed]);
 
+	// Programmatic collapse/restore for right panel (used by dialogue mode)
+	const rightSavedRef = useRef<{ width: number; collapsed: boolean } | null>(
+		null,
+	);
+
+	const collapseRight = useCallback(() => {
+		if (!rightCollapsed) {
+			rightSavedRef.current = { width: rightWidth, collapsed: false };
+			setRightCollapsed(true);
+			setRightWidth(0);
+		}
+	}, [rightCollapsed, rightWidth]);
+
+	const restoreRight = useCallback(() => {
+		const saved = rightSavedRef.current;
+		if (saved && !saved.collapsed) {
+			setRightCollapsed(false);
+			setRightWidth(saved.width);
+		} else {
+			setRightCollapsed(false);
+			setRightWidth(defaultsRef.current.right);
+		}
+		rightSavedRef.current = null;
+	}, []);
+
 	const leftDividerProps: DividerProps = {
 		onMouseDown: (e) => onMouseDown("left", e),
 		onDoubleClick: () => {
@@ -223,5 +248,7 @@ export function useResizableLayout(
 		toggleLeft,
 		toggleRight,
 		toggleFocus,
+		collapseRight,
+		restoreRight,
 	};
 }

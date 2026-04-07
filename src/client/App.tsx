@@ -476,7 +476,7 @@ function App() {
 						) : (
 							<div
 								style={{ width: layout.rightWidth }}
-								className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-700/50"
+								className="h-full flex-shrink-0 overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/60 dark:border-zinc-700/50 transition-[width] duration-300 ease-out"
 							>
 								<ErrorBoundary>
 									<RightPanel
@@ -493,6 +493,11 @@ function App() {
 							</div>
 						)}
 					</div>
+					{/* Dialogue mode: fixed bottom overlay (outside flex layout) */}
+					<DialogueOverlay
+						onCollapse={layout.collapseRight}
+						onRestore={layout.restoreRight}
+					/>
 				</RuntimeProvider>
 			</Show>
 		</main>
@@ -577,6 +582,36 @@ const DocViewerWithVoice: FC<{
 	);
 };
 
+// ── Dialogue Overlay (fixed bottom, outside flex layout) ─────────────────────
+
+const DialogueOverlay: FC<{
+	onCollapse: () => void;
+	onRestore: () => void;
+}> = ({ onCollapse, onRestore }) => {
+	const { dialogueMode, exitDialogueMode } = useDialogueMode();
+	const { persona } = usePersona();
+	const prevActiveRef = useRef(false);
+
+	// Auto-collapse right panel on enter, restore on exit
+	useEffect(() => {
+		if (dialogueMode.active && !prevActiveRef.current) {
+			onCollapse();
+		}
+		if (!dialogueMode.active && prevActiveRef.current) {
+			onRestore();
+		}
+		prevActiveRef.current = dialogueMode.active;
+	}, [dialogueMode.active, onCollapse, onRestore]);
+
+	if (!dialogueMode.active) return null;
+
+	return (
+		<div className="fixed inset-x-0 bottom-0 z-30 animate-in slide-in-from-bottom-4 fade-in duration-300">
+			<DialogueThread persona={persona} onExit={exitDialogueMode} />
+		</div>
+	);
+};
+
 // ── Right Panel (switches between Chat and VoiceThread) ─────────────────────
 
 const RightPanel: FC<{
@@ -593,12 +628,6 @@ const RightPanel: FC<{
 	registerImprove?: (fn: () => void) => void;
 }> = (props) => {
 	const { voiceMode, exitVoiceMode } = useVoiceMode();
-	const { dialogueMode, exitDialogueMode } = useDialogueMode();
-	const { persona } = usePersona();
-
-	if (dialogueMode.active) {
-		return <DialogueThread persona={persona} onExit={exitDialogueMode} />;
-	}
 
 	if (voiceMode.active && voiceMode.docTitle) {
 		return (
