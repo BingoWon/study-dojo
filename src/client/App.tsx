@@ -1,3 +1,4 @@
+import { useAuiState } from "@assistant-ui/react";
 import { Show, SignInButton, SignUpButton } from "@clerk/react";
 import {
 	Check,
@@ -569,17 +570,20 @@ const DocViewerWithVoice: FC<{
 	const { voiceMode, enterVoiceMode, exitVoiceMode } = useVoiceMode();
 	const { dialogueMode, enterDialogueMode, exitDialogueMode } =
 		useDialogueMode();
+	const threadId = useAuiState(
+		(s) => s.threadListItem.remoteId as string | undefined,
+	);
 
 	return (
 		<DocumentViewer
 			docId={doc.id}
 			{...rest}
 			onVoiceRead={() =>
-				voiceMode.active ? exitVoiceMode() : enterVoiceMode()
+				voiceMode.active ? exitVoiceMode() : enterVoiceMode(threadId)
 			}
 			isVoiceActive={voiceMode.active}
 			onDialogue={() =>
-				dialogueMode.active ? exitDialogueMode() : enterDialogueMode()
+				dialogueMode.active ? exitDialogueMode() : enterDialogueMode(threadId)
 			}
 			isDialogueActive={dialogueMode.active}
 		/>

@@ -26,7 +26,7 @@ import {
 	useState,
 } from "react";
 import { getFileIcon } from "../lib/file-icons";
-import { getThreadPersona } from "../RuntimeProvider";
+import { useThreadPersona } from "../RuntimeProvider";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -302,7 +302,7 @@ const RuntimeThreadItem: FC = () => {
 	const remoteId = useAuiState((s) => s.threadListItem.remoteId) ?? "";
 	const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
 	const isActive = id === mainThreadId;
-	const persona = getThreadPersona(remoteId);
+	const persona = useThreadPersona(remoteId);
 
 	if (editing) {
 		return (

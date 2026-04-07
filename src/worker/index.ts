@@ -97,6 +97,15 @@ app.patch("/api/threads/:id", async (c) => {
 	return c.json({ ok: true });
 });
 
+app.get("/api/threads/:id", async (c) => {
+	const userId = await requireUserId(c);
+	if (!userId) return c.json({ error: "未授权" }, 401);
+	const db = createDb(c.env.DB);
+	const row = await getThread(db, c.req.param("id"));
+	if (!row || row.userId !== userId) return c.json({ error: "未找到" }, 404);
+	return c.json({ id: row.id, title: row.title, persona: row.persona });
+});
+
 app.delete("/api/threads/:id", async (c) => {
 	const userId = await requireUserId(c);
 	if (!userId) return c.json({ error: "未授权" }, 401);
@@ -520,6 +529,7 @@ function maybeAutoTitle(
 		.flatMap((m) =>
 			(m.parts ?? []).filter((p) => p.type === "text").map((p) => p.text ?? ""),
 		)
+		.filter((t) => !/^\[.*\]$/.test(t.trim()) && !t.startsWith("🎙"))
 		.join(" ")
 		.trim()
 		.slice(0, 200);
@@ -1009,14 +1019,19 @@ app.post("/api/dialogue", async (c) => {
 		}
 
 		// Build dialogue system prompt
+		const tz = c.req.header("x-timezone") || "Asia/Shanghai";
+		const timeStr = new Date().toLocaleString("zh-CN", { timeZone: tz });
+
 		let systemPrompt = `${p.prompt}
+
+当前时间：${timeStr}
 
 # 剧情对话模式规则
 - 你正在与用户进行角色扮演式的剧情对话
 - 你的回复必须严格按照指定的 JSON 结构输出
 - speech 字段必须是纯文本，禁止使用任何 markdown 格式
 - pose 字段必须从以下选项中选择最贴切的姿态：${poses.join("、")}
-- choices 字段必须提供 1-3 个用户可能的回复选项，引导对话走向不同方向
+- choices 字段必须提供 1-3 个用户可能的回复选项，用第一人称口语化短句，像 RPG 对话选项；鼓励在选项开头使用 emoji 增加趣味
 - 保持角色一致性，每句话都要符合你的人设
 - preEffect / postEffect 是可选的视觉特效，仅在剧情高潮、惊喜、愤怒等强烈情绪时使用`;
 
