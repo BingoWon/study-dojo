@@ -186,13 +186,13 @@ const PersonaSelect: FC = () => {
 								/>
 							</div>
 
-							{/* Avatar — absolute positioned, bottom flush with card bottom, top 1/3 overflows */}
+							{/* Avatar — bottom flush with card, height 130% of card so top 1/3 overflows */}
 							<img
 								src={`/characters/${id}/avatars/neutral.webp`}
 								alt={p.name}
 								draggable={false}
 								className={`
-									absolute left-3 bottom-0 w-16 h-16 z-10
+									absolute left-3 bottom-0 h-[130%] w-auto z-10
 									object-cover select-none
 									transition-all duration-300 ease-out
 									${selected ? "scale-110 -translate-y-1 drop-shadow-xl" : "group-hover:scale-105 group-hover:-translate-y-0.5 drop-shadow-md"}
