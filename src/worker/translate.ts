@@ -7,7 +7,8 @@ import { log } from "./log";
 
 const TMT_HOST = "tmt.tencentcloudapi.com";
 const TMT_VERSION = "2018-03-21";
-const CHUNK_LIMIT = 1800; // chars per API call (leave margin from 2000 limit)
+const CHUNK_LIMIT = 5000; // chars per API call (leave margin from 6000 limit)
+const MAX_CONCURRENCY = 4; // concurrent translation requests (API limit: 5/s)
 
 type TmtEnv = {
 	TMT_SECRET_ID: string;
@@ -150,68 +151,99 @@ export function isChinese(text: string): boolean {
 
 // ── Batch Markdown Translation ──────────────────────────────────────────────
 
-/**
- * Translate a full markdown document paragraph by paragraph.
- * Preserves markdown structure (headings, code blocks, etc.).
- */
-export async function translateMarkdown(
-	markdown: string,
-	env: TmtEnv,
-): Promise<string> {
-	const paragraphs = markdown.split(/\n{2,}/);
-	const translated: string[] = [];
-
-	// Batch paragraphs into chunks within CHUNK_LIMIT
+/** Group paragraphs into batches that fit within CHUNK_LIMIT. */
+function buildBatches(paragraphs: string[]): { text: string; empty: boolean }[] {
+	const batches: { text: string; empty: boolean }[] = [];
 	let batch: string[] = [];
 	let batchLen = 0;
 
-	const flushBatch = async () => {
+	const flush = () => {
 		if (batch.length === 0) return;
-		const joined = batch.join("\n\n");
-		try {
-			const result = await translateText(joined, env);
-			translated.push(result);
-		} catch (e) {
-			log.warn({
-				module: "translate",
-				msg: "batch failed, keeping original",
-				error: String(e),
-			});
-			translated.push(joined);
-		}
+		batches.push({ text: batch.join("\n\n"), empty: false });
 		batch = [];
 		batchLen = 0;
 	};
 
 	for (const p of paragraphs) {
 		if (!p.trim()) {
-			translated.push("");
+			batches.push({ text: "", empty: true });
 			continue;
 		}
 
 		if (p.length > CHUNK_LIMIT) {
-			await flushBatch();
-			// Split long paragraph into CHUNK_LIMIT-sized pieces
-			const parts: string[] = [];
+			flush();
+			// Split oversized paragraph into CHUNK_LIMIT-sized pieces
 			for (let i = 0; i < p.length; i += CHUNK_LIMIT) {
-				try {
-					parts.push(await translateText(p.slice(i, i + CHUNK_LIMIT), env));
-				} catch {
-					parts.push(p.slice(i, i + CHUNK_LIMIT));
-				}
+				batches.push({ text: p.slice(i, i + CHUNK_LIMIT), empty: false });
 			}
-			translated.push(parts.join(""));
 			continue;
 		}
 
 		if (batchLen + p.length + 2 > CHUNK_LIMIT) {
-			await flushBatch();
+			flush();
 		}
 
 		batch.push(p);
 		batchLen += p.length + 2;
 	}
 
-	await flushBatch();
+	flush();
+	return batches;
+}
+
+/** Run async tasks with bounded concurrency. */
+async function mapConcurrent<T, R>(
+	items: T[],
+	concurrency: number,
+	fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let next = 0;
+
+	const worker = async () => {
+		while (next < items.length) {
+			const i = next++;
+			results[i] = await fn(items[i], i);
+		}
+	};
+
+	await Promise.all(
+		Array.from({ length: Math.min(concurrency, items.length) }, () =>
+			worker(),
+		),
+	);
+	return results;
+}
+
+/**
+ * Translate a full markdown document paragraph by paragraph.
+ * Batches paragraphs within CHUNK_LIMIT, then translates concurrently
+ * with bounded parallelism to respect API rate limits (5 req/s).
+ */
+export async function translateMarkdown(
+	markdown: string,
+	env: TmtEnv,
+): Promise<string> {
+	const paragraphs = markdown.split(/\n{2,}/);
+	const batches = buildBatches(paragraphs);
+
+	const translated = await mapConcurrent(
+		batches,
+		MAX_CONCURRENCY,
+		async (batch) => {
+			if (batch.empty) return "";
+			try {
+				return await translateText(batch.text, env);
+			} catch (e) {
+				log.warn({
+					module: "translate",
+					msg: "batch failed, keeping original",
+					error: String(e),
+				});
+				return batch.text;
+			}
+		},
+	);
+
 	return translated.join("\n\n");
 }
