@@ -48,7 +48,12 @@ import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
 import { getNextPlaceholder } from "./lib/greeting";
-import { setThreadPersona, useAutoTTS, usePersona } from "./RuntimeProvider";
+import {
+	setPendingPersonaSwitch,
+	setThreadPersona,
+	useAutoTTS,
+	usePersona,
+} from "./RuntimeProvider";
 
 // ── Document Select Context ─────────────────────────────────────────────────
 
@@ -162,6 +167,7 @@ const PersonaSwitcher: FC = () => {
 			setOpen(false);
 			return;
 		}
+		setPendingPersonaSwitch(PERSONAS[persona].name, PERSONAS[id].name);
 		setPersona(id);
 		setOpen(false);
 		// Update local cache + persist to DB

@@ -151,6 +151,14 @@ let bumpFetchKey: (() => void) | null = null;
 /** Module-level autoTTS flag readable by transport headers. */
 let autoTTSFlag = true;
 
+/** Pending persona switch marker — consumed on next user message send. */
+let pendingPersonaSwitch: { from: string; to: string } | null = null;
+
+/** Set by Chat.tsx PersonaSwitcher when user switches persona mid-thread. */
+export function setPendingPersonaSwitch(from: string, to: string) {
+	pendingPersonaSwitch = { from, to };
+}
+
 // ── Attachment Adapter ──────────────────────────────────────────────────────
 
 const readAsDataURL = (file: File): Promise<string> =>
@@ -395,6 +403,27 @@ function useMyRuntime() {
 						"x-active-doc": sessionStorage.getItem("center:activeTab") ?? "",
 						"x-auto-tts": autoTTSFlag ? "1" : "0",
 					};
+				},
+				prepareSendMessagesRequest: (req) => {
+					// Consume pending persona switch: prepend marker to last user message text
+					const ps = pendingPersonaSwitch;
+					if (ps && req.trigger === "submit-message") {
+						pendingPersonaSwitch = null;
+						const prefix = `[🔄 角色切换：${ps.from} → ${ps.to}]\n`;
+						const msgs = req.messages.map((m, i, arr) => {
+							if (m.role !== "user" || i !== arr.length - 1) return m;
+							return {
+								...m,
+								parts: m.parts.map((p) =>
+									p.type === "text"
+										? { ...p, text: prefix + p.text }
+										: p,
+								),
+							};
+						});
+						return { body: { ...req.body, messages: msgs } };
+					}
+					return { body: { ...req.body, messages: req.messages } };
 				},
 			}),
 		[aui],
