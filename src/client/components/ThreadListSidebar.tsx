@@ -26,6 +26,8 @@ import {
 	useState,
 } from "react";
 import { getFileIcon } from "../lib/file-icons";
+import { getThreadPersona } from "../RuntimeProvider";
+import { CharacterAvatar } from "./CharacterAvatar";
 import { ThemeToggle } from "./ThemeToggle";
 
 export type SidebarTab = "chat" | "library" | "memory";
@@ -297,14 +299,16 @@ const RuntimeThreadItem: FC = () => {
 	const [editing, setEditing] = useState(false);
 	const title = useAuiState((s) => s.threadListItem.title) || "新对话";
 	const id = useAuiState((s) => s.threadListItem.id);
+	const remoteId = useAuiState((s) => s.threadListItem.remoteId) ?? "";
 	const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
 	const isActive = id === mainThreadId;
+	const persona = getThreadPersona(remoteId);
 
 	if (editing) {
 		return (
 			<ThreadListItemPrimitive.Root className="w-full">
 				<InlineEdit
-					icon={<MessageSquare className="w-4 h-4" />}
+					icon={<CharacterAvatar persona={persona} size="xs" />}
 					value={title}
 					onSave={(newTitle) => aui.threadListItem().rename(newTitle)}
 					onCancel={() => setEditing(false)}
@@ -322,7 +326,7 @@ const RuntimeThreadItem: FC = () => {
 				onDoubleClick={() => setEditing(true)}
 			/>
 			<div className="flex items-center gap-2 overflow-hidden flex-1 min-w-0 pointer-events-none">
-				<MessageSquare className="w-4 h-4 opacity-50 shrink-0" />
+				<CharacterAvatar persona={persona} size="xs" />
 				<span className="truncate">
 					<ThreadListItemPrimitive.Title fallback="新对话" />
 				</span>

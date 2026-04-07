@@ -5,12 +5,12 @@
 # ── LLM (OpenRouter) ────────────────────────────────────────────────────────
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_API_KEY=your-openrouter-api-key
-LLM_MODEL=qwen/qwen3.6-plus:free
+LLM_MODEL=google/gemma-4-26b-a4b-it
 
 # ── Dialogue Mode LLM (separate fast model for structured output) ──────────
 DIALOGUE_BASE_URL=https://openrouter.ai/api/v1
 DIALOGUE_API_KEY=your-openrouter-api-key
-DIALOGUE_MODEL=google/gemma-4-31b-it
+DIALOGUE_MODEL=google/gemma-4-26b-a4b-it
 
 # ── Embedding (for RAG vector search) ───────────────────────────────────────
 EMBEDDING_BASE_URL=https://openrouter.ai/api/v1

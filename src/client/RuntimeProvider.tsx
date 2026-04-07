@@ -184,6 +184,11 @@ export function setThreadPersona(remoteId: string, persona: PersonaId) {
 	threadPersonaMap.set(remoteId, persona);
 }
 
+/** Get the persona for a thread (used by ThreadListSidebar for avatars). */
+export function getThreadPersona(remoteId: string): PersonaId {
+	return threadPersonaMap.get(remoteId) ?? DEFAULT_PERSONA;
+}
+
 const threadListAdapter: RemoteThreadListAdapter = {
 	async list() {
 		const res = await fetch("/api/threads");

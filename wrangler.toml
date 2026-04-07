@@ -32,8 +32,8 @@ head_sampling_rate = 1
 
 [vars]
 LLM_BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = "qwen/qwen3.6-plus:free"
+LLM_MODEL = "google/gemma-4-26b-a4b-it"
 DIALOGUE_BASE_URL = "https://openrouter.ai/api/v1"
-DIALOGUE_MODEL = "google/gemma-4-31b-it"
+DIALOGUE_MODEL = "google/gemma-4-26b-a4b-it"
 EMBEDDING_BASE_URL = "https://openrouter.ai/api/v1"
 EMBEDDING_MODEL = "qwen/qwen3-embedding-4b"
