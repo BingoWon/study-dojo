@@ -9,7 +9,13 @@ export const shiyu: Persona = {
 	gradient: "from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-950",
 	border: "border-pink-300 dark:border-pink-700",
 	glow: "shadow-pink-400/30 dark:shadow-pink-600/20",
-	placeholder: "向学姐请教论文问题...",
+	placeholders: [
+		"向学姐请教论文问题...",
+		"有什么不懂的尽管问~",
+		"想聊哪个部分？学姐陪你看~",
+		"别紧张，慢慢说就好~",
+		"学姐在呢，有什么问题？",
+	],
 	voiceId: "bhJUNIXWQQ94l8eI2VUf",
 	voiceStability: 0.6,
 	firstMessages: [

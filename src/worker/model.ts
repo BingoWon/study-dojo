@@ -27,7 +27,7 @@ export interface Persona {
 	gradient: string;
 	border: string;
 	glow: string;
-	placeholder: string;
+	placeholders: string[];
 	// Voice
 	voiceId: string;
 	voiceSpeed?: number;

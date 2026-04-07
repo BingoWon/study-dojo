@@ -16,7 +16,7 @@ import { CharacterAvatar } from "../components/CharacterAvatar";
 import { useTypewriter } from "../hooks/useTypewriter";
 import { DialogueTTSPlayer, ttsAdapter } from "../lib/dialogue-tts";
 import { ElevenLabsScribeAdapter } from "../lib/elevenlabs-scribe-adapter";
-import { getNextGreeting } from "../lib/greeting";
+import { getNextGreeting, getNextPlaceholder } from "../lib/greeting";
 
 // ── Voice input adapter (dialogue mode instance) ───────────────────────────
 
@@ -148,6 +148,12 @@ export const DialogueThread: FC<{
 	const schema = useMemo(
 		() => buildDialogueTurnSchema(poses as [string, ...string[]]),
 		[poses],
+	);
+
+	// Cycling placeholder (stable per persona, shared with text mode)
+	const inputPlaceholder = useMemo(
+		() => getNextPlaceholder(persona),
+		[persona],
 	);
 
 	const { object, submit, isLoading, error } = useObject({
@@ -361,21 +367,33 @@ export const DialogueThread: FC<{
 				</div>
 			)}
 
-			{/* Input row: [mode toggle] [TTS toggle] [input field with mic inside] [send] */}
+			{/* Input row */}
 			<div className="flex items-center gap-2">
-				{/* Mode toggle */}
-				<button
-					type="button"
-					onClick={() =>
-						setDisplayMode((m) => (m === "pose" ? "avatar" : "pose"))
-					}
-					className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-						bg-white/30 dark:bg-white/10 text-zinc-600 dark:text-zinc-300
-						hover:bg-white/50 dark:hover:bg-white/20 transition-colors cursor-pointer text-[10px] font-bold"
-					title={displayMode === "pose" ? "切换头像模式" : "切换姿态模式"}
-				>
-					{displayMode === "pose" ? "姿" : "像"}
-				</button>
+				{/* Display mode: pill segmented control */}
+				<div className="shrink-0 flex items-center rounded-full bg-white/30 dark:bg-white/10 p-0.5">
+					<button
+						type="button"
+						onClick={() => setDisplayMode("pose")}
+						className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+							displayMode === "pose"
+								? "bg-white/70 dark:bg-white/20 text-zinc-900 dark:text-zinc-100 shadow-sm"
+								: "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+						}`}
+					>
+						姿态
+					</button>
+					<button
+						type="button"
+						onClick={() => setDisplayMode("avatar")}
+						className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+							displayMode === "avatar"
+								? "bg-white/70 dark:bg-white/20 text-zinc-900 dark:text-zinc-100 shadow-sm"
+								: "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+						}`}
+					>
+						头像
+					</button>
+				</div>
 
 				{/* Auto TTS toggle */}
 				<button
@@ -407,7 +425,7 @@ export const DialogueThread: FC<{
 								handleCustomSubmit();
 							}
 						}}
-						placeholder={isDictating ? "正在听..." : "输入回复..."}
+						placeholder={isDictating ? "正在听..." : inputPlaceholder}
 						disabled={isLoading || isDictating}
 						className="flex-1 px-4 py-2 text-sm bg-transparent outline-none
 							text-zinc-800 dark:text-zinc-200

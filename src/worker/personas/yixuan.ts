@@ -9,7 +9,13 @@ export const yixuan: Persona = {
 	gradient: "from-sky-50 to-cyan-50 dark:from-sky-950 dark:to-cyan-950",
 	border: "border-sky-300 dark:border-sky-700",
 	glow: "shadow-sky-400/30 dark:shadow-sky-600/20",
-	placeholder: "让学长帮你拆解论文...",
+	placeholders: [
+		"让学长帮你拆解论文...",
+		"有啥不懂的直接问。",
+		"说白了你卡在哪了？",
+		"直接说问题，别客气。",
+		"今天想聊哪篇？",
+	],
 	voiceId: "DowyQ68vDpgFYdWVGjc3",
 	voiceStability: 0.5,
 	firstMessages: [

@@ -31,7 +31,14 @@ import {
 	VolumeOff,
 	X,
 } from "lucide-react";
-import { createContext, type FC, useEffect, useRef, useState } from "react";
+import {
+	createContext,
+	type FC,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { PERSONAS, type PersonaId } from "../worker/model";
 import { CharacterAvatar } from "./components/CharacterAvatar";
 import { ReasoningPart } from "./components/message/ReasoningPart";
@@ -40,6 +47,7 @@ import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
+import { getNextPlaceholder } from "./lib/greeting";
 import {
 	setThreadPersona,
 	useAutoTTS,
@@ -214,6 +222,9 @@ const PersonaSelect: FC = () => {
 
 const Composer: FC = () => {
 	const { persona } = usePersona();
+	// Cycle placeholder once per persona switch (stable across re-renders)
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	const placeholder = useMemo(() => getNextPlaceholder(persona), [persona]);
 	return (
 		<ComposerPrimitive.Root className="relative flex w-full flex-col">
 			<ComposerPrimitive.AttachmentDropzone className="flex w-full flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1 pt-2 outline-none transition-shadow has-[textarea:focus-visible]:border-blue-400/40 has-[textarea:focus-visible]:ring-2 has-[textarea:focus-visible]:ring-blue-400/10 data-[dragging=true]:border-blue-400 data-[dragging=true]:border-dashed data-[dragging=true]:bg-blue-50 dark:data-[dragging=true]:bg-blue-950/30">
@@ -223,7 +234,7 @@ const Composer: FC = () => {
 					/>
 				</div>
 				<ComposerPrimitive.Input
-					placeholder={PERSONAS[persona].placeholder}
+					placeholder={placeholder}
 					className="mb-1 max-h-32 min-h-14 w-full resize-none bg-transparent px-4 pt-2 pb-3 text-sm outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus-visible:ring-0"
 					rows={1}
 					autoFocus
