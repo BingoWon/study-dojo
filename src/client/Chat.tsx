@@ -139,9 +139,9 @@ const PersonaSelect: FC = () => {
 							type="button"
 							onClick={() => setPersona(id)}
 							className={`
-								group relative w-full flex items-center gap-4 rounded-2xl p-4 pl-5
+								group relative w-full flex items-center gap-4 rounded-2xl p-4 pl-3
 								bg-gradient-to-r ${p.gradient}
-								border-2 transition-all duration-300 cursor-pointer overflow-hidden
+								border-2 transition-all duration-300 cursor-pointer overflow-visible
 								${
 									selected
 										? `${p.border} shadow-xl ${p.glow} scale-[1.02]`
@@ -149,18 +149,29 @@ const PersonaSelect: FC = () => {
 								}
 							`}
 						>
-							{/* Diagonal shimmer sweep (hover-triggered) */}
-							<div className={`shimmer-sweep ${selected ? "active" : ""}`} />
+							{/* Shimmer sweep (inside card, clipped to rounded corners) */}
+							<div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+								<div className={`shimmer-sweep ${selected ? "active" : ""}`} />
+							</div>
 
-							{/* Avatar — overflows top/bottom of card */}
+							{/* Avatar — square, overflows above card */}
 							<div
 								className={`
-									relative -my-3 shrink-0
+									relative shrink-0 w-14 h-14 -mt-8 mb-0
+									rounded-xl overflow-hidden
+									ring-2 ring-white/60 dark:ring-zinc-700/60
+									shadow-lg
 									transition-all duration-300 ease-out z-10
-									${selected ? "scale-110 -translate-y-0.5 drop-shadow-lg" : "group-hover:scale-105"}
+									bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-700
+									${selected ? "scale-110 -translate-y-1 shadow-xl" : "group-hover:scale-105 group-hover:-translate-y-0.5"}
 								`}
 							>
-								<CharacterAvatar persona={id} size="lg" />
+								<img
+									src={`/characters/${id}/avatars/neutral.webp`}
+									alt={p.name}
+									className="w-full h-full object-cover"
+									draggable={false}
+								/>
 							</div>
 
 							{/* Info */}

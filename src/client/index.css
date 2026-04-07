@@ -98,46 +98,64 @@ body {
 	background: rgba(255, 255, 255, 0.2);
 }
 
-/* ── Persona card shimmer (diagonal light sweep on hover) ────────────────── */
+/* ── Persona card shimmer (45° sweep from bottom-right to top-left) ──────── */
 
 @keyframes shimmer-sweep {
 	0% {
-		transform: translateX(-100%) rotate(-25deg);
+		transform: translateX(100%) translateY(100%);
 	}
 	100% {
-		transform: translateX(200%) rotate(-25deg);
+		transform: translateX(-100%) translateY(-100%);
 	}
 }
 .shimmer-sweep {
 	position: absolute;
-	inset: -20%;
-	background: linear-gradient(
-		90deg,
-		transparent 0%,
-		rgba(255, 255, 255, 0.25) 45%,
-		rgba(255, 255, 255, 0.5) 50%,
-		rgba(255, 255, 255, 0.25) 55%,
-		transparent 100%
-	);
-	transform: translateX(-100%) rotate(-25deg);
+	inset: 0;
+	overflow: hidden;
 	pointer-events: none;
-	opacity: 0;
-	transition: opacity 0.2s;
+	border-radius: inherit;
 }
-.dark .shimmer-sweep {
+.shimmer-sweep::after {
+	content: "";
+	position: absolute;
+	top: -50%;
+	left: -50%;
+	width: 200%;
+	height: 200%;
 	background: linear-gradient(
-		90deg,
+		-45deg,
 		transparent 0%,
-		rgba(255, 255, 255, 0.08) 45%,
-		rgba(255, 255, 255, 0.18) 50%,
-		rgba(255, 255, 255, 0.08) 55%,
+		transparent 35%,
+		rgba(255, 255, 255, 0.15) 42%,
+		rgba(255, 255, 255, 0.45) 48%,
+		rgba(255, 255, 255, 0.65) 50%,
+		rgba(255, 255, 255, 0.45) 52%,
+		rgba(255, 255, 255, 0.15) 58%,
+		transparent 65%,
+		transparent 100%
+	);
+	transform: translateX(100%) translateY(100%);
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+.dark .shimmer-sweep::after {
+	background: linear-gradient(
+		-45deg,
+		transparent 0%,
+		transparent 35%,
+		rgba(255, 255, 255, 0.06) 42%,
+		rgba(255, 255, 255, 0.18) 48%,
+		rgba(255, 255, 255, 0.28) 50%,
+		rgba(255, 255, 255, 0.18) 52%,
+		rgba(255, 255, 255, 0.06) 58%,
+		transparent 65%,
 		transparent 100%
 	);
 }
-.group:hover .shimmer-sweep,
-.shimmer-sweep.active {
+.group:hover .shimmer-sweep::after,
+.shimmer-sweep.active::after {
 	opacity: 1;
-	animation: shimmer-sweep 0.8s ease-in-out;
+	animation: shimmer-sweep 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ── Dialogue mode effects ───────────────────────────────────────────────── */
