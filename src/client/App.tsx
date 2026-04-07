@@ -303,7 +303,7 @@ function App() {
 								<ThreadListSidebar
 									activeDocId={activeDoc?.id ?? null}
 									activeTab={sidebarTab}
-									onTabChange={setSidebarTab}
+									setActiveTab={setSidebarTab}
 									onDocSelect={handleDocSelect}
 								/>
 							</div>

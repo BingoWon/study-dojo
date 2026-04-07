@@ -25,7 +25,6 @@ import {
 	Paperclip,
 	Pencil,
 	RefreshCw,
-	Sparkles,
 	Square,
 	Volume2,
 	VolumeOff,
@@ -41,20 +40,16 @@ import {
 } from "react";
 import { PERSONA_IDS, PERSONAS, type PersonaId } from "../worker/model";
 import { CharacterAvatar } from "./components/CharacterAvatar";
+import { ModeButtons } from "./components/ModeButtons";
 import { ReasoningPart } from "./components/message/ReasoningPart";
+import { PersonaSelect } from "./components/PersonaSelect";
 import type { Recipe } from "./components/RecipePanel";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
 import { getNextPlaceholder } from "./lib/greeting";
-import {
-	setThreadPersona,
-	useAutoTTS,
-	useDialogueMode,
-	usePersona,
-	useVoiceMode,
-} from "./RuntimeProvider";
+import { setThreadPersona, useAutoTTS, usePersona } from "./RuntimeProvider";
 
 // ── Recipe Update Context ────────────────────────────────────────────────────
 
@@ -118,109 +113,7 @@ const ComposerAttachment: FC = () => (
 	</AttachmentPrimitive.Root>
 );
 
-// ── Persona Selection (replaces old ThreadWelcome) ──────────────────────────
-
-const PersonaSelect: FC = () => {
-	const { persona, setPersona } = usePersona();
-
-	return (
-		<div className="mx-auto my-auto flex w-full max-w-md flex-grow flex-col items-center justify-center gap-6 px-4">
-			<div className="text-center">
-				<div className="text-sm font-medium tracking-widest uppercase text-zinc-400 dark:text-zinc-500 mb-2">
-					选择你的导师
-				</div>
-				<div className="text-xl font-bold text-zinc-800 dark:text-zinc-100">
-					开始论文陪读之旅
-				</div>
-			</div>
-
-			<div className="flex w-full flex-col gap-8 pt-8">
-				{PERSONA_IDS.map((id) => {
-					const p = PERSONAS[id];
-					const selected = persona === id;
-					return (
-						<button
-							key={id}
-							type="button"
-							onClick={() => setPersona(id)}
-							className={`
-								group relative w-full rounded-2xl overflow-visible cursor-pointer
-								transition-all duration-300
-								${selected ? "scale-[1.02]" : ""}
-							`}
-						>
-							{/* Card body — pl-20 reserves space for the avatar area */}
-							<div
-								className={`
-									relative rounded-2xl py-3.5 pr-4 pl-[108px]
-									bg-gradient-to-r ${p.gradient}
-									border-2 transition-all duration-300 overflow-hidden
-									${
-										selected
-											? `${p.border} shadow-xl ${p.glow}`
-											: "border-transparent group-hover:border-zinc-200/80 dark:group-hover:border-zinc-700/60 group-hover:shadow-lg"
-									}
-								`}
-							>
-								{/* Shimmer sweep */}
-								<div className={`shimmer-sweep ${selected ? "active" : ""}`} />
-
-								{/* Info */}
-								<div className="text-left min-w-0 relative z-10">
-									<div className="flex items-center gap-2">
-										<span className="font-bold text-zinc-900 dark:text-zinc-100">
-											{p.name}
-										</span>
-										<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
-											{p.title}
-										</span>
-									</div>
-									<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-										{p.desc}
-									</p>
-								</div>
-							</div>
-
-							{/* Selection check — overflows right edge of card */}
-							<div
-								className={`
-									absolute -right-3 top-1/2 -translate-y-1/2 z-20
-									w-8 h-8 rounded-full flex items-center justify-center
-									shadow-lg transition-all duration-300
-									${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
-								`}
-								style={{ backgroundColor: p.accentColor }}
-							>
-								<Check className="w-4.5 h-4.5 text-white" strokeWidth={3} />
-							</div>
-
-							{/* Avatar — 88px square, bottom flush with card, top ~1/3 overflows */}
-							<img
-								src={`/characters/${id}/avatars/neutral.webp`}
-								alt={p.name}
-								draggable={false}
-								className={`
-									absolute left-3 bottom-0 w-[88px] h-[88px] z-10
-									object-cover select-none
-									transition-all duration-300 ease-out
-									${selected ? "scale-110 -translate-y-1 drop-shadow-xl" : "group-hover:scale-105 group-hover:-translate-y-0.5 drop-shadow-md"}
-								`}
-							/>
-						</button>
-					);
-				})}
-			</div>
-
-			<div className="w-full pt-4">
-				<ModeButtons variant="card" />
-			</div>
-
-			<p className="text-[11px] text-zinc-400 dark:text-zinc-600 text-center">
-				在下方输入消息开始文字对话 · 输入框左下角可随时切换角色和模式
-			</p>
-		</div>
-	);
-};
+// PersonaSelect extracted to ./components/PersonaSelect.tsx
 
 // ── Composer ──────────────────────────────────────────────────────────────────
 
@@ -362,76 +255,7 @@ const AutoTTSToggle: FC = () => {
 	);
 };
 
-/** Shared mode entry buttons — `compact` for composer bar, `card` for persona panel. */
-const ModeButtons: FC<{ variant?: "compact" | "card" }> = ({
-	variant = "compact",
-}) => {
-	const { enterVoiceMode } = useVoiceMode();
-	const { enterDialogueMode } = useDialogueMode();
-	const threadId = useAuiState(
-		(s) => s.threadListItem.remoteId as string | undefined,
-	);
-
-	if (variant === "card") {
-		return (
-			<div className="flex w-full gap-3">
-				<button
-					type="button"
-					onClick={() => enterVoiceMode(threadId)}
-					className="group relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
-						bg-purple-50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40
-						text-purple-600 dark:text-purple-400 text-xs font-semibold
-						transition-all hover:shadow-lg hover:shadow-purple-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer overflow-hidden"
-				>
-					<div className="shimmer-sweep group-hover:active" />
-					<Mic className="h-3.5 w-3.5 relative z-10" />
-					<span className="relative z-10">语音伴读</span>
-				</button>
-				<button
-					type="button"
-					onClick={() => enterDialogueMode(threadId)}
-					className="group relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
-						bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40
-						text-amber-600 dark:text-amber-400 text-xs font-semibold
-						transition-all hover:shadow-lg hover:shadow-amber-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer overflow-hidden"
-				>
-					<div className="shimmer-sweep group-hover:active" />
-					<Sparkles className="h-3.5 w-3.5 relative z-10" />
-					<span className="relative z-10">剧情伴读</span>
-				</button>
-			</div>
-		);
-	}
-
-	return (
-		<>
-			<button
-				type="button"
-				onClick={() => enterVoiceMode(threadId)}
-				className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
-					text-zinc-400 dark:text-zinc-500 transition-all
-					hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:text-purple-600 dark:hover:text-purple-400
-					active:scale-95 cursor-pointer"
-				title="语音伴读"
-			>
-				<Mic className="h-3.5 w-3.5" />
-				语音
-			</button>
-			<button
-				type="button"
-				onClick={() => enterDialogueMode(threadId)}
-				className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
-					text-zinc-400 dark:text-zinc-500 transition-all
-					hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400
-					active:scale-95 cursor-pointer"
-				title="剧情伴读"
-			>
-				<Sparkles className="h-3.5 w-3.5" />
-				剧情
-			</button>
-		</>
-	);
-};
+// ModeButtons extracted to ./components/ModeButtons.tsx
 
 const ComposerAction: FC = () => (
 	<div className="relative mx-2 mb-2 flex items-center justify-between">
