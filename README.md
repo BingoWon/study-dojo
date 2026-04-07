@@ -105,7 +105,7 @@ graph TB
         VEC[(Cloudflare Vectorize)]
     end
 
-    UI -->|AG-UI 协议| API
+    UI -->|AI SDK 流式协议| API
     CHAT --> LLM
     DIAL --> LLM
     RAG --> EMB
