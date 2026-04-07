@@ -11,6 +11,7 @@ import {
 	X,
 } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { PERSONA_IDS, PERSONAS } from "../worker/model";
 import { Chat, type HighlightAction, type HighlightItem } from "./Chat";
 import { CollapsedHandle } from "./components/CollapsedHandle";
 import { DialogueThread } from "./components/DialogueThread";
@@ -225,34 +226,79 @@ function App() {
 					<ThemeToggle />
 				</div>
 				<div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full w-full z-10">
-					<div className="max-w-md w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-						<div className="w-20 h-20 bg-purple-500/10 dark:bg-purple-500/20 text-purple-500 dark:text-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm ring-1 ring-purple-500/20 text-4xl">
-							⚡
+					<div className="max-w-lg w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+						{/* Avatars */}
+						<div className="flex items-end justify-center gap-1 mb-2">
+							{PERSONA_IDS.map((id, i) => (
+								<img
+									key={id}
+									src={`/characters/${id}/avatars/neutral.webp`}
+									alt={PERSONAS[id].name}
+									draggable={false}
+									className="object-cover select-none drop-shadow-lg"
+									style={{
+										width: i === 0 || i === 3 ? 56 : 64,
+										height: i === 0 || i === 3 ? 56 : 64,
+										transform:
+											i === 0
+												? "translateY(4px)"
+												: i === 3
+													? "translateY(4px)"
+													: "",
+									}}
+								/>
+							))}
 						</div>
-						<h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-							雷电教授
-						</h1>
-						<p className="text-zinc-500 dark:text-zinc-400 text-lg leading-relaxed">
-							AI
-							论文陪读导师，多角色人设，陪你在知识的海洋里畅游。登录以开始你的学术之旅。
-						</p>
-						<div className="flex flex-col sm:flex-row gap-3 pt-6 justify-center">
-							<SignInButton mode="modal">
-								<button
-									type="button"
-									className="flex-1 sm:flex-none flex items-center justify-center px-8 py-3.5 text-sm font-semibold hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition cursor-pointer text-zinc-800 dark:text-zinc-100 ring-1 ring-zinc-300 dark:ring-zinc-700"
-								>
-									立即登录
-								</button>
-							</SignInButton>
+
+						{/* Title */}
+						<div>
+							<h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+								StudyDojo{" "}
+								<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-amber-500">
+									学乐园
+								</span>
+							</h1>
+							<p className="text-zinc-500 dark:text-zinc-400 text-base leading-relaxed mt-3 max-w-sm mx-auto">
+								四位 AI 导师陪你读论文——文字、语音、剧情三种模式，让学术不再孤单。
+							</p>
+						</div>
+
+						{/* Persona tags */}
+						<div className="flex flex-wrap justify-center gap-2 pt-1">
+							{PERSONA_IDS.map((id) => {
+								const p = PERSONAS[id];
+								return (
+									<span
+										key={id}
+										className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+									>
+										{p.emoji} {p.name}
+										<span className="text-zinc-400 dark:text-zinc-500">
+											· {p.title}
+										</span>
+									</span>
+								);
+							})}
+						</div>
+
+						{/* CTA buttons */}
+						<div className="flex flex-col sm:flex-row gap-3 pt-4 justify-center">
 							<SignUpButton mode="modal">
 								<button
 									type="button"
 									className="flex-1 sm:flex-none flex items-center justify-center px-8 py-3.5 text-sm font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 rounded-full transition cursor-pointer shadow-lg shadow-zinc-900/20 dark:shadow-white/10"
 								>
-									免费注册
+									免费开始
 								</button>
 							</SignUpButton>
+							<SignInButton mode="modal">
+								<button
+									type="button"
+									className="flex-1 sm:flex-none flex items-center justify-center px-8 py-3.5 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition cursor-pointer text-zinc-600 dark:text-zinc-300 ring-1 ring-zinc-300 dark:ring-zinc-700"
+								>
+									已有账号？登录
+								</button>
+							</SignInButton>
 						</div>
 					</div>
 				</div>
