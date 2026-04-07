@@ -1,4 +1,5 @@
 import { experimental_useObject as useObject } from "@ai-sdk/react";
+import { useAui } from "@assistant-ui/react";
 import { Mic, Send, Volume2, VolumeOff, X } from "lucide-react";
 import {
 	type FC,
@@ -8,15 +9,29 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { Effect } from "../../shared/dialogue";
-import { buildDialogueTurnSchema } from "../../shared/dialogue";
+import {
+	buildDialogueTurnSchema,
+	EFFECTS,
+	type Effect,
+} from "../../shared/dialogue";
 import type { PersonaId } from "../../worker/model";
 import { getPoses, PERSONAS } from "../../worker/model";
 import { CharacterAvatar } from "../components/CharacterAvatar";
+import { SpeechActionBar } from "../components/SpeechActionBar";
 import { useTypewriter } from "../hooks/useTypewriter";
-import { DialogueTTSPlayer, ttsAdapter } from "../lib/dialogue-tts";
+import {
+	createDialogueTTSPlayer,
+	type StreamingTTSPlayer,
+	ttsAdapter,
+} from "../lib/dialogue-tts";
+import { buildChatSummary, getActiveDocId } from "../lib/doc-context";
 import { ElevenLabsScribeAdapter } from "../lib/elevenlabs-scribe-adapter";
-import { getNextGreeting, getNextPlaceholder } from "../lib/greeting";
+import { getNextPlaceholder } from "../lib/greeting";
+import {
+	persistDialogueTurn,
+	setThreadPersona,
+	usePersona,
+} from "../RuntimeProvider";
 
 // ── Voice input adapter (dialogue mode instance) ───────────────────────────
 
@@ -38,7 +53,12 @@ type DisplayMode = "pose" | "avatar";
 
 // ── Visual Effects ─────────────────────────────────────────────────────────
 
-function triggerEffect(effect: Effect | undefined) {
+function isValidEffect(v: unknown): v is Effect {
+	return typeof v === "string" && (EFFECTS as readonly string[]).includes(v);
+}
+
+function triggerEffect(effect: unknown) {
+	if (!isValidEffect(effect)) return;
 	if (!effect) return;
 	const el = document.getElementById("dialogue-overlay");
 	if (!el) return;
@@ -109,6 +129,8 @@ export const DialogueThread: FC<{
 	onExit: () => void;
 }> = ({ persona, onExit }) => {
 	const p = PERSONAS[persona];
+	const { setPersona } = usePersona();
+	const personaIds = Object.keys(PERSONAS) as PersonaId[];
 
 	const [turns, setTurns] = useState<CompletedTurn[]>([]);
 	const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
@@ -129,10 +151,20 @@ export const DialogueThread: FC<{
 	});
 	const [customInput, setCustomInput] = useState("");
 	const [isDictating, setIsDictating] = useState(false);
+	const [isSpeaking, setIsSpeaking] = useState(false);
 	const dictationRef = useRef<{ stop: () => void; cancel: () => void } | null>(
 		null,
 	);
-	const ttsRef = useRef<DialogueTTSPlayer | null>(null);
+	const ttsRef = useRef<StreamingTTSPlayer | null>(null);
+
+	// Context passed to /api/dialogue on every request
+	const aui = useAui();
+	const getContext = useCallback(() => {
+		const activeDocId = getActiveDocId();
+		const chatSummary =
+			buildChatSummary(aui.thread().getState().messages) || undefined;
+		return { activeDocId, chatSummary };
+	}, [aui]);
 
 	useEffect(() => {
 		try {
@@ -140,9 +172,12 @@ export const DialogueThread: FC<{
 		} catch {}
 	}, [displayMode]);
 
-	ttsAdapter.voiceId = p.voiceId;
-	ttsAdapter.voiceSpeed = p.voiceSpeed;
-	ttsAdapter.voiceStability = p.voiceStability;
+	// Sync TTS voice params when persona changes (side effect, not in render)
+	useEffect(() => {
+		ttsAdapter.voiceId = p.voiceId;
+		ttsAdapter.voiceSpeed = p.voiceSpeed;
+		ttsAdapter.voiceStability = p.voiceStability;
+	}, [p.voiceId, p.voiceSpeed, p.voiceStability]);
 
 	const poses = useMemo(() => getPoses(persona), [persona]);
 	const schema = useMemo(
@@ -162,19 +197,30 @@ export const DialogueThread: FC<{
 	});
 
 	const lastPoseRef = useRef("neutral");
-	if (object?.pose) lastPoseRef.current = object.pose;
+	// Only update pose when it's a valid known pose (streaming may yield partial strings like "im")
+	if (object?.pose && poses.includes(object.pose)) {
+		lastPoseRef.current = object.pose;
+	}
 	const currentPose = lastPoseRef.current;
 
-	// Speech: show LLM streaming text, or fall back to last assistant turn (greeting)
+	// Track whether we're waiting for a new LLM response (user just sent, no streaming yet)
+	const isWaiting = isLoading && !object?.speech;
+
+	// Speech to display: streaming text when available, otherwise last completed assistant turn
 	const streamingSpeech = object?.speech ?? "";
-	const lastAssistantSpeech =
+	const lastCompletedSpeech =
 		turns.filter((t) => t.role === "assistant").pop()?.speech ?? "";
-	const currentSpeech = streamingSpeech || lastAssistantSpeech;
+	// When waiting for response, show nothing (the UI will show loading dots)
+	const currentSpeech = isWaiting ? "" : streamingSpeech || lastCompletedSpeech;
 
 	const currentChoices = object?.choices;
 	const hasChoices =
 		currentChoices && currentChoices.length > 0 && currentChoices[0] != null;
-	const displayedSpeech = useTypewriter(currentSpeech, isLoading, 25);
+	const displayedSpeech = useTypewriter(
+		currentSpeech,
+		isLoading && !isWaiting,
+		25,
+	);
 
 	// ── Actions ──
 
@@ -183,48 +229,87 @@ export const DialogueThread: FC<{
 			ttsRef.current?.abort();
 			ttsRef.current = null;
 			const userTurn: CompletedTurn = { role: "user", speech: userSpeech };
+			persistDialogueTurn({ role: "user", speech: userSpeech });
 			const newTurns = [...turns, userTurn];
 			setTurns(newTurns);
 			submit({
 				history: newTurns.map((t) => ({ role: t.role, speech: t.speech })),
 				persona,
+				...getContext(),
 			});
 		},
-		[turns, persona, submit],
+		[turns, persona, submit, getContext],
 	);
 
-	const mountedRef = useRef(false);
-	useEffect(() => {
-		if (mountedRef.current) return;
-		mountedRef.current = true;
-		const greeting = getNextGreeting(persona, "dialogue");
-		lastPoseRef.current = greeting.pose;
-		setTurns([
-			{ role: "assistant", pose: greeting.pose, speech: greeting.text },
-		]);
-		submit({ history: [], persona });
-	}, [submit, persona]);
-
-	// ── TTS ──
+	// Init + persona switch: inject system marker, auto-request LLM response
+	const initPersonaRef = useRef<PersonaId | null>(null);
+	const turnsRef = useRef(turns);
+	turnsRef.current = turns;
+	const submitRef = useRef(submit);
+	submitRef.current = submit;
+	const getContextRef = useRef(getContext);
+	getContextRef.current = getContext;
 
 	useEffect(() => {
-		if (!autoTTS || !currentSpeech) return;
-		if (!ttsRef.current && currentSpeech.length > 0)
-			ttsRef.current = new DialogueTTSPlayer(ttsAdapter.voiceParams);
-		if (ttsRef.current && isLoading) ttsRef.current.feedSpeech(currentSpeech);
-	}, [currentSpeech, isLoading, autoTTS]);
+		if (initPersonaRef.current === persona) return;
+		const prevId = initPersonaRef.current;
+		initPersonaRef.current = persona;
+
+		// Abort any ongoing TTS
+		ttsRef.current?.abort();
+		ttsRef.current = null;
+
+		// Build system marker + submit to LLM
+		let newTurns: CompletedTurn[];
+		if (prevId !== null) {
+			// Persona switch
+			const marker: CompletedTurn = {
+				role: "user",
+				speech: `[角色切换：${PERSONAS[prevId].name} → ${PERSONAS[persona].name}]`,
+			};
+			persistDialogueTurn(marker);
+			newTurns = [...turnsRef.current, marker];
+		} else {
+			// Initial enter
+			const marker: CompletedTurn = {
+				role: "user",
+				speech: "[进入剧情伴读]",
+			};
+			persistDialogueTurn(marker);
+			newTurns = [marker];
+		}
+		setTurns(newTurns);
+
+		// Auto-request LLM response (model generates its own opening)
+		submitRef.current({
+			history: newTurns.map((t) => ({ role: t.role, speech: t.speech })),
+			persona,
+			...getContextRef.current(),
+		});
+	}, [persona]);
+
+	// ── TTS (only for real LLM streaming, not greeting fallback) ──
+
+	useEffect(() => {
+		if (!autoTTS || !streamingSpeech || isWaiting) return;
+		if (!ttsRef.current && streamingSpeech.length > 0)
+			ttsRef.current = createDialogueTTSPlayer();
+		if (ttsRef.current && isLoading) ttsRef.current.feedText(streamingSpeech);
+	}, [streamingSpeech, isLoading, autoTTS, isWaiting]);
 
 	const wasLoadingRef = useRef(false);
 	useEffect(() => {
 		if (wasLoadingRef.current && !isLoading && object?.speech) {
 			ttsRef.current?.flush(object.speech);
-			triggerEffect(object.postEffect as Effect | undefined);
+			triggerEffect(object.postEffect);
+			const assistantSpeech = object.speech as string;
+			persistDialogueTurn({ role: "assistant", speech: assistantSpeech });
 			setTurns((prev) => [
 				...prev,
 				{
 					role: "assistant",
 					pose: (object.pose as string) ?? "neutral",
-					speech: object.speech as string,
+					speech: assistantSpeech,
 				},
 			]);
 		}
@@ -234,7 +319,7 @@ export const DialogueThread: FC<{
 	const preEffectTriggered = useRef(false);
 	useEffect(() => {
 		if (isLoading && object?.preEffect && !preEffectTriggered.current) {
-			triggerEffect(object.preEffect as Effect | undefined);
+			triggerEffect(object.preEffect);
 			preEffectTriggered.current = true;
 		}
 		if (!isLoading) preEffectTriggered.current = false;
@@ -260,14 +345,18 @@ export const DialogueThread: FC<{
 
 	const handleManualSpeak = useCallback(() => {
 		ttsRef.current?.abort();
-		const speech =
-			currentSpeech ||
-			turns.filter((t) => t.role === "assistant").pop()?.speech;
-		if (!speech) return;
-		const player = new DialogueTTSPlayer(ttsAdapter.voiceParams);
+		if (!currentSpeech) return;
+		const player = createDialogueTTSPlayer();
 		ttsRef.current = player;
-		player.flush(speech);
-	}, [currentSpeech, turns]);
+		setIsSpeaking(true);
+		player.flush(currentSpeech);
+	}, [currentSpeech]);
+
+	const handleStopSpeak = useCallback(() => {
+		ttsRef.current?.abort();
+		ttsRef.current = null;
+		setIsSpeaking(false);
+	}, []);
 
 	// ── Dictation ──
 
@@ -298,33 +387,76 @@ export const DialogueThread: FC<{
 
 	const dialoguePanel = (
 		<div className="dialogue-glass rounded-3xl p-4 space-y-3 relative">
-			{/* Close button */}
-			<button
-				type="button"
-				onClick={handleExit}
-				className="absolute top-3 right-3 p-1.5 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white/30 dark:hover:bg-white/10 transition-colors cursor-pointer z-20"
-				title="退出剧情模式"
-			>
-				<X className="w-4 h-4" />
-			</button>
-
-			{/* Name + title (+ avatar in avatar mode) */}
-			<div className="pr-8 flex items-center gap-2.5">
-				{displayMode === "avatar" && (
-					<CharacterAvatar
-						persona={persona}
-						pose={currentPose}
-						size="md"
-						className="ring-2 ring-white/40 dark:ring-white/10 shadow-md"
+			{/* Avatar overflowing top (avatar mode only) */}
+			{displayMode === "avatar" && (
+				<div className="absolute -top-8 left-4 z-20">
+					<img
+						src={`/characters/${persona}/avatars/${currentPose}.webp`}
+						alt={p.name}
+						className="w-14 h-14 object-cover drop-shadow-lg select-none"
+						draggable={false}
 					/>
-				)}
-				<div>
-					<span className="font-genshin text-lg text-zinc-900 dark:text-zinc-50 tracking-wide">
-						{p.name}
+				</div>
+			)}
+
+			{/* Top row: name + persona switcher + close */}
+			<div
+				className={`flex items-center justify-between ${displayMode === "avatar" ? "pl-16" : ""}`}
+			>
+				<div className="flex items-center gap-2.5">
+					<div>
+						<span className="font-genshin text-lg text-zinc-900 dark:text-zinc-50 tracking-wide">
+							{p.name}
+						</span>
+						<span className="ml-2 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+							{p.title}
+						</span>
+					</div>
+				</div>
+
+				{/* Persona switcher + close */}
+				<div className="flex items-center gap-1">
+					<span className="text-[10px] text-zinc-400 dark:text-zinc-500 mr-0.5">
+						切换角色：
 					</span>
-					<span className="ml-2 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
-						{p.title}
-					</span>
+					{personaIds.map((id) => (
+						<button
+							key={id}
+							type="button"
+							onClick={() => {
+								setPersona(id);
+								// Update thread persona mapping + persist to DB
+								const remoteId =
+									window.location.pathname.match(/\/c\/([0-9a-f-]{36})/)?.[1];
+								if (remoteId) {
+									setThreadPersona(remoteId, id);
+									fetch(`/api/threads/${remoteId}`, {
+										method: "PATCH",
+										headers: { "Content-Type": "application/json" },
+										body: JSON.stringify({ persona: id }),
+									}).catch((e) =>
+										console.error("[dialogue] Persona update failed:", e),
+									);
+								}
+							}}
+							className={`rounded-full transition-all cursor-pointer ${
+								id === persona
+									? "ring-2 ring-purple-400 dark:ring-purple-500 scale-110"
+									: "opacity-50 hover:opacity-100 hover:scale-105"
+							}`}
+							title={PERSONAS[id].name}
+						>
+							<CharacterAvatar persona={id} size="xs" />
+						</button>
+					))}
+					<button
+						type="button"
+						onClick={handleExit}
+						className="ml-1 p-1.5 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white/30 dark:hover:bg-white/10 transition-colors cursor-pointer"
+						title="退出剧情模式"
+					>
+						<X className="w-4 h-4" />
+					</button>
 				</div>
 			</div>
 
@@ -335,25 +467,36 @@ export const DialogueThread: FC<{
 				</div>
 			)}
 
-			{/* Speech */}
-			<button
-				type="button"
-				className="w-full text-left rounded-xl px-4 py-3 text-sm leading-relaxed
-					bg-white/30 dark:bg-white/5
-					text-zinc-800 dark:text-zinc-200 cursor-pointer
-					hover:bg-white/40 dark:hover:bg-white/10 transition-colors"
-				onClick={handleManualSpeak}
-				title="点击朗读"
-			>
-				{displayedSpeech || (
+			{/* Speech bubble */}
+			<div className="rounded-xl px-4 py-3 text-sm leading-relaxed bg-white/30 dark:bg-white/5 text-zinc-800 dark:text-zinc-200">
+				{isWaiting ? (
 					<span className="text-zinc-400 dark:text-zinc-500 animate-pulse">
 						......
 					</span>
+				) : (
+					<>
+						{displayedSpeech || (
+							<span className="text-zinc-400 dark:text-zinc-500 animate-pulse">
+								......
+							</span>
+						)}
+						{isLoading && displayedSpeech && (
+							<span className="inline-block w-0.5 h-4 bg-zinc-400 dark:bg-zinc-500 animate-pulse ml-0.5 align-text-bottom" />
+						)}
+					</>
 				)}
-				{isLoading && displayedSpeech && (
-					<span className="inline-block w-0.5 h-4 bg-zinc-400 dark:bg-zinc-500 animate-pulse ml-0.5 align-text-bottom" />
-				)}
-			</button>
+			</div>
+
+			{/* Action bar: speak + copy (aligned with bubble text via px-4) */}
+			{!isWaiting && !isLoading && currentSpeech && (
+				<SpeechActionBar
+					text={currentSpeech}
+					onSpeak={handleManualSpeak}
+					isSpeaking={isSpeaking}
+					onStopSpeak={handleStopSpeak}
+					className="px-3"
+				/>
+			)}
 
 			{/* Choices */}
 			{!isLoading && hasChoices && (
@@ -475,22 +618,24 @@ export const DialogueThread: FC<{
 	return (
 		<div id="dialogue-overlay" className="relative pointer-events-auto">
 			{displayMode === "pose" ? (
-				// ── Pose Mode: character left, glass panel fills remaining width ──
-				<div className="flex items-end">
-					{/* Character pose: h=2/3 screen, max-w=1/3, flush left+bottom */}
-					<div className="shrink-0 h-[66dvh] max-w-[33vw]">
-						<PoseImage persona={persona} pose={currentPose} />
-					</div>
+				// ── Pose Mode: pose+panel 3/4 width, centered at bottom ──
+				<div className="flex justify-center pb-0">
+					<div className="w-3/4 flex items-end">
+						{/* Character pose: h=2/3 screen, max-w=40% of container */}
+						<div className="shrink-0 h-[66dvh] max-w-[40%]">
+							<PoseImage persona={persona} pose={currentPose} />
+						</div>
 
-					{/* Dialogue panel: fills remaining width, max-h=50vh */}
-					<div className="flex-1 min-w-0 -ml-4 max-h-[50vh] overflow-y-auto pb-4 pr-6">
-						{dialoguePanel}
+						{/* Dialogue panel: fills remaining width, max-h=50vh */}
+						<div className="flex-1 min-w-0 -ml-4 max-h-[50vh] overflow-y-auto pb-4">
+							{dialoguePanel}
+						</div>
 					</div>
 				</div>
 			) : (
-				// ── Avatar Mode: centered, 60% width ──
-				<div className="flex justify-center pb-4 px-4">
-					<div className="w-3/5 min-w-[400px] max-h-[50vh] overflow-y-auto">
+				// ── Avatar Mode: centered, 60% width, avatar overflows top ──
+				<div className="flex justify-center pb-4 px-4 pt-10">
+					<div className="w-3/5 min-w-[400px] max-h-[50vh] overflow-y-auto overflow-x-visible">
 						{dialoguePanel}
 					</div>
 				</div>
@@ -506,10 +651,19 @@ const PoseImage: FC<{
 	pose: string;
 }> = ({ persona, pose }) => {
 	const src = `/characters/${persona}/poses/${pose}.webp`;
+	const [loadedSrc, setLoadedSrc] = useState(src);
 	const [errSrc, setErrSrc] = useState("");
-	const err = errSrc === src;
 
-	if (err) {
+	// Preload new image, then swap (prevents flicker)
+	useEffect(() => {
+		if (src === loadedSrc || src === errSrc) return;
+		const img = new Image();
+		img.onload = () => setLoadedSrc(src);
+		img.onerror = () => setErrSrc(src);
+		img.src = src;
+	}, [src, loadedSrc, errSrc]);
+
+	if (errSrc === src) {
 		return (
 			<div className="w-full h-full flex items-end justify-center">
 				<CharacterAvatar persona={persona} pose={pose} size="xl" />
@@ -519,11 +673,10 @@ const PoseImage: FC<{
 
 	return (
 		<img
-			src={src}
+			src={loadedSrc}
 			alt={`${PERSONAS[persona].name} – ${pose}`}
-			className="w-full h-full object-contain object-bottom select-none drop-shadow-xl"
+			className="w-full h-full object-contain object-bottom select-none drop-shadow-xl transition-opacity duration-300"
 			draggable={false}
-			onError={() => setErrSrc(src)}
 		/>
 	);
 };

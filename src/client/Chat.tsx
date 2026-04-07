@@ -53,6 +53,7 @@ import {
 	useAutoTTS,
 	useDialogueMode,
 	usePersona,
+	useVoiceMode,
 } from "./RuntimeProvider";
 
 // ── Recipe Update Context ────────────────────────────────────────────────────
@@ -182,16 +183,19 @@ const PersonaSelect: FC = () => {
 										{p.desc}
 									</p>
 								</div>
+							</div>
 
-								{/* Selection dot */}
-								<div
-									className={`
-										absolute right-3 top-1/2 -translate-y-1/2
-										w-2 h-2 rounded-full transition-all duration-300
-										${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
-									`}
-									style={{ backgroundColor: p.accentColor }}
-								/>
+							{/* Selection check — overflows right edge of card */}
+							<div
+								className={`
+									absolute -right-3 top-1/2 -translate-y-1/2 z-20
+									w-8 h-8 rounded-full flex items-center justify-center
+									shadow-lg transition-all duration-300
+									${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
+								`}
+								style={{ backgroundColor: p.accentColor }}
+							>
+								<Check className="w-4.5 h-4.5 text-white" strokeWidth={3} />
 							</div>
 
 							{/* Avatar — 88px square, bottom flush with card, top ~1/3 overflows */}
@@ -358,26 +362,56 @@ const AutoTTSToggle: FC = () => {
 	);
 };
 
+const VoiceModeButton: FC = () => {
+	const { enterVoiceMode } = useVoiceMode();
+	return (
+		<button
+			type="button"
+			onClick={() => enterVoiceMode()}
+			className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
+				text-zinc-400 dark:text-zinc-500 transition-all
+				hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:text-purple-600 dark:hover:text-purple-400
+				active:scale-95 cursor-pointer"
+			title="语音伴读"
+		>
+			<Mic className="h-3.5 w-3.5" />
+			语音
+		</button>
+	);
+};
+
 const DialogueModeButton: FC = () => {
 	const { enterDialogueMode } = useDialogueMode();
 	return (
 		<button
 			type="button"
 			onClick={enterDialogueMode}
-			className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:text-purple-500 active:scale-95 cursor-pointer"
-			title="剧情模式"
+			className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
+				text-zinc-400 dark:text-zinc-500 transition-all
+				hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400
+				active:scale-95 cursor-pointer"
+			title="剧情伴读"
 		>
-			<Sparkles className="h-4 w-4" />
+			<Sparkles className="h-3.5 w-3.5" />
+			剧情
 		</button>
 	);
 };
 
 const ComposerAction: FC = () => (
 	<div className="relative mx-2 mb-2 flex items-center justify-between">
+		{/* Left: persona + mode buttons */}
 		<div className="flex items-center gap-1">
 			<PersonaSwitcher />
+			<div className="ml-1 flex items-center gap-0.5">
+				<VoiceModeButton />
+				<DialogueModeButton />
+			</div>
+		</div>
+
+		{/* Right: TTS, attachment, dictation, send */}
+		<div className="flex items-center gap-1">
 			<AutoTTSToggle />
-			<DialogueModeButton />
 
 			<ComposerPrimitive.AddAttachment
 				className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 dark:text-zinc-500 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-300 active:scale-95 cursor-pointer"
@@ -386,7 +420,7 @@ const ComposerAction: FC = () => (
 				<Paperclip className="h-4 w-4" />
 			</ComposerPrimitive.AddAttachment>
 
-			{/* Dictation: mic button (hidden when no adapter or already dictating) */}
+			{/* Dictation: mic button */}
 			<AuiIf condition={(s) => s.composer.dictation == null}>
 				<ComposerPrimitive.Dictate asChild>
 					<TooltipIconButton
@@ -398,7 +432,7 @@ const ComposerAction: FC = () => (
 				</ComposerPrimitive.Dictate>
 			</AuiIf>
 
-			{/* Dictation: stop button (shown only while dictating) */}
+			{/* Dictation: stop button */}
 			<AuiIf condition={(s) => s.composer.dictation != null}>
 				<ComposerPrimitive.StopDictation asChild>
 					<TooltipIconButton
@@ -409,33 +443,33 @@ const ComposerAction: FC = () => (
 					</TooltipIconButton>
 				</ComposerPrimitive.StopDictation>
 			</AuiIf>
+
+			<AuiIf condition={(s) => !s.thread.isRunning}>
+				<ComposerPrimitive.Send asChild>
+					<TooltipIconButton
+						tooltip="发送消息"
+						variant="default"
+						size="icon"
+						className="size-8 rounded-full"
+					>
+						<ArrowUp className="size-4" />
+					</TooltipIconButton>
+				</ComposerPrimitive.Send>
+			</AuiIf>
+
+			<AuiIf condition={(s) => s.thread.isRunning}>
+				<ComposerPrimitive.Cancel asChild>
+					<TooltipIconButton
+						tooltip="停止生成"
+						variant="default"
+						size="icon"
+						className="size-8 rounded-full"
+					>
+						<Square className="size-3 fill-current" />
+					</TooltipIconButton>
+				</ComposerPrimitive.Cancel>
+			</AuiIf>
 		</div>
-
-		<AuiIf condition={(s) => !s.thread.isRunning}>
-			<ComposerPrimitive.Send asChild>
-				<TooltipIconButton
-					tooltip="发送消息"
-					variant="default"
-					size="icon"
-					className="size-8 rounded-full"
-				>
-					<ArrowUp className="size-4" />
-				</TooltipIconButton>
-			</ComposerPrimitive.Send>
-		</AuiIf>
-
-		<AuiIf condition={(s) => s.thread.isRunning}>
-			<ComposerPrimitive.Cancel asChild>
-				<TooltipIconButton
-					tooltip="停止生成"
-					variant="default"
-					size="icon"
-					className="size-8 rounded-full"
-				>
-					<Square className="size-3 fill-current" />
-				</TooltipIconButton>
-			</ComposerPrimitive.Cancel>
-		</AuiIf>
 	</div>
 );
 

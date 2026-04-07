@@ -1,11 +1,6 @@
 import type { PersonaId } from "../../worker/model";
 import { PERSONAS } from "../../worker/model";
 
-export interface Greeting {
-	text: string;
-	pose: string;
-}
-
 /** Cycle through an array sequentially using localStorage. */
 function cycle<T>(items: T[], key: string): T {
 	let idx = 0;
@@ -19,15 +14,13 @@ function cycle<T>(items: T[], key: string): T {
 	return items[idx];
 }
 
-/** Get next greeting (text + pose) for a persona in a given mode. */
-export function getNextGreeting(
-	persona: PersonaId,
-	mode: "voice" | "dialogue",
-): Greeting {
-	return cycle(PERSONAS[persona].firstMessages, `greeting:${mode}:${persona}`);
+/** Get next greeting text for voice mode (sequential cycling). */
+export function getNextVoiceGreeting(persona: PersonaId): string {
+	return cycle(PERSONAS[persona].firstMessages, `greeting:voice:${persona}`)
+		.text;
 }
 
-/** Get next placeholder text for a persona's input field. */
+/** Get next placeholder text for input fields (sequential cycling). */
 export function getNextPlaceholder(persona: PersonaId): string {
 	return cycle(PERSONAS[persona].placeholders, `placeholder:${persona}`);
 }

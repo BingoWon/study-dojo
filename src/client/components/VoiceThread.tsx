@@ -6,7 +6,7 @@ import type {
 	VoiceTranscript,
 } from "../lib/elevenlabs-voice-adapter";
 import { startVoiceSession } from "../lib/elevenlabs-voice-adapter";
-import { getNextGreeting } from "../lib/greeting";
+import { getNextVoiceGreeting } from "../lib/greeting";
 import { usePersona } from "../RuntimeProvider";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { VoiceOrb, type VoiceOrbState } from "./voice/VoiceOrb";
@@ -68,7 +68,7 @@ export const VoiceThread: FC<{
 	useEffect(() => {
 		let cancelled = false;
 
-		const firstMessage = getNextGreeting(persona, "voice").text;
+		const firstMessage = getNextVoiceGreeting(persona);
 
 		const sessionPromise = startVoiceSession(
 			"/api/voice-signed-url",

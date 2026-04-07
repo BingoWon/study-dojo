@@ -1,13 +1,25 @@
-/** Shared TTS utilities for sentence splitting, fetching, and playback.
- *  Used by both the manual speak adapter and the streaming auto-TTS system. */
+/**
+ * Shared TTS utilities for sentence splitting, fetching, playback,
+ * and the unified StreamingTTSPlayer used by both text and dialogue modes.
+ *
+ * See docs/tts-architecture.md for full design documentation.
+ */
 
-// ── Sentence splitting ────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────
 
 /** Splits on Chinese/English sentence-ending punctuation and newlines. */
 export const SENTENCE_RE = /(?<=[。！？.!?\n])/;
 
 /** Inter-chunk pause (ms) for natural pacing between audio segments. */
 export const CHUNK_GAP_MS = 300;
+
+/** First chunk threshold (chars). Lower = faster time-to-first-audio. */
+const FIRST_CHUNK_CHARS = 30;
+
+/** Subsequent chunk threshold (chars). Higher = more natural phrasing. */
+const NEXT_CHUNK_CHARS = 100;
+
+// ── Manual speak: split complete text into chunks ────────────────────────
 
 /** Split text into chunks at sentence boundaries.
  *  Accumulates sentences until buffer reaches minChars, then cuts. */
@@ -25,7 +37,6 @@ export function splitIntoChunks(text: string, minChars = 60): string[] {
 		}
 	}
 	if (buf.trim()) {
-		// Merge tiny trailing fragment into last chunk
 		if (chunks.length > 0 && buf.trim().length < minChars / 2) {
 			chunks[chunks.length - 1] += buf;
 		} else {
@@ -55,7 +66,7 @@ export function stripMarkdown(md: string): string {
 		.trim();
 }
 
-// ── Fetch & Playback ──────────────────────────────────────────────────────
+// ── Fetch & Playback ────────────────────────────────────────────────────
 
 export interface TTSVoiceParams {
 	endpoint: string;
@@ -106,4 +117,142 @@ export function playBlob(blob: Blob, signal: AbortSignal): Promise<void> {
 		);
 		audio.play().catch(cleanup);
 	});
+}
+
+// ── Unified Streaming TTS Player ────────────────────────────────────────
+//
+// Used by BOTH text mode (AutoSpeakWatcher) and dialogue mode.
+// Single source of truth for all streaming auto-read logic.
+//
+// Algorithm:
+//   1. First chunk: accumulate to FIRST_CHUNK_CHARS (30), then cut at the
+//      last sentence boundary before that point. If no boundary exists yet,
+//      wait until the first sentence boundary appears, then send immediately.
+//   2. Subsequent chunks: accumulate to NEXT_CHUNK_CHARS (100), same
+//      boundary logic. BUT if the first chunk's audio result has arrived
+//      (about to start playing), immediately send whatever is buffered up
+//      to the last sentence boundary — don't wait for 100 chars.
+//   3. Flush: when LLM output ends, send everything remaining.
+
+/** Find the last sentence boundary position in text. Returns -1 if none. */
+function lastSentenceBoundary(text: string): number {
+	for (let i = text.length - 1; i >= 0; i--) {
+		if (/[。！？.!?\n]/.test(text[i])) return i + 1;
+	}
+	return -1;
+}
+
+export class StreamingTTSPlayer {
+	private abortCtrl = new AbortController();
+	private items: Promise<Blob | null>[] = [];
+	private playing = false;
+	private consumed = 0;
+	private buffer = "";
+	private firstSent = false;
+	private firstResultReady = false;
+
+	/** Optional callback when queue drains (used by text mode proxy bridge). */
+	onIdle?: () => void;
+
+	constructor(private voiceParams: TTSVoiceParams) {}
+
+	/** Feed growing full text from LLM streaming. */
+	feedText(fullText: string) {
+		const newText = fullText.slice(this.consumed);
+		if (!newText) return;
+		this.buffer += newText;
+		this.consumed = fullText.length;
+		this.tryEmit(false);
+	}
+
+	/** Flush all remaining text (call when LLM output is complete). */
+	flush(fullText: string) {
+		const remaining = fullText.slice(this.consumed);
+		if (remaining) this.buffer += remaining;
+		this.consumed = fullText.length;
+		this.tryEmit(true);
+	}
+
+	abort() {
+		this.abortCtrl.abort();
+		this.items.length = 0;
+		this.buffer = "";
+		this.consumed = 0;
+		this.firstSent = false;
+		this.firstResultReady = false;
+	}
+
+	private tryEmit(force: boolean) {
+		const text = this.buffer;
+		if (!text.trim() && !force) return;
+
+		const threshold = this.firstSent ? NEXT_CHUNK_CHARS : FIRST_CHUNK_CHARS;
+		const shouldSend =
+			force || text.length >= threshold || this.firstResultReady;
+
+		if (!shouldSend) return;
+
+		// Find the last sentence boundary to cut at
+		const boundary = lastSentenceBoundary(text);
+
+		if (force) {
+			// Flush: send everything
+			if (text.trim()) {
+				this.buffer = "";
+				this.enqueue(text.trim());
+			}
+		} else if (boundary > 0) {
+			// Cut at last sentence boundary
+			const chunk = text.slice(0, boundary).trim();
+			this.buffer = text.slice(boundary);
+			if (chunk) {
+				if (!this.firstSent) this.firstSent = true;
+				if (this.firstResultReady) this.firstResultReady = false;
+				this.enqueue(chunk);
+			}
+		} else if (text.length >= threshold) {
+			// No sentence boundary but over threshold — keep waiting for one
+			// (don't send mid-sentence)
+		}
+	}
+
+	private enqueue(text: string) {
+		if (this.abortCtrl.signal.aborted) return;
+
+		const isFirstItem = this.items.length === 0 && !this.playing;
+		const blobPromise = fetchTTSBlob(
+			text,
+			this.voiceParams,
+			this.abortCtrl.signal,
+		);
+
+		// When first fetch resolves, trigger immediate send of buffered content
+		if (isFirstItem || !this.firstSent) {
+			blobPromise.then(() => {
+				if (!this.abortCtrl.signal.aborted && !this.firstResultReady) {
+					this.firstResultReady = true;
+					this.tryEmit(false);
+				}
+			});
+		}
+
+		this.items.push(blobPromise);
+		if (!this.playing) this.drain();
+	}
+
+	private async drain() {
+		this.playing = true;
+		let isFirst = true;
+		const { signal } = this.abortCtrl;
+		while (this.items.length > 0 && !signal.aborted) {
+			const blob = await (this.items.shift() as Promise<Blob | null>);
+			if (!blob || blob.size === 0 || signal.aborted) continue;
+			if (!isFirst) await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
+			if (signal.aborted) break;
+			await playBlob(blob, signal);
+			isFirst = false;
+		}
+		this.playing = false;
+		if (!signal.aborted) this.onIdle?.();
+	}
 }

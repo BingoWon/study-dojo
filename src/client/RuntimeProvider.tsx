@@ -43,15 +43,15 @@ import { ReadDocToolUI } from "./components/tools/ReadDocToolUI";
 import { RecipeToolUI } from "./components/tools/RecipeToolUI";
 import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
+import {
+	buildChatSummary,
+	getActiveDocId,
+	getActiveDocTitle,
+} from "./lib/doc-context";
 import { ElevenLabsScribeAdapter } from "./lib/elevenlabs-scribe-adapter";
 import { ElevenLabsTTSAdapter } from "./lib/elevenlabs-tts-adapter";
 import type { VoiceTranscript } from "./lib/elevenlabs-voice-adapter";
-import {
-	CHUNK_GAP_MS,
-	fetchTTSBlob,
-	playBlob,
-	SENTENCE_RE,
-} from "./lib/tts-utils";
+import { StreamingTTSPlayer } from "./lib/tts-utils";
 
 // ── Persona Context (per-thread persona, set at thread creation) ──────────
 
@@ -75,17 +75,16 @@ export const useAutoTTS = () => useContext(AutoTTSCtx);
 
 export interface VoiceModeState {
 	active: boolean;
-	docId: string | null;
 	docTitle: string | null;
 	systemPrompt: string | null;
 }
 
 const VoiceModeCtx = createContext<{
 	voiceMode: VoiceModeState;
-	enterVoiceMode: (docId: string, docTitle: string) => void;
+	enterVoiceMode: () => void;
 	exitVoiceMode: (voiceMessages?: VoiceTranscript[]) => void;
 }>({
-	voiceMode: { active: false, docId: null, docTitle: null, systemPrompt: null },
+	voiceMode: { active: false, docTitle: null, systemPrompt: null },
 	enterVoiceMode: () => {},
 	exitVoiceMode: () => {},
 });
@@ -96,6 +95,11 @@ export const useVoiceMode = () => useContext(VoiceModeCtx);
 
 export interface DialogueModeState {
 	active: boolean;
+}
+
+export interface DialogueTranscript {
+	role: "user" | "assistant";
+	speech: string;
 }
 
 const DialogueModeCtx = createContext<{
@@ -109,6 +113,14 @@ const DialogueModeCtx = createContext<{
 });
 
 export const useDialogueMode = () => useContext(DialogueModeCtx);
+
+/** Module-level ref for persistDialogueTurn (set by useMyRuntime). */
+let persistDialogueTurnFn: ((turn: DialogueTranscript) => void) | null = null;
+
+/** Called by DialogueThread for each completed turn. */
+export function persistDialogueTurn(turn: DialogueTranscript) {
+	persistDialogueTurnFn?.(turn);
+}
 
 // ── ElevenLabs Adapters (stable module-scope instances) ─────────────────────
 
@@ -125,9 +137,11 @@ const runtimeAdapters = {
 	speech: ttsAdapter,
 };
 
-/** Voice messages pending merge into text chat. Module-level to bridge
- *  between RuntimeProvider (writer) and useMyRuntime (reader). */
-let pendingVoiceMsgs: VoiceTranscript[] | null = null;
+/** Remote thread ID captured at mode entry — ensures DB writes go to the right thread. */
+let capturedThreadId: string | null = null;
+
+/** Monotonic counter bumped on voice/dialogue exit to signal useMyRuntime to reload. */
+let reloadGeneration = 0;
 
 /** Module-level autoTTS flag readable by transport headers. */
 let autoTTSFlag = true;
@@ -309,6 +323,17 @@ function useMyRuntime() {
 
 	// Fetch messages for existing threads
 	const [loadedMessages, setLoadedMessages] = useState<UIMessage[]>([]);
+	const [fetchKey, setFetchKey] = useState(0);
+	const lastGenRef = useRef(reloadGeneration);
+
+	// Detect when reloadGeneration is bumped (voice/dialogue exit)
+	if (reloadGeneration !== lastGenRef.current) {
+		lastGenRef.current = reloadGeneration;
+		// Schedule a re-fetch after a short delay (DB write may still be in flight)
+		setTimeout(() => setFetchKey((k) => k + 1), 300);
+	}
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fetchKey triggers reload
 	useEffect(() => {
 		if (!remoteId) return;
 		let cancelled = false;
@@ -321,7 +346,7 @@ function useMyRuntime() {
 		return () => {
 			cancelled = true;
 		};
-	}, [remoteId]);
+	}, [remoteId, fetchKey]);
 
 	// Dynamic header: reads remoteId at send time (after initialize()).
 	// IMPORTANT: Read from aui store directly (not stateRef) to avoid a race
@@ -371,51 +396,37 @@ function useMyRuntime() {
 		}
 	}, [loadedMessages, chat.setMessages]);
 
-	// Merge voice messages into chat when returning from voice mode
-	const { voiceMode } = useVoiceMode();
-	useEffect(() => {
-		if (voiceMode.active || !pendingVoiceMsgs) return;
-		const voiceMsgs = pendingVoiceMsgs;
-		pendingVoiceMsgs = null;
-
-		// Insert a separator + voice transcripts into the chat
-		const existing = chat.messages;
-		const separator = {
-			id: crypto.randomUUID(),
-			role: "user" as const,
-			parts: [{ type: "text" as const, text: "🎙 进入语音陪读" }],
-		};
-		const converted = voiceMsgs.map((m) => ({
-			id: crypto.randomUUID(),
-			role: m.role as "user" | "assistant",
-			parts: [
-				{
-					type: "text" as const,
-					text: m.role === "assistant" ? `🎙 ${m.text}` : m.text,
-				},
-			],
-		}));
-		chat.setMessages([...existing, separator, ...converted]);
-
-		// Persist to DB
-		const threadId = aui.threadListItem().getState().remoteId;
-		if (threadId) {
-			fetch(`/api/threads/${threadId}/voice-messages`, {
+	// Real-time persistence for dialogue turns — DB only, no chat.setMessages
+	const persistTurn = useCallback(
+		(turn: { role: "user" | "assistant"; speech: string }) => {
+			const remoteId = capturedThreadId;
+			if (!remoteId) {
+				console.error(
+					"[dialogue] No capturedThreadId — message NOT persisted!",
+				);
+				return;
+			}
+			const msg = {
+				id: crypto.randomUUID(),
+				role: turn.role,
+				parts: [{ type: "text" as const, text: turn.speech }],
+			};
+			fetch(`/api/threads/${remoteId}/voice-messages`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ messages: [separator, ...converted] }),
-			}).catch(() => {});
-		}
-
-		// Scroll to bottom after merge
-		setTimeout(() => {
-			document
-				.querySelector(
-					"[data-role='assistant']:last-child, [data-role='user']:last-child",
-				)
-				?.scrollIntoView({ behavior: "smooth" });
-		}, 100);
-	}, [voiceMode.active, chat.messages, chat.setMessages, aui]);
+				headers: {
+					"Content-Type": "application/json",
+					"x-persona": persona,
+				},
+				body: JSON.stringify({ messages: [msg] }),
+			})
+				.then((r) => {
+					if (!r.ok) console.error("[dialogue] Persist failed:", r.status);
+				})
+				.catch((e) => console.error("[dialogue] Persist error:", e));
+		},
+		[persona],
+	);
+	persistDialogueTurnFn = persistTurn;
 
 	return useAISDKRuntime(chat, {
 		adapters: runtimeAdapters,
@@ -474,77 +485,98 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	// ── Voice mode ────────────────────────────────────────────────────────
 	const [voiceMode, setVoiceMode] = useState<VoiceModeState>({
 		active: false,
-		docId: null,
 		docTitle: null,
 		systemPrompt: null,
 	});
 
-	const enterVoiceMode = useCallback(
-		async (docId: string, docTitle: string) => {
-			// Stop any ongoing TTS before entering voice mode
-			try {
-				const speech = runtime.thread.getState().speech;
-				if (speech) runtime.thread.stopSpeaking();
-			} catch {}
+	const enterVoiceMode = useCallback(async () => {
+		// Capture current thread IDs before mode switch
+		const urlMatch = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/);
+		capturedThreadId = urlMatch ? urlMatch[1] : null;
 
-			// Fetch document content for system prompt injection
-			let docContent = "";
+		// Stop any ongoing TTS
+		try {
+			const speech = runtime.thread.getState().speech;
+			if (speech) runtime.thread.stopSpeaking();
+		} catch {}
+
+		// Build system prompt with document + chat context
+		const activeDocId = getActiveDocId();
+		const docTitle = getActiveDocTitle();
+
+		let docContent = "";
+		if (activeDocId) {
 			try {
-				const res = await fetch(`/api/documents/${docId}/markdown`);
+				const res = await fetch(`/api/documents/${activeDocId}/markdown`);
 				if (res.ok) docContent = await res.text();
 			} catch {}
+		}
 
-			// Summarize recent text conversation for voice context continuity
-			let chatSummary = "";
-			try {
-				const msgs = runtime.thread.getState().messages;
-				const recent = msgs.slice(-10);
-				if (recent.length > 0) {
-					chatSummary = recent
-						.map((m) => {
-							const text = m.content
-								.filter(
-									(p): p is { type: "text"; text: string } => p.type === "text",
-								)
-								.map((p) => p.text)
-								.join(" ");
-							return `${m.role === "user" ? "学生" : "导师"}：${text.slice(0, 200)}`;
-						})
-						.join("\n");
-				}
-			} catch {}
+		const chatSummary = buildChatSummary(runtime.thread.getState().messages);
 
-			const p = PERSONAS[persona];
-			const truncated = docContent.slice(0, 12000);
+		const p = PERSONAS[persona];
+		const truncated = docContent.slice(0, 12000);
 
-			const prompt = `${p.prompt}
+		let prompt = `${p.prompt}
 
 # 语音对话规则
-- 你正在与学生进行实时语音对话，讨论一篇文档
+- 你正在与学生进行实时语音对话
 - 回答简洁口语化，每次回复控制在3-5句话以内
 - 禁止输出 markdown、代码块、列表符号等书面格式
-- 可以主动追问学生的理解，引导深入讨论
+- 可以主动追问学生的理解，引导深入讨论`;
 
-# 正在阅读的文档：「${docTitle}」
-
-${truncated}${chatSummary ? `\n\n# 之前的文字对话记录（供参考）\n${chatSummary}` : ""}`;
-
-			setVoiceMode({ active: true, docId, docTitle, systemPrompt: prompt });
-		},
-		[persona, runtime],
-	);
-
-	const exitVoiceMode = useCallback((voiceMessages?: VoiceTranscript[]) => {
-		if (voiceMessages && voiceMessages.length > 0) {
-			pendingVoiceMsgs = voiceMessages;
+		if (truncated) {
+			prompt += `\n\n# 正在阅读的文档${docTitle ? `：「${docTitle}」` : ""}\n\n${truncated}`;
 		}
+		if (chatSummary) {
+			prompt += `\n\n# 之前的文字对话记录（供参考）\n${chatSummary}`;
+		}
+
 		setVoiceMode({
-			active: false,
-			docId: null,
-			docTitle: null,
-			systemPrompt: null,
+			active: true,
+			docTitle: docTitle || "语音伴读",
+			systemPrompt: prompt,
 		});
-	}, []);
+	}, [persona, runtime]);
+
+	const exitVoiceMode = useCallback(
+		async (voiceMessages?: VoiceTranscript[]) => {
+			// Persist voice messages to DB synchronously before switching back
+			if (voiceMessages && voiceMessages.length > 0 && capturedThreadId) {
+				const separator = {
+					id: crypto.randomUUID(),
+					role: "user" as const,
+					parts: [{ type: "text" as const, text: "🎙 [进入语音伴读]" }],
+				};
+				const converted = voiceMessages.map((m) => ({
+					id: crypto.randomUUID(),
+					role: m.role as "user" | "assistant",
+					parts: [
+						{
+							type: "text" as const,
+							text: m.role === "assistant" ? `🎙 ${m.text}` : m.text,
+						},
+					],
+				}));
+				await fetch(`/api/threads/${capturedThreadId}/voice-messages`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"x-persona": persona,
+					},
+					body: JSON.stringify({ messages: [separator, ...converted] }),
+				}).catch((e) => console.error("[voice] Persist failed:", e));
+			}
+			setVoiceMode({ active: false, docTitle: null, systemPrompt: null });
+			// Bump reload generation so useMyRuntime re-fetches messages from DB
+			reloadGeneration++;
+			// Update URL to original thread
+			if (capturedThreadId) {
+				window.history.replaceState(null, "", `/c/${capturedThreadId}`);
+			}
+		},
+		[persona],
+	);
 
 	const voiceModeCtx = useMemo(
 		() => ({ voiceMode, enterVoiceMode, exitVoiceMode }),
@@ -557,6 +589,10 @@ ${truncated}${chatSummary ? `\n\n# 之前的文字对话记录（供参考）\n$
 	});
 
 	const enterDialogueMode = useCallback(() => {
+		// Capture current thread IDs before mode switch
+		const urlMatch = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/);
+		capturedThreadId = urlMatch ? urlMatch[1] : null;
+
 		// Stop any ongoing TTS/speech
 		try {
 			const speech = runtime.thread.getState().speech;
@@ -567,6 +603,12 @@ ${truncated}${chatSummary ? `\n\n# 之前的文字对话记录（供参考）\n$
 
 	const exitDialogueMode = useCallback(() => {
 		setDialogueMode({ active: false });
+		// Bump reload generation so useMyRuntime re-fetches messages from DB
+		reloadGeneration++;
+		// Update URL to original thread
+		if (capturedThreadId) {
+			window.history.replaceState(null, "", `/c/${capturedThreadId}`);
+		}
 	}, []);
 
 	const dialogueModeCtx = useMemo(
@@ -615,106 +657,9 @@ function PersonaSync() {
 	return null;
 }
 
-// ── Streaming sentence-level TTS ──────────────────────────────────────────
+// ── Streaming sentence-level TTS (uses shared StreamingTTSPlayer) ────────
 
-const MIN_CHARS = 20;
-const MAX_CHARS = 100;
-
-/** Pre-fetching sequential audio queue.
- *  Fetches start immediately on enqueue(); playback is strictly sequential. */
-class TTSPlayQueue {
-	private items: Promise<Blob | null>[] = [];
-	private playing = false;
-	private abortCtrl = new AbortController();
-	onIdle?: () => void;
-
-	enqueue(text: string) {
-		const t = text.trim();
-		if (!t || this.abortCtrl.signal.aborted) return;
-		this.items.push(fetchTTSBlob(t, ttsAdapter.voiceParams));
-		if (!this.playing) this.drain();
-	}
-
-	abort() {
-		this.abortCtrl.abort();
-		this.items.length = 0;
-	}
-
-	private async drain() {
-		this.playing = true;
-		let isFirst = true;
-		while (this.items.length > 0 && !this.abortCtrl.signal.aborted) {
-			const blobPromise = this.items.shift() as Promise<Blob | null>;
-			const blob = await blobPromise;
-			if (!blob || blob.size === 0 || this.abortCtrl.signal.aborted) continue;
-			// Brief pause between segments for natural pacing
-			if (!isFirst) await new Promise((r) => setTimeout(r, CHUNK_GAP_MS));
-			if (this.abortCtrl.signal.aborted) break;
-			await playBlob(blob, this.abortCtrl.signal);
-			isFirst = false;
-		}
-		this.playing = false;
-		if (!this.abortCtrl.signal.aborted) this.onIdle?.();
-	}
-}
-
-/** Streaming TTS with smart batching:
- *  - First chunk: sent to fetch as soon as MIN_CHARS at a sentence boundary
- *  - Subsequent: accumulate in buffer until first audio finishes playing
- *  - MAX_CHARS: force-send if buffer grows too large
- *  - On generation end: flush immediately */
-class StreamingTTS {
-	private buffer = "";
-	private firstSent = false;
-	private firstDone = false;
-	private aborted = false;
-	readonly queue = new TTSPlayQueue();
-
-	constructor() {
-		this.queue.onIdle = () => {
-			if (!this.firstDone && this.firstSent) {
-				this.firstDone = true;
-				this.trySend(false);
-			}
-		};
-	}
-
-	addSentence(text: string) {
-		if (this.aborted || !text.trim()) return;
-		this.buffer += text;
-		this.trySend(false);
-	}
-
-	flush() {
-		if (this.aborted) return;
-		this.trySend(true);
-	}
-
-	abort() {
-		this.aborted = true;
-		this.buffer = "";
-		this.queue.abort();
-	}
-
-	private trySend(force: boolean) {
-		const text = this.buffer.trim();
-		if (!text) return;
-		const overMax = text.length >= MAX_CHARS;
-
-		if (!this.firstSent) {
-			if (text.length >= MIN_CHARS || force || overMax) {
-				this.buffer = "";
-				this.firstSent = true;
-				this.queue.enqueue(text);
-			}
-		} else if (this.firstDone || force || overMax) {
-			this.buffer = "";
-			this.queue.enqueue(text);
-		}
-	}
-}
-
-/** Watches LLM streaming output and feeds sentences to StreamingTTS.
+/** Watches LLM streaming output and feeds text to StreamingTTSPlayer.
  *  Bridges into assistant-ui speech state via ttsAdapter proxy mode,
  *  so the speak/stop button in the message UI reflects auto-TTS state. */
 function AutoSpeakWatcher() {
@@ -724,8 +669,7 @@ function AutoSpeakWatcher() {
 	const isRunning = useAuiState((s) => s.thread.isRunning);
 	const isDictating = useAuiState((s) => s.composer.dictation != null);
 	const wasRunning = useRef(false);
-	const ttsRef = useRef<StreamingTTS | null>(null);
-	const spokenLenRef = useRef(0);
+	const ttsRef = useRef<StreamingTTSPlayer | null>(null);
 
 	// Dictation started → abort TTS immediately
 	useEffect(() => {
@@ -743,8 +687,7 @@ function AutoSpeakWatcher() {
 			ttsRef.current?.abort();
 			ttsAdapter.endProxy();
 			if (autoTTS && !voiceMode.active) {
-				ttsRef.current = new StreamingTTS();
-				spokenLenRef.current = 0;
+				ttsRef.current = new StreamingTTSPlayer(ttsAdapter.voiceParams);
 			} else {
 				ttsRef.current = null;
 			}
@@ -755,16 +698,10 @@ function AutoSpeakWatcher() {
 		// ── Transition: running → idle (generation finished) ──
 		if (wasRunning.current && !isRunning && ttsRef.current) {
 			const tts = ttsRef.current;
-			// Consume any final text
 			const fullText = getLastAssistantText(aui);
-			const remaining = fullText.slice(spokenLenRef.current);
-			if (remaining.trim()) tts.addSentence(remaining);
-			tts.flush();
-			spokenLenRef.current = 0;
+			tts.flush(fullText);
 
-			// Bridge into assistant-ui speech state via proxy utterance.
-			// This makes the message's speak button show "stop" during auto-TTS,
-			// and clicking stop will abort the streaming TTS.
+			// Bridge into assistant-ui speech state via proxy utterance
 			ttsAdapter.enterProxyMode(() => {
 				tts.abort();
 				ttsRef.current = null;
@@ -773,29 +710,18 @@ function AutoSpeakWatcher() {
 			const last = [...msgs].reverse().find((m) => m.role === "assistant");
 			if (last) {
 				aui.thread().message({ id: last.id }).speak();
-				// End proxy when queue drains
-				const origOnIdle = tts.queue.onIdle;
-				tts.queue.onIdle = () => {
-					origOnIdle?.();
-					ttsAdapter.endProxy();
-				};
+				tts.onIdle = () => ttsAdapter.endProxy();
 			}
 		}
 
 		wasRunning.current = isRunning;
 
-		// ── Polling: feed sentences during streaming ──
+		// ── Polling: feed full text during streaming ──
 		if (!isRunning || !ttsRef.current) return;
 		const tts = ttsRef.current;
 		const interval = setInterval(() => {
 			const fullText = getLastAssistantText(aui);
-			const unspoken = fullText.slice(spokenLenRef.current);
-			if (!unspoken) return;
-			const parts = unspoken.split(SENTENCE_RE);
-			for (let i = 0; i < parts.length - 1; i++) {
-				tts.addSentence(parts[i]);
-				spokenLenRef.current += parts[i].length;
-			}
+			if (fullText) tts.feedText(fullText);
 		}, 200);
 		return () => clearInterval(interval);
 	}, [isRunning, autoTTS, voiceMode.active, aui]);
