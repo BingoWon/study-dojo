@@ -2,7 +2,28 @@ import { z } from "zod";
 
 // ── Visual Effects ─────────────────────────────────────────────────────────
 
-export const EFFECTS = ["confetti", "screen-shake", "flash"] as const;
+export const EFFECTS = [
+	// Particle effects (canvas-confetti)
+	"confetti",
+	"fireworks",
+	"stars",
+	"hearts",
+	"school-pride",
+	// Cinematic full-screen effects
+	"flash",
+	"screen-shake",
+	"bomb",
+	"explosions",
+	"lightning",
+	"vortex",
+	"glitch",
+	// Atmospheric
+	"rain",
+	// Text celebration
+	"good-job",
+	// Panel-specific
+	"panel-shake",
+] as const;
 
 export type Effect = (typeof EFFECTS)[number];
 
@@ -14,13 +35,13 @@ export function buildDialogueTurnSchema(poses: [string, ...string[]]) {
 		pose: z.enum(poses).describe("Character pose for portrait display"),
 		preEffect: z
 			.enum(EFFECTS)
-			.optional()
-			.describe("Visual effect before speech"),
+			.nullable()
+			.describe("Visual effect before speech, or null if none"),
 		speech: z.string().describe("Plain text dialogue, no markdown"),
 		postEffect: z
 			.enum(EFFECTS)
-			.optional()
-			.describe("Visual effect after speech"),
+			.nullable()
+			.describe("Visual effect after speech, or null if none"),
 		choices: z
 			.array(z.string())
 			.min(1)

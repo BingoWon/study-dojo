@@ -4,15 +4,9 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { DbClient } from "./db";
 import { addMemories } from "./memory";
+import type { EmbeddingEnv } from "./rag";
 import { retrieveContext } from "./rag";
 import { chunks as chunksTable, documents } from "./schema";
-
-type RagEnv = {
-	EMBEDDING_BASE_URL: string;
-	EMBEDDING_API_KEY: string;
-	EMBEDDING_MODEL: string;
-	EMBEDDING_DIMENSIONS?: string;
-};
 
 /** Static tools available without request context. */
 export const staticTools = {
@@ -147,7 +141,7 @@ export function createDocTools(opts: {
 	}[];
 	db: DbClient;
 	vectorize: VectorizeIndex;
-	env: RagEnv;
+	env: EmbeddingEnv;
 }) {
 	return {
 		doc_suggest: tool({

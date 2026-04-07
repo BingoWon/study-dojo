@@ -13,15 +13,17 @@ const CHUNK_SIZE = 1500;
 const CHUNK_OVERLAP = 128;
 const INSERT_BATCH = 15;
 const DEFAULT_DIMENSIONS = 1536;
+const RECALL_MULTIPLIER = 3;
 
 const PADDLE_OCR_URL_DEFAULT =
 	"https://y9z388hbpaj013l5.aistudio-app.com/layout-parsing";
 
-type EmbeddingEnv = {
+export type EmbeddingEnv = {
 	EMBEDDING_BASE_URL: string;
 	EMBEDDING_API_KEY: string;
 	EMBEDDING_MODEL: string;
 	EMBEDDING_DIMENSIONS?: string;
+	RERANK_MODEL: string;
 };
 
 function createEmbeddings(env: EmbeddingEnv) {
@@ -484,7 +486,38 @@ export async function getDocumentChunks(db: DbClient, docId: string) {
 		.orderBy(sql`rowid`);
 }
 
-// ── Retrieve Context (filtered by docIds only) ─────────────────────────────
+// ── Reranker (OpenRouter-compatible) ─────────────────────────────────────────
+
+async function rerank(
+	query: string,
+	documents: string[],
+	topN: number,
+	env: EmbeddingEnv,
+): Promise<{ index: number; score: number }[]> {
+	const res = await fetch(`${env.EMBEDDING_BASE_URL}/rerank`, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${env.EMBEDDING_API_KEY}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			model: env.RERANK_MODEL,
+			query,
+			documents,
+			top_n: topN,
+		}),
+	});
+	if (!res.ok) throw new Error(`Rerank failed: ${res.status}`);
+	const data = (await res.json()) as {
+		results: { index: number; relevance_score: number }[];
+	};
+	return data.results.map((r) => ({
+		index: r.index,
+		score: r.relevance_score,
+	}));
+}
+
+// ── Retrieve Context (two-stage: vector recall → rerank) ─────────────────────
 
 export async function retrieveContext(
 	query: string,
@@ -498,6 +531,9 @@ export async function retrieveContext(
 ): Promise<string> {
 	if (opts.docIds.length === 0) return "";
 
+	const topK = opts.topK ?? 5;
+	const recallK = topK * RECALL_MULTIPLIER;
+
 	const embeddings = createEmbeddings(opts.env);
 	const store = createVectorStore(opts.vectorize, embeddings);
 
@@ -506,31 +542,51 @@ export async function retrieveContext(
 			? { docId: opts.docIds[0] }
 			: { docId: { $in: opts.docIds } };
 
+	// Stage 1: Broad vector recall (no score threshold — reranker decides quality)
 	let results: [Document, number][];
 	try {
-		results = await store.similaritySearchWithScore(
-			query,
-			opts.topK ?? 5,
-			filter,
-		);
+		results = await store.similaritySearchWithScore(query, recallK, filter);
 	} catch {
 		return "";
 	}
 
-	const matchedIds = results
-		.filter(([, score]) => score > 0.4)
-		.map(([doc]) => doc.metadata.id as string);
+	const candidateIds = results.map(([doc]) => doc.metadata.id as string);
+	if (candidateIds.length === 0) return "";
 
-	if (matchedIds.length === 0) return "";
-
+	// Fetch chunk content for all candidates
 	const rows = await opts.db
 		.select({ id: chunksTable.id, content: chunksTable.content })
 		.from(chunksTable)
-		.where(inArray(chunksTable.id, matchedIds));
+		.where(inArray(chunksTable.id, candidateIds));
 
 	const contentMap = new Map(rows.map((r) => [r.id, r.content]));
-	return matchedIds
-		.map((id) => contentMap.get(id))
-		.filter(Boolean)
-		.join("\n\n---\n\n");
+	// Preserve vector-search order for fallback
+	const orderedCandidates = candidateIds
+		.map((id) => ({ id, content: contentMap.get(id) ?? "" }))
+		.filter((c) => c.content);
+
+	if (orderedCandidates.length === 0) return "";
+
+	// Stage 2: Rerank (with graceful fallback to vector-only results)
+	try {
+		const ranked = await rerank(
+			query,
+			orderedCandidates.map((c) => c.content),
+			topK,
+			opts.env,
+		);
+		return ranked
+			.map((r) => orderedCandidates[r.index].content)
+			.join("\n\n---\n\n");
+	} catch (e) {
+		log.warn({
+			module: "rag",
+			msg: "rerank failed, falling back to vector scores",
+			error: (e as Error).message,
+		});
+		return orderedCandidates
+			.slice(0, topK)
+			.map((c) => c.content)
+			.join("\n\n---\n\n");
+	}
 }

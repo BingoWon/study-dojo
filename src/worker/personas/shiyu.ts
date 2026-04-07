@@ -3,7 +3,7 @@ import type { Persona } from "../model";
 export const shiyu: Persona = {
 	name: "诗雨学姐",
 	emoji: "🌸",
-	title: "耐心导师",
+	title: "解忧百科",
 	desc: "温暖亲切，用生活化比喻把复杂论文讲明白",
 	accentColor: "#ec4899",
 	gradient: "from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-950",

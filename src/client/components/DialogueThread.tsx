@@ -9,13 +9,9 @@ import {
 	useRef,
 	useState,
 } from "react";
-import {
-	buildDialogueTurnSchema,
-	EFFECTS,
-	type Effect,
-} from "../../shared/dialogue";
+import { buildDialogueTurnSchema } from "../../shared/dialogue";
 import type { PersonaId } from "../../worker/model";
-import { getPoses, PERSONAS } from "../../worker/model";
+import { getPoses, PERSONA_IDS, PERSONAS } from "../../worker/model";
 import { CharacterAvatar } from "../components/CharacterAvatar";
 import { SpeechActionBar } from "../components/SpeechActionBar";
 import { useTypewriter } from "../hooks/useTypewriter";
@@ -25,11 +21,13 @@ import {
 	ttsAdapter,
 } from "../lib/dialogue-tts";
 import { buildChatSummary, getActiveDocId } from "../lib/doc-context";
+import { triggerEffect } from "../lib/effects";
 import { ElevenLabsScribeAdapter } from "../lib/elevenlabs-scribe-adapter";
 import { getNextPlaceholder } from "../lib/greeting";
 import {
 	persistDialogueTurn,
 	setThreadPersona,
+	useAutoTTS,
 	usePersona,
 } from "../RuntimeProvider";
 
@@ -50,49 +48,6 @@ interface CompletedTurn {
 }
 
 type DisplayMode = "pose" | "avatar";
-
-// ── Visual Effects ─────────────────────────────────────────────────────────
-
-function isValidEffect(v: unknown): v is Effect {
-	return typeof v === "string" && (EFFECTS as readonly string[]).includes(v);
-}
-
-function triggerEffect(effect: unknown) {
-	if (!isValidEffect(effect)) return;
-	if (!effect) return;
-	const el = document.getElementById("dialogue-overlay");
-	if (!el) return;
-	switch (effect) {
-		case "screen-shake":
-			el.classList.add("animate-shake");
-			setTimeout(() => el.classList.remove("animate-shake"), 500);
-			break;
-		case "flash":
-			el.classList.add("animate-flash");
-			setTimeout(() => el.classList.remove("animate-flash"), 300);
-			break;
-		case "confetti":
-			spawnConfetti(el);
-			break;
-	}
-}
-
-function spawnConfetti(container: HTMLElement) {
-	const colors = ["#f59e0b", "#ef4444", "#3b82f6", "#10b981", "#a855f7"];
-	for (let i = 0; i < 30; i++) {
-		const dot = document.createElement("div");
-		dot.className = "confetti-particle";
-		dot.style.cssText = `
-			position:absolute;left:${50 + (Math.random() - 0.5) * 60}%;top:20%;
-			width:8px;height:8px;border-radius:50%;
-			background:${colors[i % colors.length]};
-			animation:confetti-fall ${0.8 + Math.random() * 0.6}s ease-out forwards;
-			pointer-events:none;z-index:50;
-		`;
-		container.appendChild(dot);
-		setTimeout(() => dot.remove(), 1500);
-	}
-}
 
 // ── Choice Button ──────────────────────────────────────────────────────────
 
@@ -130,7 +85,6 @@ export const DialogueThread: FC<{
 }> = ({ persona, onExit }) => {
 	const p = PERSONAS[persona];
 	const { setPersona } = usePersona();
-	const personaIds = Object.keys(PERSONAS) as PersonaId[];
 
 	const [turns, setTurns] = useState<CompletedTurn[]>([]);
 	const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
@@ -142,13 +96,7 @@ export const DialogueThread: FC<{
 			return "pose";
 		}
 	});
-	const [autoTTS, setAutoTTS] = useState(() => {
-		try {
-			return localStorage.getItem("settings:autoTTS") !== "false";
-		} catch {
-			return true;
-		}
-	});
+	const { autoTTS, setAutoTTS } = useAutoTTS();
 	const [customInput, setCustomInput] = useState("");
 	const [isDictating, setIsDictating] = useState(false);
 	const [isSpeaking, setIsSpeaking] = useState(false);
@@ -410,7 +358,7 @@ export const DialogueThread: FC<{
 					<span className="text-[10px] text-zinc-400 dark:text-zinc-500 mr-0.5">
 						切换角色：
 					</span>
-					{personaIds.map((id) => (
+					{PERSONA_IDS.map((id) => (
 						<button
 							key={id}
 							type="button"
@@ -538,7 +486,7 @@ export const DialogueThread: FC<{
 				{/* Auto TTS toggle */}
 				<button
 					type="button"
-					onClick={() => setAutoTTS((v) => !v)}
+					onClick={() => setAutoTTS(!autoTTS)}
 					className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
 						autoTTS
 							? "bg-purple-500/20 text-purple-500"
@@ -566,7 +514,7 @@ export const DialogueThread: FC<{
 							}
 						}}
 						placeholder={isDictating ? "正在听..." : inputPlaceholder}
-						disabled={isLoading || isDictating}
+						disabled={isDictating}
 						className="flex-1 px-4 py-2 text-sm bg-transparent outline-none
 							text-zinc-800 dark:text-zinc-200
 							placeholder:text-zinc-400 dark:placeholder:text-zinc-500
@@ -607,18 +555,18 @@ export const DialogueThread: FC<{
 	// ── Render ──
 
 	return (
-		<div id="dialogue-overlay" className="relative pointer-events-auto">
+		<div id="dialogue-overlay" className="relative">
 			{displayMode === "pose" ? (
 				// ── Pose Mode: pose+panel 3/4 width, centered at bottom ──
 				<div className="flex justify-center pb-0">
 					<div className="w-3/4 flex items-end">
-						{/* Character pose: h=2/3 screen, max-w=40% of container */}
-						<div className="shrink-0 h-[66dvh] max-w-[40%]">
+						{/* Character pose: h=2/3 screen, max-w=40%, pointer-events-none so transparent area doesn't block content behind */}
+						<div className="shrink-0 h-[66dvh] max-w-[40%] pointer-events-none">
 							<PoseImage persona={persona} pose={currentPose} />
 						</div>
 
 						{/* Dialogue panel: fills remaining width, max-h=50vh */}
-						<div className="flex-1 min-w-0 -ml-4 max-h-[50vh] overflow-y-auto pb-4">
+						<div className="flex-1 min-w-0 -ml-4 max-h-[50vh] overflow-y-auto pb-4 pointer-events-auto">
 							{dialoguePanel}
 						</div>
 					</div>
@@ -626,7 +574,7 @@ export const DialogueThread: FC<{
 			) : (
 				// ── Avatar Mode: centered, 60% width, avatar overflows top ──
 				<div className="flex justify-center pb-4 px-4">
-					<div className="relative w-3/5 min-w-[400px]">
+					<div className="relative w-3/5 min-w-[400px] pointer-events-auto">
 						{/* Avatar: bottom aligns with name text baseline, top 1/3 overflows above panel */}
 						<AvatarImage
 							persona={persona}

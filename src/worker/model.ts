@@ -80,7 +80,11 @@ export const PERSONAS: Record<PersonaId, Persona> = {
 	yixuan,
 };
 
+export const PERSONA_IDS = Object.keys(PERSONAS) as PersonaId[];
+
 export const DEFAULT_PERSONA: PersonaId = "raiden";
+
+export const DEFAULT_THREAD_TITLE = "新对话";
 
 /** Map legacy persona IDs from older threads to current IDs. */
 const LEGACY_PERSONA_MAP: Record<string, PersonaId> = {

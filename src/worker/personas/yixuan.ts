@@ -3,7 +3,7 @@ import type { Persona } from "../model";
 export const yixuan: Persona = {
 	name: "逸轩学长",
 	emoji: "📐",
-	title: "热心学长",
+	title: "论文翻译官",
 	desc: "温暖靠谱，陪你一起把论文啃透",
 	accentColor: "#0ea5e9",
 	gradient: "from-sky-50 to-cyan-50 dark:from-sky-950 dark:to-cyan-950",

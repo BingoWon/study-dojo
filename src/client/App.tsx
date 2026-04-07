@@ -614,7 +614,7 @@ const DialogueOverlay: FC<{
 	if (!dialogueMode.active) return null;
 
 	return (
-		<div className="fixed inset-x-0 bottom-0 z-30 animate-in slide-in-from-bottom-4 fade-in duration-300">
+		<div className="fixed inset-x-0 bottom-0 z-30 pointer-events-none animate-in slide-in-from-bottom-4 fade-in duration-300">
 			<DialogueThread persona={persona} onExit={exitDialogueMode} />
 		</div>
 	);

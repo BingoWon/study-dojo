@@ -36,6 +36,7 @@ import {
 	createModel,
 	createTitleModel,
 	DEFAULT_PERSONA,
+	DEFAULT_THREAD_TITLE,
 	getPoses,
 	getSystemPrompt,
 	PERSONAS,
@@ -141,9 +142,9 @@ app.post("/api/threads/:id/voice-messages", async (c) => {
 	}>();
 
 	if (msgs?.length) {
-		// Check if thread had any messages before saving (for title generation)
-		const existingMsgs = await getMessagesByThreadId(db, threadId);
-		const hadMessages = existingMsgs.length > 0;
+		// Check if thread still has default title (for title generation)
+		const thread = await getThread(db, threadId);
+		const needsTitle = !thread || thread.title === DEFAULT_THREAD_TITLE;
 
 		const now = Math.floor(Date.now() / 1000);
 		await saveMessages(
@@ -158,8 +159,8 @@ app.post("/api/threads/:id/voice-messages", async (c) => {
 		);
 		await touchThread(db, threadId, userId);
 
-		// Auto-generate title if this is the first content in the thread
-		if (!hadMessages) {
+		// Auto-generate title if thread still has default title
+		if (needsTitle) {
 			// biome-ignore lint/suspicious/noExplicitAny: wire format
 			maybeAutoTitle(c.executionCtx, c.env, db, threadId, userId, msgs as any);
 		}
@@ -260,7 +261,7 @@ app.post("/api/threads/:id/generate-title", async (c) => {
 	const { text } = await c.req
 		.json<{ text?: string }>()
 		.catch(() => ({ text: undefined }));
-	if (!text) return c.json({ title: "新对话" });
+	if (!text) return c.json({ title: DEFAULT_THREAD_TITLE });
 
 	const db = createDb(c.env.DB);
 	const threadId = c.req.param("id");
@@ -1033,7 +1034,7 @@ app.post("/api/dialogue", async (c) => {
 - pose 字段必须从以下选项中选择最贴切的姿态：${poses.join("、")}
 - choices 字段必须提供 1-3 个用户可能的回复选项，用第一人称口语化短句，像 RPG 对话选项；鼓励在选项开头使用 emoji 增加趣味
 - 保持角色一致性，每句话都要符合你的人设
-- preEffect / postEffect 是可选的视觉特效，仅在剧情高潮、惊喜、愤怒等强烈情绪时使用`;
+- preEffect / postEffect 是视觉特效，用于增强对话的戏剧性和趣味性。可选值：confetti（庆祝）、fireworks（烟花）、stars（星星）、hearts（爱心）、school-pride（双侧彩炮）、flash（闪光）、screen-shake（震动）、bomb（炸弹爆炸）、explosions（密集爆炸）、lightning（闪电）、vortex（漩涡）、glitch（故障）、rain（阴云下雨）、good-job（彩色文字庆祝）、panel-shake（对话框抖动）。积极使用这些特效来配合对话情绪和剧情节奏，不要吝啬使用`;
 
 		if (docContext) systemPrompt += docContext;
 		if (chatSummary)

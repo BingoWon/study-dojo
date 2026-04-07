@@ -1,6 +1,11 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { DEFAULT_PERSONA, isValidPersona, type PersonaId } from "./model";
+import {
+	DEFAULT_PERSONA,
+	DEFAULT_THREAD_TITLE,
+	isValidPersona,
+	type PersonaId,
+} from "./model";
 import { messages, threads } from "./schema";
 
 export function createDb(d1: D1Database) {
@@ -37,7 +42,7 @@ export async function ensureThread(
 		.values({
 			id,
 			userId,
-			title: "新对话",
+			title: DEFAULT_THREAD_TITLE,
 			persona:
 				opts?.persona && isValidPersona(opts.persona)
 					? opts.persona

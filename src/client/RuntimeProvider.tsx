@@ -28,6 +28,7 @@ import {
 } from "react";
 import {
 	DEFAULT_PERSONA,
+	DEFAULT_THREAD_TITLE,
 	PERSONAS,
 	type PersonaId,
 	resolvePersona,
@@ -290,7 +291,7 @@ const threadListAdapter: RemoteThreadListAdapter = {
 					.join(" ") ?? "";
 
 			if (!text) {
-				controller.appendText("新对话");
+				controller.appendText(DEFAULT_THREAD_TITLE);
 				return;
 			}
 

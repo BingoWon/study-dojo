@@ -39,7 +39,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { PERSONAS, type PersonaId } from "../worker/model";
+import { PERSONA_IDS, PERSONAS, type PersonaId } from "../worker/model";
 import { CharacterAvatar } from "./components/CharacterAvatar";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import type { Recipe } from "./components/RecipePanel";
@@ -117,10 +117,6 @@ const ComposerAttachment: FC = () => (
 		</AttachmentPrimitive.Remove>
 	</AttachmentPrimitive.Root>
 );
-
-// ── Persona card list (derived from single source of truth in PERSONAS) ─────
-
-const PERSONA_IDS: PersonaId[] = ["raiden", "keli", "shiyu", "yixuan"];
 
 // ── Persona Selection (replaces old ThreadWelcome) ──────────────────────────
 
