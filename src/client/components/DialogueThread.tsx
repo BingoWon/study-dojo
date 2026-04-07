@@ -18,7 +18,7 @@ import { DialogueTTSPlayer, ttsAdapter } from "../lib/dialogue-tts";
 import { ElevenLabsScribeAdapter } from "../lib/elevenlabs-scribe-adapter";
 import { getNextGreeting } from "../lib/greeting";
 
-// ── Voice input (shared scribe adapter instance for dialogue mode) ─────────
+// ── Voice input adapter (dialogue mode instance) ───────────────────────────
 
 const scribeAdapter = new ElevenLabsScribeAdapter({
 	tokenEndpoint: "/api/scribe-token",
@@ -86,53 +86,20 @@ const ChoiceButton: FC<{
 		type="button"
 		onClick={onClick}
 		disabled={disabled}
-		className="w-full text-left px-3 py-2 rounded-lg text-sm leading-relaxed
-			bg-white/40 dark:bg-zinc-800/40 backdrop-blur-sm
-			border border-zinc-200/60 dark:border-zinc-700/40
-			hover:bg-white/70 dark:hover:bg-zinc-700/60
-			hover:border-zinc-300 dark:hover:border-zinc-600
+		className="w-full text-left px-3 py-2 rounded-xl text-sm leading-relaxed
+			bg-white/30 dark:bg-white/5
+			border border-white/40 dark:border-white/10
+			hover:bg-white/50 dark:hover:bg-white/10
 			disabled:opacity-40 disabled:pointer-events-none
 			transition-all duration-200 cursor-pointer group"
 	>
 		<span className="inline-flex items-center gap-2">
-			<span className="shrink-0 w-5 h-5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-[10px] font-bold flex items-center justify-center text-zinc-500 dark:text-zinc-400 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-600 transition-colors">
+			<span className="shrink-0 w-5 h-5 rounded-full bg-white/40 dark:bg-white/10 text-[10px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300 group-hover:bg-white/60 dark:group-hover:bg-white/20 transition-colors">
 				{index + 1}
 			</span>
 			<span className="text-zinc-700 dark:text-zinc-200">{text}</span>
 		</span>
 	</button>
-);
-
-// ── Display Mode Toggle ────────────────────────────────────────────────────
-
-const DisplayModeToggle: FC<{
-	mode: DisplayMode;
-	onChange: (m: DisplayMode) => void;
-}> = ({ mode, onChange }) => (
-	<div className="flex items-center rounded-lg bg-black/10 dark:bg-white/10 p-0.5">
-		<button
-			type="button"
-			onClick={() => onChange("pose")}
-			className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors cursor-pointer ${
-				mode === "pose"
-					? "bg-white/80 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-					: "text-zinc-500 dark:text-zinc-400"
-			}`}
-		>
-			姿态
-		</button>
-		<button
-			type="button"
-			onClick={() => onChange("avatar")}
-			className={`px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors cursor-pointer ${
-				mode === "avatar"
-					? "bg-white/80 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-					: "text-zinc-500 dark:text-zinc-400"
-			}`}
-		>
-			头像
-		</button>
-	</div>
 );
 
 // ── Main Component (bottom overlay) ────────────────────────────────────────
@@ -188,7 +155,6 @@ export const DialogueThread: FC<{
 		schema,
 	});
 
-	// Keep last known pose so it doesn't flash to "neutral" between turns
 	const lastPoseRef = useRef("neutral");
 	if (object?.pose) lastPoseRef.current = object.pose;
 	const currentPose = lastPoseRef.current;
@@ -207,16 +173,14 @@ export const DialogueThread: FC<{
 			const userTurn: CompletedTurn = { role: "user", speech: userSpeech };
 			const newTurns = [...turns, userTurn];
 			setTurns(newTurns);
-			const history = newTurns.map((t) => ({
-				role: t.role,
-				speech: t.speech,
-			}));
-			submit({ history, persona });
+			submit({
+				history: newTurns.map((t) => ({ role: t.role, speech: t.speech })),
+				persona,
+			});
 		},
 		[turns, persona, submit],
 	);
 
-	// Show greeting as first assistant turn, then request LLM opening
 	const mountedRef = useRef(false);
 	useEffect(() => {
 		if (mountedRef.current) return;
@@ -230,12 +194,9 @@ export const DialogueThread: FC<{
 
 	useEffect(() => {
 		if (!autoTTS || !currentSpeech) return;
-		if (!ttsRef.current && currentSpeech.length > 0) {
+		if (!ttsRef.current && currentSpeech.length > 0)
 			ttsRef.current = new DialogueTTSPlayer(ttsAdapter.voiceParams);
-		}
-		if (ttsRef.current && isLoading) {
-			ttsRef.current.feedSpeech(currentSpeech);
-		}
+		if (ttsRef.current && isLoading) ttsRef.current.feedSpeech(currentSpeech);
 	}, [currentSpeech, isLoading, autoTTS]);
 
 	const wasLoadingRef = useRef(false);
@@ -243,12 +204,14 @@ export const DialogueThread: FC<{
 		if (wasLoadingRef.current && !isLoading && object?.speech) {
 			ttsRef.current?.flush(object.speech);
 			triggerEffect(object.postEffect as Effect | undefined);
-			const turn: CompletedTurn = {
-				role: "assistant",
-				pose: (object.pose as string) ?? "neutral",
-				speech: object.speech as string,
-			};
-			setTurns((prev) => [...prev, turn]);
+			setTurns((prev) => [
+				...prev,
+				{
+					role: "assistant",
+					pose: (object.pose as string) ?? "neutral",
+					speech: object.speech as string,
+				},
+			]);
 		}
 		wasLoadingRef.current = isLoading;
 	}, [isLoading, object]);
@@ -276,6 +239,7 @@ export const DialogueThread: FC<{
 
 	const handleExit = useCallback(() => {
 		ttsRef.current?.abort();
+		dictationRef.current?.cancel();
 		onExit();
 	}, [onExit]);
 
@@ -290,18 +254,15 @@ export const DialogueThread: FC<{
 		player.flush(speech);
 	}, [currentSpeech, turns]);
 
-	// ── Dictation (voice input via ElevenLabs Scribe) ──
+	// ── Dictation ──
 
 	const startDictation = useCallback(() => {
 		if (isDictating || isLoading) return;
-		// Abort any playing TTS when user starts speaking
 		ttsRef.current?.abort();
 		setIsDictating(true);
 		const session = scribeAdapter.listen();
 		dictationRef.current = session;
-		session.onSpeech((result) => {
-			setCustomInput(result.transcript);
-		});
+		session.onSpeech((result) => setCustomInput(result.transcript));
 		session.onSpeechEnd((result) => {
 			setIsDictating(false);
 			dictationRef.current = null;
@@ -318,122 +279,157 @@ export const DialogueThread: FC<{
 		dictationRef.current = null;
 	}, []);
 
-	// ── Shared sub-components ──
+	// ── Shared dialogue panel (glass card with all controls) ──
 
-	const speechBubble = (
-		<button
-			type="button"
-			className="w-full text-left rounded-xl px-4 py-3 text-sm leading-relaxed
-				bg-white/60 dark:bg-zinc-900/60 backdrop-blur-md
-				border border-zinc-200/40 dark:border-zinc-700/40
-				shadow-lg text-zinc-800 dark:text-zinc-200 cursor-pointer
-				hover:bg-white/80 dark:hover:bg-zinc-900/80 transition-colors"
-			onClick={handleManualSpeak}
-			title="点击朗读"
-		>
-			{displayedSpeech || (
-				<span className="text-zinc-400 dark:text-zinc-500 animate-pulse">
-					......
-				</span>
-			)}
-			{isLoading && displayedSpeech && (
-				<span className="inline-block w-0.5 h-4 bg-zinc-400 dark:bg-zinc-500 animate-pulse ml-0.5 align-text-bottom" />
-			)}
-		</button>
-	);
-
-	const choiceList = !isLoading && hasChoices && (
-		<div className="space-y-1.5">
-			{currentChoices?.map(
-				(c, i) =>
-					c && (
-						<ChoiceButton
-							key={c}
-							text={c}
-							index={i}
-							onClick={() => handleChoice(c)}
-							disabled={isLoading}
-						/>
-					),
-			)}
-		</div>
-	);
-
-	const inputBar = (
-		<div className="flex items-center gap-2">
-			<button
-				type="button"
-				onClick={isDictating ? stopDictation : startDictation}
-				disabled={isLoading && !isDictating}
-				className={`p-2 rounded-lg transition-all cursor-pointer shrink-0 ${
-					isDictating
-						? "bg-red-500 text-white animate-pulse"
-						: "bg-white/50 dark:bg-zinc-800/50 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-700/70"
-				} disabled:opacity-30 disabled:pointer-events-none`}
-				title={isDictating ? "停止录音" : "语音输入"}
-			>
-				<Mic className="w-4 h-4" />
-			</button>
-			<input
-				type="text"
-				value={customInput}
-				onChange={(e) => setCustomInput(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter" && !e.shiftKey) {
-						e.preventDefault();
-						handleCustomSubmit();
-					}
-				}}
-				placeholder={isDictating ? "正在听..." : "输入自定义回复..."}
-				disabled={isLoading || isDictating}
-				className="flex-1 px-3 py-2 rounded-lg text-sm
-					bg-white/50 dark:bg-zinc-800/50 backdrop-blur-sm
-					border border-zinc-200/50 dark:border-zinc-700/50
-					placeholder:text-zinc-400 dark:placeholder:text-zinc-500
-					focus:outline-none focus:ring-2 focus:ring-purple-500/30
-					disabled:opacity-50 transition-colors"
-			/>
-			<button
-				type="button"
-				onClick={handleCustomSubmit}
-				disabled={isLoading || isDictating || !customInput.trim()}
-				className="p-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900
-					hover:opacity-90 disabled:opacity-30 disabled:pointer-events-none
-					transition-opacity cursor-pointer"
-				title="发送"
-			>
-				<Send className="w-4 h-4" />
-			</button>
-		</div>
-	);
-
-	const toolbar = (
-		<div className="flex items-center gap-1.5">
-			<DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
-			<button
-				type="button"
-				onClick={() => setAutoTTS((v) => !v)}
-				className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-					autoTTS
-						? "text-purple-400 bg-purple-500/10"
-						: "text-zinc-400 hover:text-zinc-300 hover:bg-white/10"
-				}`}
-				title={autoTTS ? "关闭自动朗读" : "开启自动朗读"}
-			>
-				{autoTTS ? (
-					<Volume2 className="w-3.5 h-3.5" />
-				) : (
-					<VolumeOff className="w-3.5 h-3.5" />
-				)}
-			</button>
+	const dialoguePanel = (
+		<div className="dialogue-glass rounded-3xl p-4 space-y-3 relative">
+			{/* Close button */}
 			<button
 				type="button"
 				onClick={handleExit}
-				className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-300 hover:bg-white/10 transition-colors cursor-pointer"
+				className="absolute top-3 right-3 p-1.5 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white/30 dark:hover:bg-white/10 transition-colors cursor-pointer z-20"
 				title="退出剧情模式"
 			>
-				<X className="w-3.5 h-3.5" />
+				<X className="w-4 h-4" />
 			</button>
+
+			{/* Name + title */}
+			<div className="pr-8">
+				<span className="font-genshin text-lg text-zinc-900 dark:text-zinc-50 tracking-wide">
+					{p.name}
+				</span>
+				<span className="ml-2 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+					{p.title}
+				</span>
+			</div>
+
+			{/* Error */}
+			{error && (
+				<div className="px-3 py-2 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-xs">
+					{error.message}
+				</div>
+			)}
+
+			{/* Speech */}
+			<button
+				type="button"
+				className="w-full text-left rounded-xl px-4 py-3 text-sm leading-relaxed
+					bg-white/30 dark:bg-white/5
+					text-zinc-800 dark:text-zinc-200 cursor-pointer
+					hover:bg-white/40 dark:hover:bg-white/10 transition-colors"
+				onClick={handleManualSpeak}
+				title="点击朗读"
+			>
+				{displayedSpeech || (
+					<span className="text-zinc-400 dark:text-zinc-500 animate-pulse">
+						......
+					</span>
+				)}
+				{isLoading && displayedSpeech && (
+					<span className="inline-block w-0.5 h-4 bg-zinc-400 dark:bg-zinc-500 animate-pulse ml-0.5 align-text-bottom" />
+				)}
+			</button>
+
+			{/* Choices */}
+			{!isLoading && hasChoices && (
+				<div className="space-y-1.5">
+					{currentChoices?.map(
+						(c, i) =>
+							c && (
+								<ChoiceButton
+									key={c}
+									text={c}
+									index={i}
+									onClick={() => handleChoice(c)}
+									disabled={isLoading}
+								/>
+							),
+					)}
+				</div>
+			)}
+
+			{/* Input row: [mode toggle] [TTS toggle] [input field with mic inside] [send] */}
+			<div className="flex items-center gap-2">
+				{/* Mode toggle */}
+				<button
+					type="button"
+					onClick={() =>
+						setDisplayMode((m) => (m === "pose" ? "avatar" : "pose"))
+					}
+					className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+						bg-white/30 dark:bg-white/10 text-zinc-600 dark:text-zinc-300
+						hover:bg-white/50 dark:hover:bg-white/20 transition-colors cursor-pointer text-[10px] font-bold"
+					title={displayMode === "pose" ? "切换头像模式" : "切换姿态模式"}
+				>
+					{displayMode === "pose" ? "姿" : "像"}
+				</button>
+
+				{/* Auto TTS toggle */}
+				<button
+					type="button"
+					onClick={() => setAutoTTS((v) => !v)}
+					className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+						autoTTS
+							? "bg-purple-500/20 text-purple-500"
+							: "bg-white/30 dark:bg-white/10 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+					}`}
+					title={autoTTS ? "关闭自动朗读" : "开启自动朗读"}
+				>
+					{autoTTS ? (
+						<Volume2 className="w-3.5 h-3.5" />
+					) : (
+						<VolumeOff className="w-3.5 h-3.5" />
+					)}
+				</button>
+
+				{/* Input field with mic inside */}
+				<div className="flex-1 flex items-center rounded-full bg-white/40 dark:bg-white/10 border border-white/50 dark:border-white/15 focus-within:ring-2 focus-within:ring-purple-500/30 transition-all overflow-hidden">
+					<input
+						type="text"
+						value={customInput}
+						onChange={(e) => setCustomInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" && !e.shiftKey) {
+								e.preventDefault();
+								handleCustomSubmit();
+							}
+						}}
+						placeholder={isDictating ? "正在听..." : "输入回复..."}
+						disabled={isLoading || isDictating}
+						className="flex-1 px-4 py-2 text-sm bg-transparent outline-none
+							text-zinc-800 dark:text-zinc-200
+							placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+							disabled:opacity-50"
+					/>
+					<button
+						type="button"
+						onClick={isDictating ? stopDictation : startDictation}
+						disabled={isLoading && !isDictating}
+						className={`shrink-0 w-8 h-8 mr-1 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+							isDictating
+								? "bg-red-500 text-white animate-pulse"
+								: "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white/30 dark:hover:bg-white/10"
+						} disabled:opacity-30 disabled:pointer-events-none`}
+						title={isDictating ? "停止录音" : "语音输入"}
+					>
+						<Mic className="w-3.5 h-3.5" />
+					</button>
+				</div>
+
+				{/* Send */}
+				<button
+					type="button"
+					onClick={handleCustomSubmit}
+					disabled={isLoading || isDictating || !customInput.trim()}
+					className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+						bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900
+						hover:opacity-90 disabled:opacity-30 disabled:pointer-events-none
+						transition-opacity cursor-pointer"
+					title="发送"
+				>
+					<Send className="w-3.5 h-3.5" />
+				</button>
+			</div>
 		</div>
 	);
 
@@ -441,70 +437,40 @@ export const DialogueThread: FC<{
 
 	return (
 		<div id="dialogue-overlay" className="relative pointer-events-auto">
-			{error && (
-				<div className="mx-4 mb-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs">
-					{error.message}
-				</div>
-			)}
-
 			{displayMode === "pose" ? (
-				// ── Pose Mode: Hades 2 style — large character left, dialogue right ──
-				<div className="flex items-end gap-0 pb-0">
-					{/* Character pose — flush left+bottom, h=2/3 viewport, max-w=1/3 viewport */}
-					<div className="shrink-0 h-[66dvh] max-w-[33vw] relative z-10">
+				// ── Pose Mode: character left, glass panel right ──
+				<div className="flex items-end">
+					{/* Character pose: h=2/3 screen, max-w=1/3, flush left+bottom */}
+					<div className="shrink-0 h-[66dvh] max-w-[33vw]">
 						<PoseImage persona={persona} pose={currentPose} />
 					</div>
 
-					{/* Dialogue panel — right edge leaves 1/3 screen gap, max-h=50vh */}
+					{/* Dialogue panel: max-h=50vh, right margin=33vw */}
 					<div
-						className="min-w-0 -ml-4 space-y-2 pb-4 max-h-[50vh] overflow-y-auto"
+						className="-ml-4 max-h-[50vh] overflow-y-auto pb-4"
 						style={{ marginRight: "33vw" }}
 					>
-						{/* Name plate + toolbar */}
-						<div className="flex items-center justify-between ml-6">
-							<div>
-								<span className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
-									{p.name}
-								</span>
-								<span className="ml-2 text-[10px] text-zinc-500 dark:text-zinc-400">
-									{p.title}
-								</span>
-							</div>
-							{toolbar}
-						</div>
-
-						{speechBubble}
-						{choiceList}
-						{inputBar}
+						{dialoguePanel}
 					</div>
 				</div>
 			) : (
-				// ── Avatar Mode: Divinity style — compact avatar + dialogue ──
-				<div className="px-4 pb-4 space-y-2">
-					{/* Name + toolbar */}
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-3">
-							<CharacterAvatar
-								persona={persona}
-								pose={currentPose}
-								size="lg"
-								className="ring-2 ring-white/60 dark:ring-zinc-700/60 shadow-lg"
-							/>
-							<div>
-								<div className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
-									{p.name}
-								</div>
-								<div className="text-[10px] text-zinc-500 dark:text-zinc-400">
-									{p.title}
-								</div>
+				// ── Avatar Mode: centered, 50% width ──
+				<div className="flex justify-center pb-4 px-4">
+					<div className="w-1/2 max-h-[50vh] overflow-y-auto">
+						<div className="flex items-end gap-3">
+							{/* Avatar */}
+							<div className="shrink-0 mb-4">
+								<CharacterAvatar
+									persona={persona}
+									pose={currentPose}
+									size="lg"
+									className="ring-2 ring-white/60 dark:ring-zinc-700/60 shadow-lg"
+								/>
 							</div>
+							{/* Panel */}
+							<div className="flex-1 min-w-0">{dialoguePanel}</div>
 						</div>
-						{toolbar}
 					</div>
-
-					{speechBubble}
-					{choiceList}
-					{inputBar}
 				</div>
 			)}
 		</div>
