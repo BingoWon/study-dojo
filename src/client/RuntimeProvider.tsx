@@ -469,7 +469,7 @@ function useMyRuntime() {
 				headers: {
 					"Content-Type": "application/json",
 					"x-persona": persona,
-					"x-doc-title": getActiveDocTitle() ?? "",
+					"x-doc-title": encodeURIComponent(getActiveDocTitle() ?? ""),
 					"x-mode": "dialogue",
 				},
 				body: JSON.stringify({ messages: [msg] }),
@@ -668,7 +668,7 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 					headers: {
 						"Content-Type": "application/json",
 						"x-persona": persona,
-						"x-doc-title": getActiveDocTitle() ?? "",
+						"x-doc-title": encodeURIComponent(getActiveDocTitle() ?? ""),
 						"x-mode": "voice",
 					},
 					body: JSON.stringify({ messages: [separator, ...converted] }),

@@ -75,7 +75,8 @@ threads.post("/:id/voice-messages", async (c) => {
 	const db = createDb(c.env.DB);
 	const threadId = c.req.param("id");
 	const persona = c.req.header("x-persona") || DEFAULT_PERSONA;
-	const docTitle = c.req.header("x-doc-title") || undefined;
+	const rawDocTitle = c.req.header("x-doc-title") || undefined;
+	const docTitle = rawDocTitle ? decodeURIComponent(rawDocTitle) : undefined;
 	const mode = c.req.header("x-mode") || undefined;
 	const resolvedPersona = resolvePersona(persona);
 	await ensureThread(db, threadId, userId, {
