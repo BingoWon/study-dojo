@@ -569,16 +569,15 @@ const DocViewerWithVoice: FC<{
 	const { voiceMode, enterVoiceMode, exitVoiceMode } = useVoiceMode();
 	const { dialogueMode, enterDialogueMode, exitDialogueMode } =
 		useDialogueMode();
-	const voiceActive = voiceMode.active && voiceMode.docId === doc.id;
 
 	return (
 		<DocumentViewer
 			docId={doc.id}
 			{...rest}
 			onVoiceRead={() =>
-				voiceActive ? exitVoiceMode() : enterVoiceMode(doc.id, doc.title)
+				voiceMode.active ? exitVoiceMode() : enterVoiceMode()
 			}
-			isVoiceActive={voiceActive}
+			isVoiceActive={voiceMode.active}
 			onDialogue={() =>
 				dialogueMode.active ? exitDialogueMode() : enterDialogueMode()
 			}
@@ -634,10 +633,10 @@ const RightPanel: FC<{
 }> = (props) => {
 	const { voiceMode, exitVoiceMode } = useVoiceMode();
 
-	if (voiceMode.active && voiceMode.docTitle) {
+	if (voiceMode.active) {
 		return (
 			<VoiceThread
-				docTitle={voiceMode.docTitle}
+				docTitle={voiceMode.docTitle ?? "语音伴读"}
 				systemPrompt={voiceMode.systemPrompt ?? ""}
 				onExit={(msgs) => exitVoiceMode(msgs)}
 			/>

@@ -121,9 +121,11 @@ app.post("/api/threads/:id/voice-messages", async (c) => {
 	if (!userId) return c.json({ error: "未授权" }, 401);
 	const db = createDb(c.env.DB);
 	const threadId = c.req.param("id");
-	const thread = await getThread(db, threadId);
-	if (!thread || thread.userId !== userId)
-		return c.json({ error: "未找到" }, 404);
+	const persona = c.req.header("x-persona") || DEFAULT_PERSONA;
+	// Ensure thread exists (dialogue mode may enter before any /api/chat call)
+	await ensureThread(db, threadId, userId, {
+		persona: resolvePersona(persona),
+	});
 
 	const { messages: msgs } = await c.req.json<{
 		messages: { id: string; role: string; parts: unknown[] }[];
@@ -951,10 +953,18 @@ app.post("/api/dialogue", async (c) => {
 		const userId = await requireUserId(c);
 		if (!userId) return c.json({ error: "未授权" }, 401);
 
-		const { history, persona: personaRaw } = await c.req.json<{
-			history: DialogueHistoryEntry[];
-			persona: string;
-		}>();
+		const body = await c.req.json<Record<string, unknown>>();
+		log.info({
+			module: "dialogue",
+			msg: "request",
+			hasActiveDocId: !!body.activeDocId,
+			hasChatSummary: !!body.chatSummary,
+			personaRaw: body.persona,
+		});
+		const history = (body.history ?? []) as DialogueHistoryEntry[];
+		const personaRaw = (body.persona ?? DEFAULT_PERSONA) as string;
+		const activeDocId = body.activeDocId as string | undefined;
+		const chatSummary = body.chatSummary as string | undefined;
 
 		const persona = resolvePersona(personaRaw);
 		const p = PERSONAS[persona];
@@ -963,8 +973,43 @@ app.post("/api/dialogue", async (c) => {
 		// Build dynamic schema with persona-specific poses
 		const schema = buildDialogueTurnSchema(poses as [string, ...string[]]);
 
+		// Fetch active document content for context injection
+		let docContext = "";
+		if (activeDocId && userId) {
+			try {
+				const db = createDb(c.env.DB);
+				log.info({
+					module: "dialogue",
+					msg: "fetching doc",
+					activeDocId,
+					userId,
+				});
+				const md = await getDocumentMarkdown(activeDocId, {
+					db,
+					r2: c.env.R2,
+					userId,
+				});
+				log.info({
+					module: "dialogue",
+					msg: "doc result",
+					hasContent: !!md,
+					length: md?.length ?? 0,
+				});
+				if (md) {
+					const truncated = md.slice(0, 12000);
+					docContext = `\n\n# 正在阅读的文档\n\n${truncated}`;
+				}
+			} catch (e) {
+				log.error({
+					module: "dialogue",
+					msg: "doc fetch error",
+					error: String(e),
+				});
+			}
+		}
+
 		// Build dialogue system prompt
-		const systemPrompt = `${p.prompt}
+		let systemPrompt = `${p.prompt}
 
 # 剧情对话模式规则
 - 你正在与用户进行角色扮演式的剧情对话
@@ -974,6 +1019,19 @@ app.post("/api/dialogue", async (c) => {
 - choices 字段必须提供 1-3 个用户可能的回复选项，引导对话走向不同方向
 - 保持角色一致性，每句话都要符合你的人设
 - preEffect / postEffect 是可选的视觉特效，仅在剧情高潮、惊喜、愤怒等强烈情绪时使用`;
+
+		if (docContext) systemPrompt += docContext;
+		if (chatSummary)
+			systemPrompt += `\n\n# 之前的文字对话记录（供参考）\n${chatSummary}`;
+
+		log.info({
+			module: "dialogue",
+			msg: "prompt built",
+			promptLength: systemPrompt.length,
+			hasDocContext: !!docContext,
+			hasChatSummary: !!chatSummary,
+			historyLength: history.length,
+		});
 
 		const messages = history.map((entry) => ({
 			role: entry.role as "user" | "assistant",
