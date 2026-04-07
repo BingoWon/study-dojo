@@ -271,7 +271,7 @@ export const DocumentsPanel: FC<{
 			>
 				<Upload className="w-5 h-5 text-zinc-400" />
 				<span className="text-xs text-zinc-500 dark:text-zinc-400">
-					拖拽、点击或粘贴上传
+					拖拽、点击或粘贴上传（支持多选）
 				</span>
 				<span className="text-[10px] text-zinc-400 dark:text-zinc-600">
 					PDF · 图片 · TXT · MD · DOC/DOCX

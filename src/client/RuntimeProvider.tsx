@@ -408,7 +408,8 @@ function useMyRuntime() {
 					// Consume pending persona switch: prepend marker to last user message text
 					const ps = pendingPersonaSwitch;
 					if (!ps || req.trigger !== "submit-message") {
-						return { body: { ...req.body } };
+						// No-op: let SDK compose default body (must include body to satisfy types)
+						return { body: { messages: req.messages } };
 					}
 					pendingPersonaSwitch = null;
 					const prefix = `[🔄 角色切换：${ps.from} → ${ps.to}]\n`;
