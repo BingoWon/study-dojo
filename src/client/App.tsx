@@ -1,8 +1,8 @@
 import { useAuiState } from "@assistant-ui/react";
 import { Show, SignInButton, SignUpButton } from "@clerk/react";
 import {
+	BookOpen,
 	Check,
-	ChefHat,
 	Copy,
 	Globe,
 	Languages,
@@ -17,11 +17,6 @@ import { DialogueThread } from "./components/DialogueThread";
 import { Divider } from "./components/Divider";
 import { DocumentViewer } from "./components/DocumentViewer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import {
-	INITIAL_RECIPE,
-	type Recipe,
-	RecipePanel,
-} from "./components/RecipePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import {
 	type SidebarTab,
@@ -61,13 +56,10 @@ type OpenDoc = {
 };
 
 function App() {
-	const [recipe, setRecipe] = useState<Recipe>(INITIAL_RECIPE);
-	const [changedKeys, setChangedKeys] = useState<string[]>([]);
-	const [isAiLoading, setIsAiLoading] = useState(false);
 	const [sidebarTab, setSidebarTab] = useState<SidebarTab>("chat");
 	// Active tab & open docs — persisted in sessionStorage
 	const [activeTab, setActiveTab] = useState<string>(() =>
-		ssRead("center:activeTab", "recipe"),
+		ssRead("center:activeTab", ""),
 	);
 	const [openDocs, setOpenDocs] = useState<OpenDoc[]>(() =>
 		ssRead("center:openDocs", []),
@@ -76,25 +68,10 @@ function App() {
 
 	useEffect(() => ssWrite("center:activeTab", activeTab), [activeTab]);
 	useEffect(() => ssWrite("center:openDocs", openDocs), [openDocs]);
-	const improveRef = useRef<(() => void) | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const layout = useResizableLayout(containerRef);
 
 	const activeDoc = openDocs.find((d) => d.id === activeTab) ?? null;
-
-	const handleRecipeUpdate = useCallback((partial: Partial<Recipe>) => {
-		setRecipe((prev) => {
-			const next = { ...prev, ...partial };
-			const keys = Object.keys(partial);
-			setChangedKeys(keys);
-			setTimeout(() => setChangedKeys([]), 2000);
-			return next;
-		});
-	}, []);
-
-	const handleImprove = useCallback(() => {
-		improveRef.current?.();
-	}, []);
 
 	const handleDocSelect = useCallback(
 		(
@@ -120,13 +97,13 @@ function App() {
 			// If closing the active tab, fall back
 			setActiveTab((cur) => {
 				if (cur !== docId) return cur;
-				// Find next tab: prefer right neighbor, then left, then recipe
+				// Find next tab: prefer right neighbor, then left, then empty
 				const idx = openDocs.findIndex((d) => d.id === docId);
 				if (openDocs.length > 1) {
 					const next = openDocs[idx + 1] ?? openDocs[idx - 1];
 					return next.id;
 				}
-				return "recipe";
+				return "";
 			});
 		},
 		[openDocs],
@@ -317,20 +294,6 @@ function App() {
 							{/* Tab bar */}
 							<div className="flex items-center justify-between px-3 pt-2 pb-2 border-b border-divider dark:border-divider-dark flex-shrink-0">
 								<div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
-									{/* Recipe tab (pinned) */}
-									<button
-										type="button"
-										onClick={() => setActiveTab("recipe")}
-										className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer shrink-0 ${
-											activeTab === "recipe"
-												? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
-												: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-										}`}
-									>
-										<ChefHat className="w-3.5 h-3.5" />
-										食谱
-									</button>
-
 									{/* Document tabs */}
 									{openDocs.map((doc) => {
 										const isActive = activeTab === doc.id;
@@ -439,15 +402,17 @@ function App() {
 							</div>
 
 							{/* 内容区 */}
-							{activeTab === "recipe" && (
-								<div className="flex-1 overflow-y-auto flex items-start justify-center py-8 px-4">
-									<RecipePanel
-										recipe={recipe}
-										onUpdate={handleRecipeUpdate}
-										isLoading={isAiLoading}
-										changedKeys={changedKeys}
-										onImprove={handleImprove}
-									/>
+							{!activeDoc && (
+								<div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">
+									<div className="text-zinc-300 dark:text-zinc-700">
+										<BookOpen className="w-12 h-12 mx-auto" />
+									</div>
+									<p className="text-sm text-zinc-400 dark:text-zinc-500">
+										暂无打开的文档
+									</p>
+									<p className="text-xs text-zinc-400/60 dark:text-zinc-500/60 max-w-[260px] leading-relaxed">
+										在左侧文档栏上传文档并打开，即可在这里与喜欢的角色进入语音伴读和剧情模式讨论文档
+									</p>
 								</div>
 							)}
 							{activeDoc && (
@@ -486,14 +451,8 @@ function App() {
 							<div className="h-full min-w-[280px]">
 								<ErrorBoundary>
 									<RightPanel
-										recipe={recipe}
-										onRecipeUpdate={handleRecipeUpdate}
 										onDocSelect={handleDocSelect}
 										onHighlight={handleHighlight}
-										onLoadingChange={setIsAiLoading}
-										registerImprove={(fn) => {
-											improveRef.current = fn;
-										}}
 									/>
 								</ErrorBoundary>
 							</div>
@@ -623,8 +582,6 @@ const DialogueOverlay: FC<{
 // ── Right Panel (switches between Chat and VoiceThread) ─────────────────────
 
 const RightPanel: FC<{
-	recipe: Recipe;
-	onRecipeUpdate: (partial: Partial<Recipe>) => void;
 	onDocSelect?: (
 		docId: string,
 		title: string,
@@ -632,8 +589,6 @@ const RightPanel: FC<{
 		fileExt?: string | null,
 	) => void;
 	onHighlight?: (action: HighlightAction) => void;
-	onLoadingChange?: (loading: boolean) => void;
-	registerImprove?: (fn: () => void) => void;
 }> = (props) => {
 	const { voiceMode, exitVoiceMode } = useVoiceMode();
 
@@ -648,14 +603,7 @@ const RightPanel: FC<{
 	}
 
 	return (
-		<Chat
-			recipe={props.recipe}
-			onRecipeUpdate={props.onRecipeUpdate}
-			onDocSelect={props.onDocSelect}
-			onHighlight={props.onHighlight}
-			onLoadingChange={props.onLoadingChange}
-			registerImprove={props.registerImprove}
-		/>
+		<Chat onDocSelect={props.onDocSelect} onHighlight={props.onHighlight} />
 	);
 };
 

@@ -12,7 +12,6 @@ import { formatMemoriesForPrompt, searchMemories } from "../memory";
 import {
 	createModel,
 	DEFAULT_PERSONA,
-	DEFAULT_THREAD_TITLE,
 	getSystemPrompt,
 	resolvePersona,
 } from "../model";
@@ -22,7 +21,6 @@ import {
 	createExaTools,
 	createMemoryTool,
 	hitlTools,
-	staticTools,
 } from "../tools";
 import { maybeAutoTitle, requireUserId, type WireMessage } from "./helpers";
 
@@ -192,13 +190,13 @@ chat.post("/", async (c) => {
 
 		const userMessages = prepared.filter((m: WireMessage) => m.role === "user");
 		if (threadId && userId && userMessages.length === 1) {
-			// biome-ignore lint/suspicious/noExplicitAny: wire format
 			maybeAutoTitle(
 				c.executionCtx,
 				c.env,
 				db,
 				threadId,
 				userId,
+				// biome-ignore lint/suspicious/noExplicitAny: wire format
 				userMessages as any,
 			);
 		}
@@ -212,7 +210,6 @@ chat.post("/", async (c) => {
 						system: systemPrompt,
 						messages: modelMessages,
 						tools: {
-							...staticTools,
 							...hitlTools,
 							...exaTools,
 							...memoryTools,
@@ -240,6 +237,7 @@ chat.post("/", async (c) => {
 											return {
 												type: `tool-${c.toolName}`,
 												toolCallId: c.toolCallId,
+												// biome-ignore lint/suspicious/noExplicitAny: ToolCallPart wire format
 												input: (c as any).args,
 											};
 										return c;

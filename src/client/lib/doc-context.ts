@@ -8,7 +8,7 @@ export function getActiveDocId(): string | undefined {
 	try {
 		const raw = sessionStorage.getItem("center:activeTab");
 		const activeTab = raw ? JSON.parse(raw) : "";
-		return activeTab && activeTab !== "recipe" ? activeTab : undefined;
+		return activeTab || undefined;
 	} catch {
 		return undefined;
 	}

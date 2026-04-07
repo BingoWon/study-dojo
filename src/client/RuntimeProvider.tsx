@@ -42,7 +42,6 @@ import {
 import { HighlightDocToolUI } from "./components/tools/HighlightDocToolUI";
 import { OpenDocToolUI } from "./components/tools/OpenDocToolUI";
 import { ReadDocToolUI } from "./components/tools/ReadDocToolUI";
-import { RecipeToolUI } from "./components/tools/RecipeToolUI";
 import { SaveMemoryToolUI } from "./components/tools/SaveMemoryToolUI";
 import { SearchToolUI } from "./components/tools/SearchToolUI";
 import {
@@ -684,7 +683,6 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 							<OpenDocToolUI />
 							<HighlightDocToolUI />
 							<ReadDocToolUI />
-							<RecipeToolUI />
 							<SaveMemoryToolUI />
 							{children}
 						</AssistantRuntimeProvider>

@@ -43,19 +43,12 @@ import { CharacterAvatar } from "./components/CharacterAvatar";
 import { ModeButtons } from "./components/ModeButtons";
 import { ReasoningPart } from "./components/message/ReasoningPart";
 import { PersonaSelect } from "./components/PersonaSelect";
-import type { Recipe } from "./components/RecipePanel";
 import { ToolCallFallback } from "./components/tools/ToolCallFallback";
 import { Button } from "./components/ui/button";
 import { MarkdownText } from "./components/ui/markdown-text";
 import { TooltipIconButton } from "./components/ui/tooltip-icon-button";
 import { getNextPlaceholder } from "./lib/greeting";
 import { setThreadPersona, useAutoTTS, usePersona } from "./RuntimeProvider";
-
-// ── Recipe Update Context ────────────────────────────────────────────────────
-
-export const RecipeUpdateCtx = createContext<
-	((data: Partial<Recipe>) => void) | null
->(null);
 
 // ── Document Select Context ─────────────────────────────────────────────────
 
@@ -557,15 +550,10 @@ const BranchPicker: FC<{ className?: string }> = ({ className }) => (
 // ── Main Chat ─────────────────────────────────────────────────────────────────
 
 export function Chat({
-	recipe,
-	onRecipeUpdate,
 	onDocSelect,
 	onHighlight,
 	onLoadingChange,
-	registerImprove,
 }: {
-	recipe: Recipe;
-	onRecipeUpdate: (partial: Partial<Recipe>) => void;
 	onDocSelect?: (
 		docId: string,
 		title: string,
@@ -574,104 +562,87 @@ export function Chat({
 	) => void;
 	onHighlight?: (action: HighlightAction) => void;
 	onLoadingChange?: (loading: boolean) => void;
-	registerImprove?: (fn: () => void) => void;
 }) {
-	const aui = useAui();
 	const isRunning = useAuiState((s) => s.thread.isRunning);
 
 	useEffect(() => {
 		onLoadingChange?.(isRunning);
 	}, [isRunning, onLoadingChange]);
 
-	useEffect(() => {
-		if (!registerImprove) return;
-		registerImprove(() => {
-			const recipeCtx = `当前食谱状态：${JSON.stringify(recipe)}`;
-			aui.thread().append({
-				role: "user",
-				content: [
-					{ type: "text", text: `请优化这个食谱，让它更好。${recipeCtx}` },
-				],
-			});
-		});
-	}, [registerImprove, recipe, aui]);
-
 	return (
-		<RecipeUpdateCtx value={onRecipeUpdate}>
-			<DocSelectCtx value={onDocSelect ?? null}>
-				<HighlightCtx value={onHighlight ?? null}>
-					<ThreadPrimitive.Root
-						className="flex h-full flex-col text-sm"
-						style={
-							{
-								"--thread-max-width": "44rem",
-							} as React.CSSProperties
-						}
+		<DocSelectCtx value={onDocSelect ?? null}>
+			<HighlightCtx value={onHighlight ?? null}>
+				<ThreadPrimitive.Root
+					className="flex h-full flex-col text-sm"
+					style={
+						{
+							"--thread-max-width": "44rem",
+						} as React.CSSProperties
+					}
+				>
+					<ThreadPrimitive.Viewport
+						turnAnchor="top"
+						className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto scroll-smooth px-4 pt-4"
 					>
-						<ThreadPrimitive.Viewport
-							turnAnchor="top"
-							className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto scroll-smooth px-4 pt-4"
+						{/* Loading → spinner */}
+						<AuiIf condition={(s) => s.thread.isEmpty && s.thread.isLoading}>
+							<div className="flex flex-1 items-center justify-center">
+								<Loader2 className="h-5 w-5 animate-spin text-zinc-300 dark:text-zinc-600" />
+							</div>
+						</AuiIf>
+						{/* Loaded but empty with remoteId → orphaned thread */}
+						<AuiIf
+							condition={(s) =>
+								s.thread.isEmpty &&
+								!s.thread.isLoading &&
+								!!s.threadListItem.remoteId
+							}
 						>
-							{/* Loading → spinner */}
-							<AuiIf condition={(s) => s.thread.isEmpty && s.thread.isLoading}>
-								<div className="flex flex-1 items-center justify-center">
-									<Loader2 className="h-5 w-5 animate-spin text-zinc-300 dark:text-zinc-600" />
+							<div className="flex flex-1 flex-col items-center justify-center gap-2 text-center px-8">
+								<div className="text-sm text-zinc-500 dark:text-zinc-400">
+									该对话没有消息记录
 								</div>
-							</AuiIf>
-							{/* Loaded but empty with remoteId → orphaned thread */}
-							<AuiIf
-								condition={(s) =>
+								<div className="text-xs text-zinc-400 dark:text-zinc-500">
+									可能是之前的操作异常导致，请开启新对话
+								</div>
+							</div>
+						</AuiIf>
+						{/* New thread → persona selection */}
+						<AuiIf
+							condition={(s) =>
+								s.thread.isEmpty &&
+								!s.thread.isLoading &&
+								!s.threadListItem.remoteId
+							}
+						>
+							<PersonaSelect />
+						</AuiIf>
+
+						<ThreadPrimitive.Messages
+							components={{
+								UserMessage,
+								EditComposer,
+								AssistantMessage,
+							}}
+						/>
+
+						<AuiIf
+							condition={(s) =>
+								!(
 									s.thread.isEmpty &&
 									!s.thread.isLoading &&
 									!!s.threadListItem.remoteId
-								}
-							>
-								<div className="flex flex-1 flex-col items-center justify-center gap-2 text-center px-8">
-									<div className="text-sm text-zinc-500 dark:text-zinc-400">
-										该对话没有消息记录
-									</div>
-									<div className="text-xs text-zinc-400 dark:text-zinc-500">
-										可能是之前的操作异常导致，请开启新对话
-									</div>
-								</div>
-							</AuiIf>
-							{/* New thread → persona selection */}
-							<AuiIf
-								condition={(s) =>
-									s.thread.isEmpty &&
-									!s.thread.isLoading &&
-									!s.threadListItem.remoteId
-								}
-							>
-								<PersonaSelect />
-							</AuiIf>
-
-							<ThreadPrimitive.Messages
-								components={{
-									UserMessage,
-									EditComposer,
-									AssistantMessage,
-								}}
-							/>
-
-							<AuiIf
-								condition={(s) =>
-									!(
-										s.thread.isEmpty &&
-										!s.thread.isLoading &&
-										!!s.threadListItem.remoteId
-									)
-								}
-							>
-								<ThreadPrimitive.ViewportFooter className="sticky bottom-0 mx-auto mt-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-gradient-to-t from-white via-white/90 dark:from-zinc-900 dark:via-zinc-900/90 to-transparent pb-4">
-									<ThreadScrollToBottom />
-									<Composer />
-								</ThreadPrimitive.ViewportFooter>
-							</AuiIf>
-						</ThreadPrimitive.Viewport>
-					</ThreadPrimitive.Root>
-				</HighlightCtx>
-			</DocSelectCtx>
-		</RecipeUpdateCtx>
+								)
+							}
+						>
+							<ThreadPrimitive.ViewportFooter className="sticky bottom-0 mx-auto mt-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-gradient-to-t from-white via-white/90 dark:from-zinc-900 dark:via-zinc-900/90 to-transparent pb-4">
+								<ThreadScrollToBottom />
+								<Composer />
+							</ThreadPrimitive.ViewportFooter>
+						</AuiIf>
+					</ThreadPrimitive.Viewport>
+				</ThreadPrimitive.Root>
+			</HighlightCtx>
+		</DocSelectCtx>
 	);
 }
