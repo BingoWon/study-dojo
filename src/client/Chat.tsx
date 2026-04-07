@@ -119,7 +119,7 @@ const PersonaSelect: FC = () => {
 	const { persona, setPersona } = usePersona();
 
 	return (
-		<div className="mx-auto my-auto flex w-full max-w-lg flex-grow flex-col items-center justify-center gap-6 px-4">
+		<div className="mx-auto my-auto flex w-full max-w-md flex-grow flex-col items-center justify-center gap-6 px-4">
 			<div className="text-center">
 				<div className="text-sm font-medium tracking-widest uppercase text-zinc-400 dark:text-zinc-500 mb-2">
 					选择你的导师
@@ -129,7 +129,7 @@ const PersonaSelect: FC = () => {
 				</div>
 			</div>
 
-			<div className="grid grid-cols-2 gap-3 w-full">
+			<div className="flex w-full flex-col gap-3">
 				{PERSONA_IDS.map((id) => {
 					const p = PERSONAS[id];
 					const selected = persona === id;
@@ -139,69 +139,53 @@ const PersonaSelect: FC = () => {
 							type="button"
 							onClick={() => setPersona(id)}
 							className={`
-								group relative rounded-2xl overflow-visible cursor-pointer
-								transition-all duration-300 ease-out
-								${selected ? "scale-[1.03]" : "hover:scale-[1.02]"}
+								group relative w-full flex items-center gap-4 rounded-2xl p-4 pl-5
+								bg-gradient-to-r ${p.gradient}
+								border-2 transition-all duration-300 cursor-pointer overflow-hidden
+								${
+									selected
+										? `${p.border} shadow-xl ${p.glow} scale-[1.02]`
+										: "border-transparent hover:border-zinc-200/80 dark:hover:border-zinc-700/60 hover:shadow-lg"
+								}
 							`}
 						>
-							{/* Card body */}
+							{/* Diagonal shimmer sweep (hover-triggered) */}
+							<div className={`shimmer-sweep ${selected ? "active" : ""}`} />
+
+							{/* Avatar — overflows top/bottom of card */}
 							<div
 								className={`
-									relative rounded-2xl pt-16 pb-3 px-3
-									bg-gradient-to-b ${p.gradient}
-									border-2 transition-all duration-300 overflow-hidden
-									${
-										selected
-											? `${p.border} shadow-xl ${p.glow}`
-											: "border-transparent hover:border-zinc-200/80 dark:hover:border-zinc-700/60 hover:shadow-lg"
-									}
+									relative -my-3 shrink-0
+									transition-all duration-300 ease-out z-10
+									${selected ? "scale-110 -translate-y-0.5 drop-shadow-lg" : "group-hover:scale-105"}
 								`}
 							>
-								{/* Shimmer overlay on selected */}
-								{selected && (
-									<div className="absolute inset-0 shimmer-border rounded-2xl pointer-events-none" />
-								)}
+								<CharacterAvatar persona={id} size="lg" />
+							</div>
 
-								{/* Character name + title */}
-								<div className="text-center relative z-10">
-									<div className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+							{/* Info */}
+							<div className="flex-1 text-left min-w-0 relative z-10">
+								<div className="flex items-center gap-2">
+									<span className="font-bold text-zinc-900 dark:text-zinc-100">
 										{p.name}
-									</div>
-									<div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+									</span>
+									<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
 										{p.title}
-									</div>
-									<p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-relaxed line-clamp-2">
-										{p.desc}
-									</p>
+									</span>
 								</div>
-
-								{/* Selection indicator dot */}
-								<div
-									className={`
-										absolute bottom-2 left-1/2 -translate-x-1/2
-										w-1.5 h-1.5 rounded-full transition-all duration-300
-										${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
-									`}
-									style={{ backgroundColor: p.accentColor }}
-								/>
+								<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+									{p.desc}
+								</p>
 							</div>
 
-							{/* Character pose — overflows above the card */}
+							{/* Selection dot */}
 							<div
 								className={`
-									absolute -top-12 left-1/2 -translate-x-1/2
-									w-24 h-28 pointer-events-none
-									transition-all duration-300 ease-out
-									${selected ? "-translate-y-1 drop-shadow-lg" : "group-hover:-translate-y-0.5"}
+									shrink-0 w-2 h-2 rounded-full transition-all duration-300 relative z-10
+									${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
 								`}
-							>
-								<img
-									src={`/characters/${id}/poses/neutral.webp`}
-									alt={p.name}
-									className="w-full h-full object-contain object-bottom"
-									draggable={false}
-								/>
-							</div>
+								style={{ backgroundColor: p.accentColor }}
+							/>
 						</button>
 					);
 				})}

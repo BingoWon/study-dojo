@@ -98,35 +98,46 @@ body {
 	background: rgba(255, 255, 255, 0.2);
 }
 
-/* ── Persona card shimmer ────────────────────────────────────────────────── */
+/* ── Persona card shimmer (diagonal light sweep on hover) ────────────────── */
 
-@keyframes shimmer {
+@keyframes shimmer-sweep {
 	0% {
-		background-position: -200% 0;
+		transform: translateX(-100%) rotate(-25deg);
 	}
 	100% {
-		background-position: 200% 0;
+		transform: translateX(200%) rotate(-25deg);
 	}
 }
-.shimmer-border {
+.shimmer-sweep {
+	position: absolute;
+	inset: -20%;
 	background: linear-gradient(
 		90deg,
 		transparent 0%,
-		rgba(255, 255, 255, 0.4) 50%,
+		rgba(255, 255, 255, 0.25) 45%,
+		rgba(255, 255, 255, 0.5) 50%,
+		rgba(255, 255, 255, 0.25) 55%,
 		transparent 100%
 	);
-	background-size: 200% 100%;
-	animation: shimmer 2.5s ease-in-out infinite;
+	transform: translateX(-100%) rotate(-25deg);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.2s;
 }
-.dark .shimmer-border {
+.dark .shimmer-sweep {
 	background: linear-gradient(
 		90deg,
 		transparent 0%,
-		rgba(255, 255, 255, 0.15) 50%,
+		rgba(255, 255, 255, 0.08) 45%,
+		rgba(255, 255, 255, 0.18) 50%,
+		rgba(255, 255, 255, 0.08) 55%,
 		transparent 100%
 	);
-	background-size: 200% 100%;
-	animation: shimmer 2.5s ease-in-out infinite;
+}
+.group:hover .shimmer-sweep,
+.shimmer-sweep.active {
+	opacity: 1;
+	animation: shimmer-sweep 0.8s ease-in-out;
 }
 
 /* ── Dialogue mode effects ───────────────────────────────────────────────── */
