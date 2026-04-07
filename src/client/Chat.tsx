@@ -129,7 +129,7 @@ const PersonaSelect: FC = () => {
 				</div>
 			</div>
 
-			<div className="flex w-full flex-col gap-6 pt-4">
+			<div className="flex w-full flex-col gap-7 pt-6">
 				{PERSONA_IDS.map((id) => {
 					const p = PERSONAS[id];
 					const selected = persona === id;
@@ -139,56 +139,64 @@ const PersonaSelect: FC = () => {
 							type="button"
 							onClick={() => setPersona(id)}
 							className={`
-								group relative w-full flex items-center gap-4 rounded-2xl p-4 pl-3
-								bg-gradient-to-r ${p.gradient}
-								border-2 transition-all duration-300 cursor-pointer overflow-visible
-								${
-									selected
-										? `${p.border} shadow-xl ${p.glow} scale-[1.02]`
-										: "border-transparent hover:border-zinc-200/80 dark:hover:border-zinc-700/60 hover:shadow-lg"
-								}
+								group relative w-full rounded-2xl overflow-visible cursor-pointer
+								transition-all duration-300
+								${selected ? "scale-[1.02]" : ""}
 							`}
 						>
-							{/* Shimmer sweep (clipped inside card) */}
-							<div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+							{/* Card body — pl-20 reserves space for the avatar area */}
+							<div
+								className={`
+									relative rounded-2xl py-4 pr-4 pl-20
+									bg-gradient-to-r ${p.gradient}
+									border-2 transition-all duration-300 overflow-hidden
+									${
+										selected
+											? `${p.border} shadow-xl ${p.glow}`
+											: "border-transparent group-hover:border-zinc-200/80 dark:group-hover:border-zinc-700/60 group-hover:shadow-lg"
+									}
+								`}
+							>
+								{/* Shimmer sweep */}
 								<div className={`shimmer-sweep ${selected ? "active" : ""}`} />
+
+								{/* Info */}
+								<div className="text-left min-w-0 relative z-10">
+									<div className="flex items-center gap-2">
+										<span className="font-bold text-zinc-900 dark:text-zinc-100">
+											{p.name}
+										</span>
+										<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
+											{p.title}
+										</span>
+									</div>
+									<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+										{p.desc}
+									</p>
+								</div>
+
+								{/* Selection dot */}
+								<div
+									className={`
+										absolute right-3 top-1/2 -translate-y-1/2
+										w-2 h-2 rounded-full transition-all duration-300
+										${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
+									`}
+									style={{ backgroundColor: p.accentColor }}
+								/>
 							</div>
 
-							{/* Avatar — no container, bottom flush with card bottom, top 1/3 overflows */}
+							{/* Avatar — absolute positioned, bottom flush with card bottom, top 1/3 overflows */}
 							<img
 								src={`/characters/${id}/avatars/neutral.webp`}
 								alt={p.name}
 								draggable={false}
 								className={`
-									relative shrink-0 w-14 h-14 -mt-7 self-end
-									object-cover object-top
-									transition-all duration-300 ease-out z-10 select-none
+									absolute left-3 bottom-0 w-16 h-16 z-10
+									object-cover select-none
+									transition-all duration-300 ease-out
 									${selected ? "scale-110 -translate-y-1 drop-shadow-xl" : "group-hover:scale-105 group-hover:-translate-y-0.5 drop-shadow-md"}
 								`}
-							/>
-
-							{/* Info */}
-							<div className="flex-1 text-left min-w-0 relative z-10">
-								<div className="flex items-center gap-2">
-									<span className="font-bold text-zinc-900 dark:text-zinc-100">
-										{p.name}
-									</span>
-									<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
-										{p.title}
-									</span>
-								</div>
-								<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-									{p.desc}
-								</p>
-							</div>
-
-							{/* Selection dot */}
-							<div
-								className={`
-									shrink-0 w-2 h-2 rounded-full transition-all duration-300 relative z-10
-									${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
-								`}
-								style={{ backgroundColor: p.accentColor }}
 							/>
 						</button>
 					);
