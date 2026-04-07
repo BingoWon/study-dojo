@@ -138,7 +138,7 @@ const PersonaSelect: FC = () => {
 				</div>
 			</div>
 
-			<div className="flex w-full flex-col gap-10 pt-8">
+			<div className="flex w-full flex-col gap-8 pt-8">
 				{PERSONA_IDS.map((id) => {
 					const p = PERSONAS[id];
 					const selected = persona === id;
@@ -215,8 +215,12 @@ const PersonaSelect: FC = () => {
 				})}
 			</div>
 
+			<div className="w-full pt-4">
+				<ModeButtons variant="card" />
+			</div>
+
 			<p className="text-[11px] text-zinc-400 dark:text-zinc-600 text-center">
-				在下方输入消息开始对话 · 输入框左下角可随时切换角色
+				在下方输入消息开始文字对话 · 输入框左下角可随时切换角色和模式
 			</p>
 		</div>
 	);
@@ -362,39 +366,74 @@ const AutoTTSToggle: FC = () => {
 	);
 };
 
-const VoiceModeButton: FC = () => {
+/** Shared mode entry buttons — `compact` for composer bar, `card` for persona panel. */
+const ModeButtons: FC<{ variant?: "compact" | "card" }> = ({
+	variant = "compact",
+}) => {
 	const { enterVoiceMode } = useVoiceMode();
-	return (
-		<button
-			type="button"
-			onClick={() => enterVoiceMode()}
-			className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
-				text-zinc-400 dark:text-zinc-500 transition-all
-				hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:text-purple-600 dark:hover:text-purple-400
-				active:scale-95 cursor-pointer"
-			title="语音伴读"
-		>
-			<Mic className="h-3.5 w-3.5" />
-			语音
-		</button>
-	);
-};
-
-const DialogueModeButton: FC = () => {
 	const { enterDialogueMode } = useDialogueMode();
+	const threadId = useAuiState(
+		(s) => s.threadListItem.remoteId as string | undefined,
+	);
+
+	if (variant === "card") {
+		return (
+			<div className="flex w-full gap-3">
+				<button
+					type="button"
+					onClick={() => enterVoiceMode(threadId)}
+					className="group relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+						bg-purple-50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40
+						text-purple-600 dark:text-purple-400 text-xs font-semibold
+						transition-all hover:shadow-lg hover:shadow-purple-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer overflow-hidden"
+				>
+					<div className="shimmer-sweep group-hover:active" />
+					<Mic className="h-3.5 w-3.5 relative z-10" />
+					<span className="relative z-10">语音伴读</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => enterDialogueMode(threadId)}
+					className="group relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+						bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40
+						text-amber-600 dark:text-amber-400 text-xs font-semibold
+						transition-all hover:shadow-lg hover:shadow-amber-500/10 hover:scale-[1.02] active:scale-[0.98] cursor-pointer overflow-hidden"
+				>
+					<div className="shimmer-sweep group-hover:active" />
+					<Sparkles className="h-3.5 w-3.5 relative z-10" />
+					<span className="relative z-10">剧情伴读</span>
+				</button>
+			</div>
+		);
+	}
+
 	return (
-		<button
-			type="button"
-			onClick={enterDialogueMode}
-			className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
-				text-zinc-400 dark:text-zinc-500 transition-all
-				hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400
-				active:scale-95 cursor-pointer"
-			title="剧情伴读"
-		>
-			<Sparkles className="h-3.5 w-3.5" />
-			剧情
-		</button>
+		<>
+			<button
+				type="button"
+				onClick={() => enterVoiceMode(threadId)}
+				className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
+					text-zinc-400 dark:text-zinc-500 transition-all
+					hover:bg-purple-50 dark:hover:bg-purple-950/30 hover:text-purple-600 dark:hover:text-purple-400
+					active:scale-95 cursor-pointer"
+				title="语音伴读"
+			>
+				<Mic className="h-3.5 w-3.5" />
+				语音
+			</button>
+			<button
+				type="button"
+				onClick={() => enterDialogueMode(threadId)}
+				className="flex h-7 shrink-0 items-center gap-1 px-2.5 rounded-full text-[11px] font-medium
+					text-zinc-400 dark:text-zinc-500 transition-all
+					hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 dark:hover:text-amber-400
+					active:scale-95 cursor-pointer"
+				title="剧情伴读"
+			>
+				<Sparkles className="h-3.5 w-3.5" />
+				剧情
+			</button>
+		</>
 	);
 };
 
@@ -404,8 +443,7 @@ const ComposerAction: FC = () => (
 		<div className="flex items-center gap-1">
 			<PersonaSwitcher />
 			<div className="ml-1 flex items-center gap-0.5">
-				<VoiceModeButton />
-				<DialogueModeButton />
+				<ModeButtons />
 			</div>
 		</div>
 

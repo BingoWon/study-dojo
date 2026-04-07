@@ -24,6 +24,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import {
 	DEFAULT_PERSONA,
@@ -81,7 +82,7 @@ export interface VoiceModeState {
 
 const VoiceModeCtx = createContext<{
 	voiceMode: VoiceModeState;
-	enterVoiceMode: () => void;
+	enterVoiceMode: (threadId?: string) => void;
 	exitVoiceMode: (voiceMessages?: VoiceTranscript[]) => void;
 }>({
 	voiceMode: { active: false, docTitle: null, systemPrompt: null },
@@ -104,7 +105,7 @@ export interface DialogueTranscript {
 
 const DialogueModeCtx = createContext<{
 	dialogueMode: DialogueModeState;
-	enterDialogueMode: () => void;
+	enterDialogueMode: (threadId?: string) => void;
 	exitDialogueMode: () => void;
 }>({
 	dialogueMode: { active: false },
@@ -140,8 +141,12 @@ const runtimeAdapters = {
 /** Remote thread ID captured at mode entry — ensures DB writes go to the right thread. */
 let capturedThreadId: string | null = null;
 
-/** Monotonic counter bumped on voice/dialogue exit to signal useMyRuntime to reload. */
-let reloadGeneration = 0;
+/** Pre-generated remoteId for new threads entering voice/dialogue before first text message.
+ *  Consumed once by initialize() so text chat later uses the same thread. */
+let presetRemoteId: string | null = null;
+
+/** Triggers useMyRuntime to re-fetch messages from DB (set by useMyRuntime). */
+let bumpFetchKey: (() => void) | null = null;
 
 /** Module-level autoTTS flag readable by transport headers. */
 let autoTTSFlag = true;
@@ -189,18 +194,31 @@ const attachmentAdapter: AttachmentAdapter = {
 
 // ── Thread List Adapter (backed by /api/threads) ────────────────────────────
 
-// ── Thread persona mapping (remoteId → persona) ──────────────────────────
+// ── Thread persona mapping (remoteId → persona, reactive) ─────────────────
 
 const threadPersonaMap = new Map<string, PersonaId>();
+const personaListeners = new Set<() => void>();
 
-/** Update cached persona for a thread (called when user switches persona). */
+/** Update cached persona for a thread and notify subscribers. */
 export function setThreadPersona(remoteId: string, persona: PersonaId) {
 	threadPersonaMap.set(remoteId, persona);
+	for (const cb of personaListeners) cb();
 }
 
-/** Get the persona for a thread (used by ThreadListSidebar for avatars). */
-export function getThreadPersona(remoteId: string): PersonaId {
+/** Get the persona for a thread. */
+function getThreadPersona(remoteId: string): PersonaId {
 	return threadPersonaMap.get(remoteId) ?? DEFAULT_PERSONA;
+}
+
+/** React hook: subscribe to persona map changes for a specific thread. */
+export function useThreadPersona(remoteId: string): PersonaId {
+	return useSyncExternalStore(
+		(cb) => {
+			personaListeners.add(cb);
+			return () => personaListeners.delete(cb);
+		},
+		() => getThreadPersona(remoteId),
+	);
 }
 
 const threadListAdapter: RemoteThreadListAdapter = {
@@ -225,8 +243,9 @@ const threadListAdapter: RemoteThreadListAdapter = {
 	},
 
 	async initialize() {
-		// Generate a proper UUID as remoteId (server creates via ensureThread)
-		const remoteId = crypto.randomUUID();
+		// Use presetRemoteId if voice/dialogue mode pre-generated one, else create new
+		const remoteId = presetRemoteId || crypto.randomUUID();
+		presetRemoteId = null;
 		return { remoteId, externalId: undefined };
 	},
 
@@ -249,6 +268,13 @@ const threadListAdapter: RemoteThreadListAdapter = {
 	},
 
 	async fetch(remoteId) {
+		try {
+			const res = await fetch(`/api/threads/${remoteId}`);
+			if (res.ok) {
+				const t = (await res.json()) as { id: string; title: string };
+				return { remoteId, status: "regular" as const, title: t.title };
+			}
+		} catch {}
 		return { remoteId, status: "regular" as const };
 	},
 
@@ -321,17 +347,10 @@ function useMyRuntime() {
 
 	const remoteId = stateRef.current.remoteId;
 
-	// Fetch messages for existing threads
+	// Fetch messages for existing threads (fetchKey bumped on voice/dialogue exit to reload)
 	const [loadedMessages, setLoadedMessages] = useState<UIMessage[]>([]);
 	const [fetchKey, setFetchKey] = useState(0);
-	const lastGenRef = useRef(reloadGeneration);
-
-	// Detect when reloadGeneration is bumped (voice/dialogue exit)
-	if (reloadGeneration !== lastGenRef.current) {
-		lastGenRef.current = reloadGeneration;
-		// Schedule a re-fetch after a short delay (DB write may still be in flight)
-		setTimeout(() => setFetchKey((k) => k + 1), 300);
-	}
+	bumpFetchKey = () => setTimeout(() => setFetchKey((k) => k + 1), 300);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fetchKey triggers reload
 	useEffect(() => {
@@ -489,35 +508,55 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		systemPrompt: null,
 	});
 
-	const enterVoiceMode = useCallback(async () => {
-		// Capture current thread IDs before mode switch
-		const urlMatch = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/);
-		capturedThreadId = urlMatch ? urlMatch[1] : null;
-
-		// Stop any ongoing TTS
-		try {
-			const speech = runtime.thread.getState().speech;
-			if (speech) runtime.thread.stopSpeaking();
-		} catch {}
-
-		// Build system prompt with document + chat context
-		const activeDocId = getActiveDocId();
-		const docTitle = getActiveDocTitle();
-
-		let docContent = "";
-		if (activeDocId) {
-			try {
-				const res = await fetch(`/api/documents/${activeDocId}/markdown`);
-				if (res.ok) docContent = await res.text();
-			} catch {}
+	/** Resolve threadId: use caller-provided value, or generate a new UUID for new threads.
+	 *  The caller (ModeButtons) reads auiRemoteId from React context — the only reliable source. */
+	const resolveThreadId = useCallback((threadId?: string) => {
+		if (threadId) {
+			capturedThreadId = threadId;
+		} else {
+			const id = crypto.randomUUID();
+			presetRemoteId = id;
+			capturedThreadId = id;
 		}
+		return capturedThreadId;
+	}, []);
 
-		const chatSummary = buildChatSummary(runtime.thread.getState().messages);
+	/** Stop any ongoing TTS/speech playback. */
+	const stopSpeech = useCallback(() => {
+		try {
+			if (runtime.thread.getState().speech) runtime.thread.stopSpeaking();
+		} catch {}
+	}, [runtime]);
 
-		const p = PERSONAS[persona];
-		const truncated = docContent.slice(0, 12000);
+	const enterVoiceMode = useCallback(
+		async (threadId?: string) => {
+			resolveThreadId(threadId);
+			stopSpeech();
 
-		let prompt = `${p.prompt}
+			// Build system prompt with document + chat context
+			const activeDocId = getActiveDocId();
+			const docTitle = getActiveDocTitle();
+
+			let docContent = "";
+			if (activeDocId) {
+				try {
+					const res = await fetch(`/api/documents/${activeDocId}/markdown`);
+					if (res.ok) docContent = await res.text();
+				} catch {}
+			}
+
+			const chatSummary = buildChatSummary(runtime.thread.getState().messages);
+
+			const p = PERSONAS[persona];
+			const truncated = docContent.slice(0, 12000);
+
+			const timeStr = new Date().toLocaleString("zh-CN", {
+				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			});
+
+			let prompt = `${p.prompt}
+
+当前时间：${timeStr}
 
 # 语音对话规则
 - 你正在与学生进行实时语音对话
@@ -525,19 +564,44 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 - 禁止输出 markdown、代码块、列表符号等书面格式
 - 可以主动追问学生的理解，引导深入讨论`;
 
-		if (truncated) {
-			prompt += `\n\n# 正在阅读的文档${docTitle ? `：「${docTitle}」` : ""}\n\n${truncated}`;
-		}
-		if (chatSummary) {
-			prompt += `\n\n# 之前的文字对话记录（供参考）\n${chatSummary}`;
-		}
+			if (truncated) {
+				prompt += `\n\n# 正在阅读的文档${docTitle ? `：「${docTitle}」` : ""}\n\n${truncated}`;
+			}
+			if (chatSummary) {
+				prompt += `\n\n# 之前的文字对话记录（供参考）\n${chatSummary}`;
+			}
 
-		setVoiceMode({
-			active: true,
-			docTitle: docTitle || "语音伴读",
-			systemPrompt: prompt,
-		});
-	}, [persona, runtime]);
+			setVoiceMode({
+				active: true,
+				docTitle: docTitle || "语音伴读",
+				systemPrompt: prompt,
+			});
+		},
+		[persona, runtime, resolveThreadId, stopSpeech],
+	);
+
+	/** After voice/dialogue exit, switch to the persisted thread and refresh sidebar + messages. */
+	const switchToPersistedThread = useCallback(async () => {
+		if (!capturedThreadId) return;
+		const tid = capturedThreadId;
+		try {
+			await runtime.threads.switchToThread(tid);
+			window.history.replaceState(null, "", `/c/${tid}`);
+			// Force thread list re-fetch: clear assistant-ui's internal list cache
+			// so ThreadListPrimitive.Items picks up the new thread.
+			// biome-ignore lint/suspicious/noExplicitAny: accessing assistant-ui internals
+			const core = (runtime as any)._core?.threads;
+			if (core?._loadThreadsPromise) {
+				core._loadThreadsPromise = null;
+				core.getLoadThreadsPromise();
+			}
+		} catch (e) {
+			console.error("[switchToPersistedThread] failed:", e);
+			window.history.replaceState(null, "", `/c/${tid}`);
+		}
+		// Re-fetch messages for existing threads (switchToThread may skip if already active)
+		bumpFetchKey?.();
+	}, [runtime]);
 
 	const exitVoiceMode = useCallback(
 		async (voiceMessages?: VoiceTranscript[]) => {
@@ -568,14 +632,9 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 				}).catch((e) => console.error("[voice] Persist failed:", e));
 			}
 			setVoiceMode({ active: false, docTitle: null, systemPrompt: null });
-			// Bump reload generation so useMyRuntime re-fetches messages from DB
-			reloadGeneration++;
-			// Update URL to original thread
-			if (capturedThreadId) {
-				window.history.replaceState(null, "", `/c/${capturedThreadId}`);
-			}
+			await switchToPersistedThread();
 		},
-		[persona],
+		[persona, switchToPersistedThread],
 	);
 
 	const voiceModeCtx = useMemo(
@@ -588,28 +647,19 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 		active: false,
 	});
 
-	const enterDialogueMode = useCallback(() => {
-		// Capture current thread IDs before mode switch
-		const urlMatch = window.location.pathname.match(/\/c\/([0-9a-f-]{36})/);
-		capturedThreadId = urlMatch ? urlMatch[1] : null;
+	const enterDialogueMode = useCallback(
+		(threadId?: string) => {
+			resolveThreadId(threadId);
+			stopSpeech();
+			setDialogueMode({ active: true });
+		},
+		[resolveThreadId, stopSpeech],
+	);
 
-		// Stop any ongoing TTS/speech
-		try {
-			const speech = runtime.thread.getState().speech;
-			if (speech) runtime.thread.stopSpeaking();
-		} catch {}
-		setDialogueMode({ active: true });
-	}, [runtime]);
-
-	const exitDialogueMode = useCallback(() => {
+	const exitDialogueMode = useCallback(async () => {
 		setDialogueMode({ active: false });
-		// Bump reload generation so useMyRuntime re-fetches messages from DB
-		reloadGeneration++;
-		// Update URL to original thread
-		if (capturedThreadId) {
-			window.history.replaceState(null, "", `/c/${capturedThreadId}`);
-		}
-	}, []);
+		await switchToPersistedThread();
+	}, [switchToPersistedThread]);
 
 	const dialogueModeCtx = useMemo(
 		() => ({ dialogueMode, enterDialogueMode, exitDialogueMode }),

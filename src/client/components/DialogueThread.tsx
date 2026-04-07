@@ -194,6 +194,9 @@ export const DialogueThread: FC<{
 	const { object, submit, isLoading, error } = useObject({
 		api: "/api/dialogue",
 		schema,
+		headers: {
+			"x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+		},
 	});
 
 	const lastPoseRef = useRef("neutral");
@@ -387,21 +390,9 @@ export const DialogueThread: FC<{
 
 	const dialoguePanel = (
 		<div className="dialogue-glass rounded-3xl p-4 space-y-3 relative">
-			{/* Avatar overflowing top (avatar mode only) */}
-			{displayMode === "avatar" && (
-				<div className="absolute -top-8 left-4 z-20">
-					<img
-						src={`/characters/${persona}/avatars/${currentPose}.webp`}
-						alt={p.name}
-						className="w-14 h-14 object-cover drop-shadow-lg select-none"
-						draggable={false}
-					/>
-				</div>
-			)}
-
 			{/* Top row: name + persona switcher + close */}
 			<div
-				className={`flex items-center justify-between ${displayMode === "avatar" ? "pl-16" : ""}`}
+				className={`flex items-center justify-between ${displayMode === "avatar" ? "pl-[96px]" : ""}`}
 			>
 				<div className="flex items-center gap-2.5">
 					<div>
@@ -634,9 +625,16 @@ export const DialogueThread: FC<{
 				</div>
 			) : (
 				// ── Avatar Mode: centered, 60% width, avatar overflows top ──
-				<div className="flex justify-center pb-4 px-4 pt-10">
-					<div className="w-3/5 min-w-[400px] max-h-[50vh] overflow-y-auto overflow-x-visible">
-						{dialoguePanel}
+				<div className="flex justify-center pb-4 px-4">
+					<div className="relative w-3/5 min-w-[400px]">
+						{/* Avatar: bottom aligns with name text baseline, top 1/3 overflows above panel */}
+						<AvatarImage
+							persona={persona}
+							pose={currentPose}
+							className="absolute left-2.5 z-20 w-[100px] h-[100px] object-cover drop-shadow-lg select-none"
+							style={{ bottom: "calc(100% - 52px)" }}
+						/>
+						<div className="max-h-[50vh] overflow-y-auto">{dialoguePanel}</div>
 					</div>
 				</div>
 			)}
@@ -645,6 +643,34 @@ export const DialogueThread: FC<{
 };
 
 // ── Pose Image ─────────────────────────────────────────────────────────────
+
+/** Preload-then-swap avatar image (same pattern as PoseImage to prevent flicker). */
+const AvatarImage: FC<{
+	persona: PersonaId;
+	pose: string;
+	className?: string;
+	style?: React.CSSProperties;
+}> = ({ persona, pose, className, style }) => {
+	const src = `/characters/${persona}/avatars/${pose}.webp`;
+	const [loadedSrc, setLoadedSrc] = useState(src);
+
+	useEffect(() => {
+		if (src === loadedSrc) return;
+		const img = new Image();
+		img.onload = () => setLoadedSrc(src);
+		img.src = src;
+	}, [src, loadedSrc]);
+
+	return (
+		<img
+			src={loadedSrc}
+			alt={`${PERSONAS[persona].name} – ${pose}`}
+			className={className}
+			style={style}
+			draggable={false}
+		/>
+	);
+};
 
 const PoseImage: FC<{
 	persona: PersonaId;
