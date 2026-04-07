@@ -106,16 +106,22 @@ body {
 /* ── Dialogue glass panel ────────────────────────────────────────────────── */
 
 .dialogue-glass {
-	background: rgba(255, 255, 255, 0.6);
-	backdrop-filter: blur(10px) saturate(1.3);
-	-webkit-backdrop-filter: blur(10px) saturate(1.3);
-	border: 1px solid rgba(255, 255, 255, 0.5);
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+	background: rgba(255, 255, 255, 0.88);
+	backdrop-filter: blur(20px) saturate(1.4);
+	-webkit-backdrop-filter: blur(20px) saturate(1.4);
+	border: 1px solid rgba(255, 255, 255, 0.6);
+	box-shadow:
+		0 8px 32px rgba(0, 0, 0, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .dark .dialogue-glass {
-	background: rgba(30, 30, 45, 0.7);
-	border: 1px solid rgba(255, 255, 255, 0.08);
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+	background: rgba(24, 24, 38, 0.92);
+	backdrop-filter: blur(20px) saturate(1.4);
+	-webkit-backdrop-filter: blur(20px) saturate(1.4);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	box-shadow:
+		0 8px 32px rgba(0, 0, 0, 0.4),
+		inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 /* ── Persona card shimmer (45° sweep from bottom-right to top-left) ──────── */
