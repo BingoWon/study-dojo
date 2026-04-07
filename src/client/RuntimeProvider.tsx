@@ -612,7 +612,7 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 				const separator = {
 					id: crypto.randomUUID(),
 					role: "user" as const,
-					parts: [{ type: "text" as const, text: "🎙 [进入语音伴读]" }],
+					parts: [{ type: "text" as const, text: "[🎙 进入语音伴读]" }],
 				};
 				const converted = voiceMessages.map((m) => ({
 					id: crypto.randomUUID(),
@@ -620,7 +620,7 @@ export const RuntimeProvider: FC<{ children: ReactNode }> = ({ children }) => {
 					parts: [
 						{
 							type: "text" as const,
-							text: m.role === "assistant" ? `🎙 ${m.text}` : m.text,
+							text: m.role === "assistant" ? `[🎙 语音回复] ${m.text}` : m.text,
 						},
 					],
 				}));

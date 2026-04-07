@@ -220,7 +220,7 @@ export const DialogueThread: FC<{
 			// Persona switch
 			const marker: CompletedTurn = {
 				role: "user",
-				speech: `[角色切换：${PERSONAS[prevId].name} → ${PERSONAS[persona].name}]`,
+				speech: `[✨ 角色切换：${PERSONAS[prevId].name} → ${PERSONAS[persona].name}]`,
 			};
 			persistDialogueTurn(marker);
 			newTurns = [...turnsRef.current, marker];
@@ -228,7 +228,7 @@ export const DialogueThread: FC<{
 			// Initial enter
 			const marker: CompletedTurn = {
 				role: "user",
-				speech: "[进入剧情伴读]",
+				speech: "[✨ 进入剧情伴读]",
 			};
 			persistDialogueTurn(marker);
 			newTurns = [marker];

@@ -45,7 +45,7 @@ export function maybeAutoTitle(
 		.flatMap((m) =>
 			(m.parts ?? []).filter((p) => p.type === "text").map((p) => p.text ?? ""),
 		)
-		.filter((t) => !/^\[.*\]$/.test(t.trim()) && !t.startsWith("🎙"));
+		.filter((t) => !/^\[.*\]$/.test(t.trim()));
 
 	const firstText = userTexts.join(" ").trim().slice(0, 200);
 
