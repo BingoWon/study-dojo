@@ -186,7 +186,10 @@ export const DialogueThread: FC<{
 		if (mountedRef.current) return;
 		mountedRef.current = true;
 		const greeting = getNextGreeting(persona, "dialogue");
-		setTurns([{ role: "assistant", pose: "neutral", speech: greeting }]);
+		lastPoseRef.current = greeting.pose;
+		setTurns([
+			{ role: "assistant", pose: greeting.pose, speech: greeting.text },
+		]);
 		submit({ history: [], persona });
 	}, [submit, persona]);
 
@@ -293,14 +296,24 @@ export const DialogueThread: FC<{
 				<X className="w-4 h-4" />
 			</button>
 
-			{/* Name + title */}
-			<div className="pr-8">
-				<span className="font-genshin text-lg text-zinc-900 dark:text-zinc-50 tracking-wide">
-					{p.name}
-				</span>
-				<span className="ml-2 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
-					{p.title}
-				</span>
+			{/* Name + title (+ avatar in avatar mode) */}
+			<div className="pr-8 flex items-center gap-2.5">
+				{displayMode === "avatar" && (
+					<CharacterAvatar
+						persona={persona}
+						pose={currentPose}
+						size="md"
+						className="ring-2 ring-white/40 dark:ring-white/10 shadow-md"
+					/>
+				)}
+				<div>
+					<span className="font-genshin text-lg text-zinc-900 dark:text-zinc-50 tracking-wide">
+						{p.name}
+					</span>
+					<span className="ml-2 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+						{p.title}
+					</span>
+				</div>
 			</div>
 
 			{/* Error */}
@@ -454,22 +467,10 @@ export const DialogueThread: FC<{
 					</div>
 				</div>
 			) : (
-				// ── Avatar Mode: centered, 50% width ──
+				// ── Avatar Mode: centered, 50% width, avatar inside panel ──
 				<div className="flex justify-center pb-4 px-4">
-					<div className="w-1/2 max-h-[50vh] overflow-y-auto">
-						<div className="flex items-end gap-3">
-							{/* Avatar */}
-							<div className="shrink-0 mb-4">
-								<CharacterAvatar
-									persona={persona}
-									pose={currentPose}
-									size="lg"
-									className="ring-2 ring-white/60 dark:ring-zinc-700/60 shadow-lg"
-								/>
-							</div>
-							{/* Panel */}
-							<div className="flex-1 min-w-0">{dialoguePanel}</div>
-						</div>
+					<div className="w-1/2 min-w-[360px] max-w-[600px] max-h-[50vh] overflow-y-auto">
+						{dialoguePanel}
 					</div>
 				</div>
 			)}

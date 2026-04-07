@@ -32,7 +32,7 @@ export interface Persona {
 	voiceId: string;
 	voiceSpeed?: number;
 	voiceStability?: number;
-	firstMessages: string[];
+	firstMessages: { text: string; pose: string }[];
 	// LLM
 	prompt: string;
 	// Dialogue mode: per-persona pose set (filenames without extension)

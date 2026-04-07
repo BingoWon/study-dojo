@@ -1,14 +1,19 @@
 import type { PersonaId } from "../../worker/model";
 import { PERSONAS } from "../../worker/model";
 
+export interface Greeting {
+	text: string;
+	pose: string;
+}
+
 /**
- * Cycle through a persona's firstMessages sequentially (not randomly).
+ * Cycle through a persona's firstMessages sequentially.
  * Each mode (voice, dialogue) tracks its own index in localStorage.
  */
 export function getNextGreeting(
 	persona: PersonaId,
 	mode: "voice" | "dialogue",
-): string {
+): Greeting {
 	const messages = PERSONAS[persona].firstMessages;
 	const key = `greeting:${mode}:${persona}`;
 	let idx = 0;

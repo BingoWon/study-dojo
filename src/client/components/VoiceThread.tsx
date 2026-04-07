@@ -68,7 +68,7 @@ export const VoiceThread: FC<{
 	useEffect(() => {
 		let cancelled = false;
 
-		const firstMessage = getNextGreeting(persona, "voice");
+		const firstMessage = getNextGreeting(persona, "voice").text;
 
 		const sessionPromise = startVoiceSession(
 			"/api/voice-signed-url",
