@@ -48,8 +48,10 @@ export const DocumentsPanel: FC<{
 		const el = panelRef.current;
 		if (!el) return;
 		const handler = (e: ClipboardEvent) => {
-			const file = e.clipboardData?.files[0];
-			if (file) handleUpload(file);
+			const files = e.clipboardData?.files;
+			if (files?.length) {
+				for (const file of files) handleUpload(file);
+			}
 		};
 		el.addEventListener("paste", handler);
 		return () => el.removeEventListener("paste", handler);
@@ -251,8 +253,7 @@ export const DocumentsPanel: FC<{
 			onDrop={(e) => {
 				e.preventDefault();
 				setDragOver(false);
-				const f = e.dataTransfer.files[0];
-				if (f) handleUpload(f);
+				for (const f of e.dataTransfer.files) handleUpload(f);
 			}}
 			onDragOver={(e) => {
 				e.preventDefault();
@@ -273,18 +274,19 @@ export const DocumentsPanel: FC<{
 					拖拽、点击或粘贴上传
 				</span>
 				<span className="text-[10px] text-zinc-400 dark:text-zinc-600">
-					PDF · 图片 · TXT · MD · DOCX
+					PDF · 图片 · TXT · MD · DOC/DOCX
 				</span>
 			</button>
 
 			<input
 				ref={fileRef}
 				type="file"
+				multiple
 				accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.docx,.doc"
 				className="hidden"
 				onChange={(e) => {
-					const f = e.target.files?.[0];
-					if (f) handleUpload(f);
+					const files = e.target.files;
+					if (files) for (const f of files) handleUpload(f);
 					e.target.value = "";
 				}}
 			/>
