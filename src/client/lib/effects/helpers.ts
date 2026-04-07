@@ -16,6 +16,7 @@ export function canvasOverlay(duration: number) {
 	canvas.width = w * dpr;
 	canvas.height = h * dpr;
 	canvas.style.cssText = `position:fixed;inset:0;z-index:9999;pointer-events:none;width:${w}px;height:${h}px;`;
+	// biome-ignore lint/style/noNonNullAssertion: canvas 2d context is always available
 	const ctx = canvas.getContext("2d")!;
 	ctx.scale(dpr, dpr);
 	document.body.appendChild(canvas);

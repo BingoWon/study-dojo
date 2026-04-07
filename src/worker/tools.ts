@@ -8,46 +8,6 @@ import type { EmbeddingEnv } from "./rag";
 import { retrieveContext } from "./rag";
 import { chunks as chunksTable, documents } from "./schema";
 
-/** Static tools available without request context. */
-export const staticTools = {
-	update_recipe: tool({
-		description:
-			"更新食谱卡片。当你创建或修改食谱时必须调用此工具。将完整的食谱数据传入，前端会实时渲染。",
-		inputSchema: zodSchema(
-			z.object({
-				title: z.string().optional().describe("食谱标题"),
-				skill_level: z
-					.enum(["初级", "中级", "高级"])
-					.optional()
-					.describe("烹饪难度"),
-				cooking_time: z
-					.enum(["5分钟", "15分钟", "30分钟", "45分钟", "60+分钟"])
-					.optional()
-					.describe("烹饪时间"),
-				ingredients: z
-					.array(
-						z.object({
-							icon: z.string().describe("食材的 emoji 图标，如 🥕"),
-							name: z.string().describe("食材名称"),
-							amount: z.string().describe("用量"),
-						}),
-					)
-					.optional()
-					.describe("完整的食材列表（包含已有和新增的）"),
-				instructions: z
-					.array(z.string())
-					.optional()
-					.describe("完整的步骤列表（包含已有和新增的）"),
-				special_preferences: z
-					.array(z.string())
-					.optional()
-					.describe("饮食偏好标签"),
-			}),
-		),
-		execute: async (input) => input,
-	}),
-};
-
 /** Create memory tool with request-scoped context. */
 export function createMemoryTool(opts: {
 	env: { MEM0_API_KEY: string };
