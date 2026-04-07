@@ -176,10 +176,3 @@ scripts/
 references/
 elevenlabs-voice/
 elevenlabs-scribe/
-
-# Source character PNGs (processed into public/characters/)
-可莉/
-学术老哥/
-温柔学姐/
-雷电将军/
-test_avatar*.png

@@ -98,6 +98,37 @@ body {
 	background: rgba(255, 255, 255, 0.2);
 }
 
+/* ── Persona card shimmer ────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}
+.shimmer-border {
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.4) 50%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 2.5s ease-in-out infinite;
+}
+.dark .shimmer-border {
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.15) 50%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 2.5s ease-in-out infinite;
+}
+
 /* ── Dialogue mode effects ───────────────────────────────────────────────── */
 
 .animate-shake {

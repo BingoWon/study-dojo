@@ -119,7 +119,7 @@ const PersonaSelect: FC = () => {
 	const { persona, setPersona } = usePersona();
 
 	return (
-		<div className="mx-auto my-auto flex w-full max-w-md flex-grow flex-col items-center justify-center gap-6 px-4">
+		<div className="mx-auto my-auto flex w-full max-w-lg flex-grow flex-col items-center justify-center gap-6 px-4">
 			<div className="text-center">
 				<div className="text-sm font-medium tracking-widest uppercase text-zinc-400 dark:text-zinc-500 mb-2">
 					选择你的导师
@@ -129,7 +129,7 @@ const PersonaSelect: FC = () => {
 				</div>
 			</div>
 
-			<div className="flex w-full flex-col gap-3">
+			<div className="grid grid-cols-2 gap-3 w-full">
 				{PERSONA_IDS.map((id) => {
 					const p = PERSONAS[id];
 					const selected = persona === id;
@@ -139,64 +139,68 @@ const PersonaSelect: FC = () => {
 							type="button"
 							onClick={() => setPersona(id)}
 							className={`
-								group relative w-full flex items-center gap-4 rounded-2xl p-4
-								bg-gradient-to-r ${p.gradient}
-								border-2 transition-all duration-200 cursor-pointer
-								${
-									selected
-										? `${p.border} shadow-lg ${p.glow} scale-[1.02]`
-										: "border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 hover:shadow-md"
-								}
+								group relative rounded-2xl overflow-visible cursor-pointer
+								transition-all duration-300 ease-out
+								${selected ? "scale-[1.03]" : "hover:scale-[1.02]"}
 							`}
 						>
-							{/* Selection indicator */}
+							{/* Card body */}
 							<div
 								className={`
-									absolute -left-px top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full
-									transition-all duration-200
-									${selected ? "bg-current opacity-100" : "opacity-0"}
-								`}
-								style={{ color: p.accentColor }}
-							/>
-
-							{/* Character avatar */}
-							<div
-								className={`
-									flex-shrink-0 transition-transform duration-200
-									${selected ? "scale-110" : "group-hover:scale-105"}
-								`}
-							>
-								<CharacterAvatar persona={id} size="lg" />
-							</div>
-
-							{/* Info */}
-							<div className="flex-1 text-left min-w-0">
-								<div className="flex items-center gap-2">
-									<span className="font-bold text-zinc-900 dark:text-zinc-100">
-										{p.name}
-									</span>
-									<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-zinc-500 dark:text-zinc-400 font-medium">
-										{p.title}
-									</span>
-								</div>
-								<p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-									{p.desc}
-								</p>
-							</div>
-
-							{/* Check mark */}
-							<div
-								className={`
-									flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center
-									transition-all duration-200
+									relative rounded-2xl pt-16 pb-3 px-3
+									bg-gradient-to-b ${p.gradient}
+									border-2 transition-all duration-300 overflow-hidden
 									${
 										selected
-											? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 scale-100"
-											: "bg-zinc-200 dark:bg-zinc-700 scale-90 opacity-0 group-hover:opacity-50"
+											? `${p.border} shadow-xl ${p.glow}`
+											: "border-transparent hover:border-zinc-200/80 dark:hover:border-zinc-700/60 hover:shadow-lg"
 									}
 								`}
 							>
-								<Check className="w-3.5 h-3.5" />
+								{/* Shimmer overlay on selected */}
+								{selected && (
+									<div className="absolute inset-0 shimmer-border rounded-2xl pointer-events-none" />
+								)}
+
+								{/* Character name + title */}
+								<div className="text-center relative z-10">
+									<div className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+										{p.name}
+									</div>
+									<div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+										{p.title}
+									</div>
+									<p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1 leading-relaxed line-clamp-2">
+										{p.desc}
+									</p>
+								</div>
+
+								{/* Selection indicator dot */}
+								<div
+									className={`
+										absolute bottom-2 left-1/2 -translate-x-1/2
+										w-1.5 h-1.5 rounded-full transition-all duration-300
+										${selected ? "opacity-100 scale-100" : "opacity-0 scale-0"}
+									`}
+									style={{ backgroundColor: p.accentColor }}
+								/>
+							</div>
+
+							{/* Character pose — overflows above the card */}
+							<div
+								className={`
+									absolute -top-12 left-1/2 -translate-x-1/2
+									w-24 h-28 pointer-events-none
+									transition-all duration-300 ease-out
+									${selected ? "-translate-y-1 drop-shadow-lg" : "group-hover:-translate-y-0.5"}
+								`}
+							>
+								<img
+									src={`/characters/${id}/poses/neutral.webp`}
+									alt={p.name}
+									className="w-full h-full object-contain object-bottom"
+									draggable={false}
+								/>
 							</div>
 						</button>
 					);
