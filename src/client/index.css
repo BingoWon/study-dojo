@@ -105,23 +105,14 @@ body {
 
 /* ── Dialogue glass panel ────────────────────────────────────────────────── */
 
+/* Dialogue glass uses Tailwind classes directly — this block only
+   provides the dark-mode border/shadow overrides that are hard to
+   express inline due to .dark ancestor selector. */
 .dialogue-glass {
-	background: rgba(255, 255, 255, 0.88);
-	backdrop-filter: blur(20px) saturate(1.4);
-	-webkit-backdrop-filter: blur(20px) saturate(1.4);
-	border: 1px solid rgba(255, 255, 255, 0.6);
-	box-shadow:
-		0 8px 32px rgba(0, 0, 0, 0.1),
-		inset 0 1px 0 rgba(255, 255, 255, 0.5);
+	@apply bg-white/60 backdrop-blur-xl border border-white/50 shadow-lg;
 }
 .dark .dialogue-glass {
-	background: rgba(24, 24, 38, 0.92);
-	backdrop-filter: blur(20px) saturate(1.4);
-	-webkit-backdrop-filter: blur(20px) saturate(1.4);
-	border: 1px solid rgba(255, 255, 255, 0.06);
-	box-shadow:
-		0 8px 32px rgba(0, 0, 0, 0.4),
-		inset 0 1px 0 rgba(255, 255, 255, 0.03);
+	@apply bg-zinc-900/60 border-zinc-700/50;
 }
 
 /* ── Persona card shimmer (45° sweep from bottom-right to top-left) ──────── */
