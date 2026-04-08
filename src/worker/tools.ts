@@ -219,32 +219,31 @@ export function createDocTools(opts: {
 
 		read_document: tool({
 			description:
-				"阅读文档内容。文档以分块（chunk）形式存储，每块约 2048 字符。可以按页阅读（每页默认 10 块），也可以一次读取全部。首次调用时不传参数即可获取文档概览和前 10 块内容，根据 totalChunks 决定是否继续读取。",
+				"阅读文档内容。文档按块（chunk）存储，每块约 2048 字符，编号从 1 开始。首次调用默认读取第 1-10 块，根据返回的 totalChunks 决定是否继续读取后续块。",
 			inputSchema: zodSchema(
 				z.object({
 					docId: z.string().describe("文档 ID"),
-					page: z
+					startChunk: z
 						.number()
 						.int()
 						.min(1)
 						.optional()
 						.default(1)
-						.describe("页码，从 1 开始，默认第 1 页"),
-					pageSize: z
+						.describe("起始块编号，从 1 开始，默认 1"),
+					count: z
 						.number()
 						.int()
 						.min(1)
 						.max(50)
 						.optional()
 						.default(10)
-						.describe("每页块数，默认 10，最大 50。传 50 可快速浏览较短文档"),
+						.describe("读取块数，默认 10，最大 50"),
 				}),
 			),
-			execute: async ({ docId, page, pageSize }) => {
+			execute: async ({ docId, startChunk, count }) => {
 				const doc = opts.docList.find((d) => d.id === docId);
 				if (!doc) return { error: "未找到该文档" };
 
-				// Get total chunk count from documents table
 				const [docRow] = await opts.db
 					.select({ totalChunks: documents.chunks })
 					.from(documents)
@@ -254,38 +253,33 @@ export function createDocTools(opts: {
 				if (totalChunks === 0)
 					return { error: "该文档尚无内容", title: doc.title };
 
-				const offset = (page - 1) * pageSize;
-				const totalPages = Math.ceil(totalChunks / pageSize);
-
+				const offset = startChunk - 1;
 				if (offset >= totalChunks) {
 					return {
-						error: `页码超出范围，共 ${totalPages} 页`,
+						error: `块编号超出范围，该文档共 ${totalChunks} 块`,
 						title: doc.title,
 						totalChunks,
-						totalPages,
 					};
 				}
 
-				// Query chunks ordered by rowid (insertion order = document order)
 				const rows = await opts.db
 					.select({ content: chunksTable.content })
 					.from(chunksTable)
 					.where(eq(chunksTable.docId, docId))
 					.orderBy(sql`rowid`)
-					.limit(pageSize)
+					.limit(count)
 					.offset(offset);
 
 				const content = rows.map((r) => r.content).join("\n\n");
+				const endChunk = startChunk + rows.length - 1;
 
 				return {
 					title: doc.title,
 					content,
-					page,
-					pageSize,
+					startChunk,
+					endChunk,
 					totalChunks,
-					totalPages,
-					chunksReturned: rows.length,
-					hasMore: offset + rows.length < totalChunks,
+					hasMore: endChunk < totalChunks,
 				};
 			},
 		}),

@@ -404,6 +404,19 @@ export const DocumentViewer: FC<{
 				{showChunks ? (
 					<div className="relative">
 						{chunks.map((chunk, i) => {
+							// Remove overlap: if this chunk starts with the tail of the
+							// previous chunk, trim the duplicated prefix.
+							let display = chunk;
+							if (i > 0) {
+								const prev = chunks[i - 1];
+								// Check suffix/prefix overlap (up to 300 chars to cover 256 overlap + margin)
+								const tail = prev.slice(-300);
+								let best = 0;
+								for (let len = 20; len <= tail.length; len++) {
+									if (chunk.startsWith(tail.slice(-len))) best = len;
+								}
+								if (best > 0) display = chunk.slice(best);
+							}
 							const chunkKey =
 								chunk.slice(0, 32).replace(/\W/g, "") || String(i);
 							return (
@@ -411,7 +424,7 @@ export const DocumentViewer: FC<{
 									key={chunkKey}
 									index={i}
 									total={chunks.length}
-									content={chunk}
+									content={display}
 								/>
 							);
 						})}

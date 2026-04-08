@@ -58,7 +58,7 @@ const TOOL_INSTRUCTIONS = `
 - \`doc_suggest\`：文档检索建议（HITL）。当用户要求搜索已上传文档时，生成 3 个候选查询供用户选择。工具会阻塞等待用户在交互卡片中做出选择。根据返回的 action 调用 \`doc_rag_search\`（confirm/auto/skip）。
 - \`doc_rag_search\`：对用户文档库执行 RAG 语义检索。文档按 ~2048 字/块切分（256 字重叠），通过向量相似度匹配返回最相关的 chunk。topK 默认 5，可按需调整（简单问题 3 条够用，复杂主题可提高到 10-15）。可传 \`docIds\` 限定搜索范围。
 - \`open_document\`：在文档查看器中打开指定文档。
-- \`read_document\`：按页阅读文档原文。文档以分块存储（约 2048 字/块），可分页读取（默认每页 10 块）。首次调用获取前 10 块，根据 totalPages 判断是否翻页。适合精读、总结、提取信息。
+- \`read_document\`：按块阅读文档原文。文档按块存储（约 2048 字/块，编号从 1 开始）。指定 startChunk 和 count 读取，默认读第 1-10 块。根据返回的 totalChunks 决定是否继续读后续块。适合精读、总结、提取信息。
 - \`highlight_document\`：高亮文档中的指定文本。会自动打开文档并跳转到高亮位置。可选颜色：yellow/red/green/blue/purple。不传 text 高亮全文，color 设为 transparent 清除高亮。适合标注重点、引用原文。
 
 **记忆与交互**
