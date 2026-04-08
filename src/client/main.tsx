@@ -7,8 +7,11 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import "./index.css";
 
 const DevEffects = lazy(() => import("./DevEffects"));
+const DevGlass = lazy(() => import("./DevGlass"));
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
-const isDev = window.location.pathname === "/dev/effects";
+const devPage = window.location.pathname.startsWith("/dev/")
+	? window.location.pathname
+	: null;
 
 const root = document.getElementById("root");
 if (root) {
@@ -16,9 +19,13 @@ if (root) {
 		<StrictMode>
 			<ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
 				<ErrorBoundary>
-					{isDev ? (
+					{devPage === "/dev/effects" ? (
 						<Suspense>
 							<DevEffects />
+						</Suspense>
+					) : devPage === "/dev/glass" ? (
+						<Suspense>
+							<DevGlass />
 						</Suspense>
 					) : (
 						<ClerkProvider publishableKey={CLERK_KEY} afterSignOutUrl="/">
