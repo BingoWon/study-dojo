@@ -152,7 +152,6 @@ export function classifyFile(name: string): {
 		return { category: "ocr", ocrType: 1 };
 	if (["txt", "md", "markdown"].includes(ext)) return { category: "text" };
 	if (ext === "docx") return { category: "docx" };
-	if (ext === "doc") return { category: "ocr", ocrType: 0 };
 	return { category: "text" };
 }
 

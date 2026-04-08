@@ -95,7 +95,6 @@ export const DocumentsPanel: FC<{
 			".txt",
 			".md",
 			".docx",
-		".doc",
 		];
 		if (!SUPPORTED.some((e) => file.name.toLowerCase().endsWith(e))) return;
 
@@ -274,7 +273,7 @@ export const DocumentsPanel: FC<{
 					拖拽、点击或粘贴上传（支持多选）
 				</span>
 				<span className="text-[10px] text-zinc-400 dark:text-zinc-600">
-					PDF · 图片 · TXT · MD · DOC/DOCX
+					PDF · 图片 · TXT · MD · DOCX
 				</span>
 			</button>
 
@@ -282,7 +281,7 @@ export const DocumentsPanel: FC<{
 				ref={fileRef}
 				type="file"
 				multiple
-				accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.docx,.doc"
+				accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.docx"
 				className="hidden"
 				onChange={(e) => {
 					const files = e.target.files;
