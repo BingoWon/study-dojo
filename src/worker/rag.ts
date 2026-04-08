@@ -54,20 +54,12 @@ export async function hashBuffer(buffer: ArrayBuffer): Promise<string> {
 // ── PaddleOCR Sync API ──────────────────────────────────────────────────────
 
 const OCR_TIMEOUT = 180_000;
-const MAX_OCR_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
-
 async function parseWithPaddleOCR(
 	fileBuffer: ArrayBuffer,
 	token: string,
 	fileType: 0 | 1,
 	ocrUrl?: string,
 ): Promise<string> {
-	if (fileBuffer.byteLength > MAX_OCR_FILE_SIZE) {
-		throw new Error(
-			`文件过大（${(fileBuffer.byteLength / 1024 / 1024).toFixed(1)} MB），OCR 最大支持 15 MB`,
-		);
-	}
-
 	const fileB64 = Buffer.from(fileBuffer).toString("base64");
 
 	const OCR_ERRORS: Record<number, string> = {

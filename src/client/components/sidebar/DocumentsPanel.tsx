@@ -41,6 +41,11 @@ export const DocumentsPanel: FC<{
 	);
 	const [loading, setLoading] = useState(true);
 	const [dragOver, setDragOver] = useState(false);
+	const [uploadError, setUploadError] = useState<string | null>(null);
+	const showError = (msg: string) => {
+		setUploadError(msg);
+		setTimeout(() => setUploadError(null), 4000);
+	};
 	const fileRef = useRef<HTMLInputElement>(null);
 	const panelRef = useRef<HTMLDivElement>(null);
 
@@ -96,10 +101,12 @@ export const DocumentsPanel: FC<{
 			".md",
 			".docx",
 		];
-		if (!SUPPORTED.some((e) => file.name.toLowerCase().endsWith(e))) return;
-		if (file.size > 15 * 1024 * 1024) {
-			alert(`文件过大（${(file.size / 1024 / 1024).toFixed(1)} MB），最大支持 15 MB`);
+		if (!SUPPORTED.some((e) => file.name.toLowerCase().endsWith(e))) {
+			showError("📎 暂不支持该格式，试试 PDF、图片、TXT、MD 或 DOCX 吧");
 			return;
+		}
+		if (file.size > 10 * 1024 * 1024) {
+			showError(`📦 大文件（${(file.size / 1024 / 1024).toFixed(1)} MB），解析可能需要较长时间`);
 		}
 
 		const buffer = await file.arrayBuffer();
@@ -115,6 +122,7 @@ export const DocumentsPanel: FC<{
 			if (checkRes.ok) {
 				const check = (await checkRes.json()) as { exists: boolean };
 				if (check.exists) {
+					showError("📄 这份文档已经在库里了，无需重复上传");
 					await fetchDocs();
 					return;
 				}
@@ -143,6 +151,7 @@ export const DocumentsPanel: FC<{
 			const res = await fetch("/api/documents", { method: "POST", body: form });
 			if (!res.ok || !res.body) {
 				updateDocStatus(tempId, "failed");
+				showError("⚠️ 上传失败，请稍后再试");
 				return;
 			}
 
@@ -179,6 +188,7 @@ export const DocumentsPanel: FC<{
 						}
 						if (data.duplicate) {
 							setDocs((prev) => prev.filter((p) => p.id !== realDocId));
+							showError("📄 这份文档已经在库里了，无需重复上传");
 							await fetchDocs();
 							return;
 						}
@@ -216,6 +226,7 @@ export const DocumentsPanel: FC<{
 			}
 		} catch {
 			updateDocStatus(tempId, "failed");
+			showError("⚠️ 上传过程中出错，请稍后再试");
 		}
 	};
 
@@ -280,6 +291,11 @@ export const DocumentsPanel: FC<{
 					PDF · 图片 · TXT · MD · DOCX
 				</span>
 			</button>
+			{uploadError && (
+				<div className="mx-3 -mt-1 mb-1 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 text-xs text-red-600 dark:text-red-400 animate-in fade-in slide-in-from-top-2 duration-200">
+					{uploadError}
+				</div>
+			)}
 
 			<input
 				ref={fileRef}
@@ -408,7 +424,7 @@ const DocListItem: FC<{
 					{isReady ? (
 						<div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
 							<span className="text-[9px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
-								{p.chunks} 片段
+								{p.chunks} 块
 							</span>
 							<span className="text-[10px] text-zinc-400 dark:text-zinc-600">
 								{timeAgo(p.createdAt)}
