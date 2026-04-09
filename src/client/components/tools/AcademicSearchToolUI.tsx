@@ -1,5 +1,5 @@
 import { makeAssistantToolUI } from "@assistant-ui/react";
-import { GraduationCap, Search } from "lucide-react";
+import { GraduationCap, Loader2 } from "lucide-react";
 import { type ExaResult, ExaResultList } from "./ExaResultList";
 
 type Args = { query: string };
@@ -12,26 +12,24 @@ export const AcademicSearchToolUI = makeAssistantToolUI<Args, Result>({
 		const results = result?.results ?? [];
 
 		return (
-			<div className="mb-2 rounded-xl border border-zinc-200/60 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 overflow-hidden">
-				<div className="flex items-center gap-2 px-3 py-2 text-xs">
-					<div
-						className={`p-1 rounded-md ${isRunning ? "bg-purple-100 dark:bg-purple-500/20 text-purple-500 animate-pulse" : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-500"}`}
-					>
+			<div className="mb-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white dark:bg-zinc-800 overflow-hidden shadow-sm">
+				<div className="flex items-center gap-2 px-4 py-3 border-b border-divider dark:border-divider-dark">
+					<div className="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/30">
 						{isRunning ? (
-							<Search className="w-3 h-3" />
+							<Loader2 className="w-3.5 h-3.5 text-purple-500 animate-spin" />
 						) : (
-							<GraduationCap className="w-3 h-3" />
+							<GraduationCap className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
 						)}
 					</div>
-					<span className="font-medium text-zinc-700 dark:text-zinc-300">
+					<span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
 						{isRunning ? "搜索论文..." : `${results.length} 篇论文`}
 					</span>
-					<span className="text-zinc-400 dark:text-zinc-500 italic truncate">
+					<span className="text-xs text-zinc-400 dark:text-zinc-500 italic truncate ml-auto">
 						{args?.query}
 					</span>
 				</div>
 				{!isRunning && results.length > 0 && (
-					<div className="px-1 pb-1.5">
+					<div className="p-2">
 						<ExaResultList results={results} previewCount={3} />
 					</div>
 				)}

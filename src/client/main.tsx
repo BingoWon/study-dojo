@@ -8,6 +8,7 @@ import "./index.css";
 
 const DevEffects = lazy(() => import("./DevEffects"));
 const DevGlass = lazy(() => import("./DevGlass"));
+const DevTools = lazy(() => import("./DevTools"));
 const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
 const devPage = window.location.pathname.startsWith("/dev/")
 	? window.location.pathname
@@ -26,6 +27,10 @@ if (root) {
 					) : devPage === "/dev/glass" ? (
 						<Suspense>
 							<DevGlass />
+						</Suspense>
+					) : devPage === "/dev/tools" ? (
+						<Suspense>
+							<DevTools />
 						</Suspense>
 					) : (
 						<ClerkProvider publishableKey={CLERK_KEY} afterSignOutUrl="/">

@@ -25,17 +25,16 @@ export const AskUserToolUI = makeAssistantToolUI<Args, Result>({
 	render: ({ args, result, addResult }) => {
 		const { propStatus } = useToolArgsStatus<Args>();
 
-		// Already answered — compact inline
+		// Already answered — compact confirmation
 		if (result) {
 			return (
-				<div className="mb-2 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-					<Check className="w-3 h-3" />
-					{result.answer}
+				<div className="mb-3 flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+					<Check className="w-3.5 h-3.5 shrink-0" />
+					<span className="font-medium">{result.answer}</span>
 				</div>
 			);
 		}
 
-		// No result yet — always show interactive card (whether current or from history)
 		const options = args?.options ?? [];
 		const optionsStreaming = propStatus.options === "streaming";
 		const question = args?.question ?? "";
@@ -73,70 +72,81 @@ function AskUserCard({
 	addResult: (result: Result) => void;
 }) {
 	const [custom, setCustom] = useState("");
+	const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
 	return (
-		<div className="mb-2 rounded-xl border border-zinc-200/60 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 overflow-hidden">
-			{/* Question */}
-			<div className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-				<MessageCircleQuestion className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-				{question}
+		<div className="mb-3 rounded-2xl border border-amber-200/60 dark:border-amber-800/30 bg-white dark:bg-zinc-800 overflow-hidden shadow-sm">
+			{/* Header */}
+			<div className="flex items-center gap-2 px-4 py-3 border-b border-divider dark:border-divider-dark">
+				<div className="p-1 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+					<MessageCircleQuestion className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+				</div>
+				<span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 flex-1">
+					{question}
+				</span>
 				{optionsStreaming && (
-					<span className="ml-auto text-[10px] text-amber-500 animate-pulse shrink-0">
+					<span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 animate-pulse">
 						生成中...
 					</span>
 				)}
 			</div>
 
-			{/* Options — single click to submit */}
-			<div className="px-3 pb-2 flex flex-wrap gap-1.5">
+			{/* Options */}
+			<div className="p-3 space-y-1.5">
 				{options.map((opt, i) => (
 					<button
 						key={opt.value}
 						type="button"
 						disabled={optionsStreaming}
 						onClick={() => addResult({ answer: opt.value, source: "option" })}
-						className="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 active:scale-95"
-						title={opt.description}
+						onMouseEnter={() => setHoveredIdx(i)}
+						onMouseLeave={() => setHoveredIdx(null)}
+						className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer border ${
+							hoveredIdx === i
+								? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200"
+								: "bg-zinc-50/50 dark:bg-zinc-800/30 border-zinc-200/60 dark:border-zinc-700/40 text-zinc-700 dark:text-zinc-300"
+						}`}
 					>
-						{opt.label}
+						<span className="font-medium">{opt.label}</span>
+						{opt.description && (
+							<span className="block text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+								{opt.description}
+							</span>
+						)}
 						{optionsStreaming && i === options.length - 1 && (
-							<span className="ml-1 inline-block w-1 h-3 bg-blue-400 animate-pulse rounded-sm" />
+							<span className="ml-1 inline-block w-1.5 h-3.5 bg-amber-400 dark:bg-amber-500 animate-pulse rounded-sm align-middle" />
 						)}
 					</button>
 				))}
 			</div>
 
-			{/* Custom input — only if allowed, inline compact */}
+			{/* Custom input */}
 			{!optionsStreaming && allowCustomInput && (
-				<div className="flex items-center gap-1.5 mx-3 mb-2 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
-					<input
-						type="text"
-						value={custom}
-						onChange={(e) => setCustom(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && custom.trim())
-								addResult({
-									answer: custom.trim(),
-									source: "custom",
-								});
-						}}
-						placeholder={placeholder || "或输入自定义回答..."}
-						className="flex-1 bg-transparent text-xs outline-none text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 min-w-0"
-					/>
-					{custom.trim() && (
-						<button
-							type="button"
-							onClick={() =>
-								addResult({
-									answer: custom.trim(),
-									source: "custom",
-								})
-							}
-							className="p-0.5 text-blue-500 hover:text-blue-600 transition cursor-pointer shrink-0"
-						>
-							<Send className="w-3 h-3" />
-						</button>
-					)}
+				<div className="px-3 pb-3">
+					<div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-zinc-200/60 dark:border-zinc-700/40 bg-zinc-50/50 dark:bg-zinc-800/30 focus-within:border-amber-300 dark:focus-within:border-amber-700 transition-colors">
+						<input
+							type="text"
+							value={custom}
+							onChange={(e) => setCustom(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && custom.trim())
+									addResult({ answer: custom.trim(), source: "custom" });
+							}}
+							placeholder={placeholder || "输入自定义回答..."}
+							className="flex-1 bg-transparent text-sm outline-none text-zinc-700 dark:text-zinc-300 placeholder-zinc-400 dark:placeholder-zinc-600 min-w-0"
+						/>
+						{custom.trim() && (
+							<button
+								type="button"
+								onClick={() =>
+									addResult({ answer: custom.trim(), source: "custom" })
+								}
+								className="p-1 rounded-lg text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition cursor-pointer shrink-0"
+							>
+								<Send className="w-3.5 h-3.5" />
+							</button>
+						)}
+					</div>
 				</div>
 			)}
 		</div>
