@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { runMonitor } from "./monitor";
 import chat from "./routes/chat";
 import dialogue from "./routes/dialogue";
 import docs from "./routes/documents";
@@ -17,4 +18,9 @@ app.route("/api/dialogue", dialogue);
 
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 
-export default app;
+export default {
+	fetch: app.fetch,
+	async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		ctx.waitUntil(runMonitor(env));
+	},
+};
