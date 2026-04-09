@@ -70,9 +70,18 @@ function App() {
 	useEffect(() => ssWrite("center:activeTab", activeTab), [activeTab]);
 	useEffect(() => ssWrite("center:openDocs", openDocs), [openDocs]);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const tabBarRef = useRef<HTMLDivElement>(null);
 	const layout = useResizableLayout(containerRef);
 
 	const activeDoc = openDocs.find((d) => d.id === activeTab) ?? null;
+
+	// Auto-scroll tab bar to show active tab
+	useEffect(() => {
+		const bar = tabBarRef.current;
+		if (!bar || !activeTab) return;
+		const el = bar.querySelector(`[data-tab-id="${activeTab}"]`) as HTMLElement;
+		el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+	}, [activeTab]);
 
 	const handleDocSelect = useCallback(
 		(
@@ -342,9 +351,9 @@ function App() {
 
 						{/* 中间面板（tab 切换） */}
 						<div className="flex-1 h-full flex flex-col min-w-0 rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50 overflow-hidden">
-							{/* Tab bar */}
-							<div className="flex items-center justify-between px-3 pt-2 pb-2 border-b border-divider dark:border-divider-dark flex-shrink-0">
-								<div className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
+							{/* Tab bar — hidden when no docs open */}
+							{openDocs.length > 0 && <div className="flex items-center justify-between px-3 pt-2 pb-2 border-b border-divider dark:border-divider-dark flex-shrink-0">
+								<div ref={tabBarRef} className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
 									{/* Document tabs */}
 									{openDocs.map((doc) => {
 										const isActive = activeTab === doc.id;
@@ -354,6 +363,7 @@ function App() {
 												role="tab"
 												tabIndex={0}
 												key={doc.id}
+												data-tab-id={doc.id}
 												onClick={() => {
 													setActiveTab(doc.id);
 													setViewLang(doc.lang === "en" ? "zh" : "original");
@@ -450,7 +460,7 @@ function App() {
 										</button>
 									</div>
 								)}
-							</div>
+							</div>}
 
 							{/* 内容区 */}
 							{!activeDoc && (

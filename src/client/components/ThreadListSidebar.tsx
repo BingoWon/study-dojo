@@ -36,7 +36,7 @@ export const ThreadListSidebar: FC<{
 		fileExt?: string | null,
 	) => void;
 }> = ({ activeTab, setActiveTab, activeDocId, onDocSelect }) => (
-	<div className="flex h-full flex-col bg-zinc-50 dark:bg-zinc-950 select-none border-r border-divider dark:border-divider-dark">
+	<div className="flex h-full flex-col bg-zinc-50 dark:bg-zinc-950 select-none">
 		{/* Tab buttons */}
 		<div className="flex items-center gap-1 p-3">
 			{(
