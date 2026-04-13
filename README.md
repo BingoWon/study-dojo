@@ -15,7 +15,7 @@
 
 ## 🎬 演示视频
 
-<https://github.com/user-attachments/assets/7485c513-3bbb-43cf-b804-a918084d1e0f>
+<https://github.com/user-attachments/assets/d5993730-fa1c-4878-aff2-86437b52d278>
 
 ---
 
