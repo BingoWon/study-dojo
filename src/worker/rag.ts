@@ -556,8 +556,8 @@ export async function retrieveContext(
 			results = await store.similaritySearchWithScore(query, recallK);
 			// Post-filter: keep only results belonging to the requested docIds
 			const docIdSet = new Set(opts.docIds);
-			results = results.filter(
-				([doc]) => docIdSet.has(doc.metadata.docId as string),
+			results = results.filter(([doc]) =>
+				docIdSet.has(doc.metadata.docId as string),
 			);
 		}
 	} catch (e) {

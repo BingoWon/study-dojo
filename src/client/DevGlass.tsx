@@ -101,13 +101,15 @@ const STRATEGIES = [
 	extraStyle?: React.CSSProperties;
 }[];
 
-const GlassCard: FC<{ label: string; className?: string; style?: React.CSSProperties }> = ({
-	label,
-	className = "",
-	style,
-}) => (
+const GlassCard: FC<{
+	label: string;
+	className?: string;
+	style?: React.CSSProperties;
+}> = ({ label, className = "", style }) => (
 	<div className={`rounded-2xl p-5 ${className}`} style={style}>
-		<div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{label}</div>
+		<div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+			{label}
+		</div>
 		<div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
 			这段文字应该能看到背后的渐变色块被模糊
 		</div>
@@ -138,7 +140,10 @@ const DevGlass: FC = () => {
 			/>
 			<div
 				className="absolute w-[446px] h-[446px] left-[8%] top-[30%] rounded-full z-0"
-				style={{ background: "rgba(255, 243, 136, 0.3)", filter: "blur(103px)" }}
+				style={{
+					background: "rgba(255, 243, 136, 0.3)",
+					filter: "blur(103px)",
+				}}
 			/>
 
 			{/* 内容 */}
@@ -182,9 +187,10 @@ const DevGlass: FC = () => {
 									setActiveFixed(activeFixed === s.id ? null : s.id)
 								}
 								className={`px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer
-									${activeFixed === s.id
-										? "bg-blue-500 text-white"
-										: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+									${
+										activeFixed === s.id
+											? "bg-blue-500 text-white"
+											: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
 									}`}
 							>
 								{s.label}

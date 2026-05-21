@@ -96,10 +96,9 @@ async function checkOpenRouter(apiKey: string): Promise<CheckResult | null> {
 
 async function checkElevenLabs(apiKey: string): Promise<CheckResult | null> {
 	try {
-		const res = await fetch(
-			"https://api.elevenlabs.io/v1/user/subscription",
-			{ headers: { "xi-api-key": apiKey } },
-		);
+		const res = await fetch("https://api.elevenlabs.io/v1/user/subscription", {
+			headers: { "xi-api-key": apiKey },
+		});
 		if (!res.ok) return null;
 		const data = (await res.json()) as {
 			character_count?: number;
@@ -204,8 +203,7 @@ export async function runMonitor(env: Env): Promise<void> {
 	try {
 		const result = await env.DB.prepare(
 			"SELECT COUNT(DISTINCT user_id) as count FROM threads",
-		)
-			.all<{ count: number }>();
+		).all<{ count: number }>();
 		const userCount = result.results[0]?.count ?? 0;
 
 		const [prev] = await db

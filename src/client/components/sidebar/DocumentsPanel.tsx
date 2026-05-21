@@ -106,7 +106,9 @@ export const DocumentsPanel: FC<{
 			return;
 		}
 		if (file.size > 10 * 1024 * 1024) {
-			showError(`📦 大文件（${(file.size / 1024 / 1024).toFixed(1)} MB），解析可能需要较长时间`);
+			showError(
+				`📦 大文件（${(file.size / 1024 / 1024).toFixed(1)} MB），解析可能需要较长时间`,
+			);
 		}
 
 		const buffer = await file.arrayBuffer();
@@ -238,11 +240,14 @@ export const DocumentsPanel: FC<{
 			return next;
 		});
 		// Evict cached document content
-		caches.open("doc-content").then((c) => {
-			c.delete(`/api/documents/${id}/markdown`);
-			c.delete(`/api/documents/${id}/markdown?lang=zh`);
-			c.delete(`/api/documents/${id}/chunks`);
-		}).catch(() => {});
+		caches
+			.open("doc-content")
+			.then((c) => {
+				c.delete(`/api/documents/${id}/markdown`);
+				c.delete(`/api/documents/${id}/markdown?lang=zh`);
+				c.delete(`/api/documents/${id}/chunks`);
+			})
+			.catch(() => {});
 		await fetch(`/api/documents/${id}`, { method: "DELETE" });
 	};
 

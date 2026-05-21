@@ -80,7 +80,11 @@ function App() {
 		const bar = tabBarRef.current;
 		if (!bar || !activeTab) return;
 		const el = bar.querySelector(`[data-tab-id="${activeTab}"]`) as HTMLElement;
-		el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+		el?.scrollIntoView({
+			behavior: "smooth",
+			block: "nearest",
+			inline: "nearest",
+		});
 	}, [activeTab]);
 
 	const handleDocSelect = useCallback(
@@ -268,7 +272,8 @@ function App() {
 								</span>
 							</h1>
 							<p className="text-zinc-500 dark:text-zinc-400 text-base leading-relaxed mt-3 max-w-sm mx-auto">
-								四位 AI 导师陪你读论文——文字、语音、剧情三种模式，让学术不再孤单。
+								四位 AI
+								导师陪你读论文——文字、语音、剧情三种模式，让学术不再孤单。
 							</p>
 						</div>
 
@@ -352,115 +357,124 @@ function App() {
 						{/* 中间面板（tab 切换） */}
 						<div className="flex-1 h-full flex flex-col min-w-0 rounded-2xl bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border border-white/60 dark:border-zinc-700/50 overflow-hidden">
 							{/* Tab bar — hidden when no docs open */}
-							{openDocs.length > 0 && <div className="flex items-center justify-between px-3 pt-2 pb-2 border-b border-divider dark:border-divider-dark flex-shrink-0">
-								<div ref={tabBarRef} className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
-									{/* Document tabs */}
-									{openDocs.map((doc) => {
-										const isActive = activeTab === doc.id;
-										const Icon = getFileIcon(doc.fileExt);
-										return (
-											<div
-												role="tab"
-												tabIndex={0}
-												key={doc.id}
-												data-tab-id={doc.id}
-												onClick={() => {
-													setActiveTab(doc.id);
-													setViewLang(doc.lang === "en" ? "zh" : "original");
-												}}
-												onKeyDown={(e) => {
-													if (e.key === "Enter" || e.key === " ") {
+							{openDocs.length > 0 && (
+								<div className="flex items-center justify-between px-3 pt-2 pb-2 border-b border-divider dark:border-divider-dark flex-shrink-0">
+									<div
+										ref={tabBarRef}
+										className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none"
+									>
+										{/* Document tabs */}
+										{openDocs.map((doc) => {
+											const isActive = activeTab === doc.id;
+											const Icon = getFileIcon(doc.fileExt);
+											return (
+												<div
+													role="tab"
+													tabIndex={0}
+													key={doc.id}
+													data-tab-id={doc.id}
+													onClick={() => {
 														setActiveTab(doc.id);
 														setViewLang(doc.lang === "en" ? "zh" : "original");
-													}
-												}}
-												className={`group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer shrink-0 max-w-[180px] ${
-													isActive
-														? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
-														: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-												}`}
-											>
-												<Icon className="w-3.5 h-3.5 shrink-0" />
-												<span className="truncate">{doc.title}</span>
-												<button
-													type="button"
-													tabIndex={0}
-													onClick={(e) => handleCloseDoc(doc.id, e)}
-													onKeyDown={(e) => {
-														if (e.key === "Enter") handleCloseDoc(doc.id);
 													}}
-													className={`shrink-0 p-0.5 rounded-sm transition-colors ${
+													onKeyDown={(e) => {
+														if (e.key === "Enter" || e.key === " ") {
+															setActiveTab(doc.id);
+															setViewLang(
+																doc.lang === "en" ? "zh" : "original",
+															);
+														}
+													}}
+													className={`group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer shrink-0 max-w-[180px] ${
 														isActive
-															? "text-white/60 dark:text-zinc-900/60 hover:text-white dark:hover:text-zinc-900 hover:bg-white/20 dark:hover:bg-zinc-900/20"
-															: "opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+															? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm"
+															: "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
 													}`}
 												>
-													<X className="w-3 h-3" />
-												</button>
-											</div>
-										);
-									})}
-								</div>
-
-								{/* Document toolbar */}
-								{activeDoc && (
-									<div className="flex items-center gap-1.5 ml-2 shrink-0">
-										{/* Language toggle (English only) */}
-										{activeDoc.lang === "en" && (
-											<div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
-												<button
-													type="button"
-													onClick={() => setViewLang("zh")}
-													className={`flex items-center gap-1 px-2.5 py-[3px] rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-														viewLang === "zh"
-															? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-															: "text-zinc-500 dark:text-zinc-400"
-													}`}
-												>
-													<Languages className="w-3 h-3" />
-													中文翻译
-												</button>
-												<button
-													type="button"
-													onClick={() => setViewLang("original")}
-													className={`flex items-center gap-1 px-2.5 py-[3px] rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-														viewLang === "original"
-															? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-															: "text-zinc-500 dark:text-zinc-400"
-													}`}
-												>
-													<Globe className="w-3 h-3" />
-													英文原文
-												</button>
-											</div>
-										)}
-
-										{/* Copy full text */}
-										<CopyButton
-											docId={activeDoc.id}
-											viewLang={activeDoc.lang === "en" ? viewLang : "original"}
-										/>
-
-										{/* Focus mode */}
-										<button
-											type="button"
-											onClick={
-												layout.immersive
-													? layout.exitImmersive
-													: layout.enterImmersive
-											}
-											className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-											title={layout.immersive ? "退出全屏" : "全屏阅读"}
-										>
-											{layout.immersive ? (
-												<Minimize2 className="w-3.5 h-3.5" />
-											) : (
-												<Maximize2 className="w-3.5 h-3.5" />
-											)}
-										</button>
+													<Icon className="w-3.5 h-3.5 shrink-0" />
+													<span className="truncate">{doc.title}</span>
+													<button
+														type="button"
+														tabIndex={0}
+														onClick={(e) => handleCloseDoc(doc.id, e)}
+														onKeyDown={(e) => {
+															if (e.key === "Enter") handleCloseDoc(doc.id);
+														}}
+														className={`shrink-0 p-0.5 rounded-sm transition-colors ${
+															isActive
+																? "text-white/60 dark:text-zinc-900/60 hover:text-white dark:hover:text-zinc-900 hover:bg-white/20 dark:hover:bg-zinc-900/20"
+																: "opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+														}`}
+													>
+														<X className="w-3 h-3" />
+													</button>
+												</div>
+											);
+										})}
 									</div>
-								)}
-							</div>}
+
+									{/* Document toolbar */}
+									{activeDoc && (
+										<div className="flex items-center gap-1.5 ml-2 shrink-0">
+											{/* Language toggle (English only) */}
+											{activeDoc.lang === "en" && (
+												<div className="flex items-center rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+													<button
+														type="button"
+														onClick={() => setViewLang("zh")}
+														className={`flex items-center gap-1 px-2.5 py-[3px] rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+															viewLang === "zh"
+																? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+																: "text-zinc-500 dark:text-zinc-400"
+														}`}
+													>
+														<Languages className="w-3 h-3" />
+														中文翻译
+													</button>
+													<button
+														type="button"
+														onClick={() => setViewLang("original")}
+														className={`flex items-center gap-1 px-2.5 py-[3px] rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+															viewLang === "original"
+																? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+																: "text-zinc-500 dark:text-zinc-400"
+														}`}
+													>
+														<Globe className="w-3 h-3" />
+														英文原文
+													</button>
+												</div>
+											)}
+
+											{/* Copy full text */}
+											<CopyButton
+												docId={activeDoc.id}
+												viewLang={
+													activeDoc.lang === "en" ? viewLang : "original"
+												}
+											/>
+
+											{/* Focus mode */}
+											<button
+												type="button"
+												onClick={
+													layout.immersive
+														? layout.exitImmersive
+														: layout.enterImmersive
+												}
+												className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+												title={layout.immersive ? "退出全屏" : "全屏阅读"}
+											>
+												{layout.immersive ? (
+													<Minimize2 className="w-3.5 h-3.5" />
+												) : (
+													<Maximize2 className="w-3.5 h-3.5" />
+												)}
+											</button>
+										</div>
+									)}
+								</div>
+							)}
 
 							{/* 内容区 */}
 							{!activeDoc && (

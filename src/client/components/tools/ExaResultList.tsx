@@ -76,8 +76,7 @@ export const ExaResultList: FC<{
 						</>
 					) : (
 						<>
-							展开全部 {results.length} 条{" "}
-							<ChevronDown className="w-3 h-3" />
+							展开全部 {results.length} 条 <ChevronDown className="w-3 h-3" />
 						</>
 					)}
 				</button>

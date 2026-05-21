@@ -69,11 +69,17 @@ const DevTools: FC = () => {
 			{/* Background blobs */}
 			<div
 				className="absolute w-[500px] h-[500px] left-[60%] top-[-5%] rounded-full z-0"
-				style={{ background: "rgba(255, 172, 77, 0.15)", filter: "blur(100px)" }}
+				style={{
+					background: "rgba(255, 172, 77, 0.15)",
+					filter: "blur(100px)",
+				}}
 			/>
 			<div
 				className="absolute w-[600px] h-[600px] left-[10%] top-[50%] rounded-full z-0"
-				style={{ background: "rgba(255, 243, 136, 0.2)", filter: "blur(100px)" }}
+				style={{
+					background: "rgba(255, 243, 136, 0.2)",
+					filter: "blur(100px)",
+				}}
 			/>
 			<div
 				className="absolute w-[500px] h-[500px] left-[80%] top-[60%] rounded-full z-0"
@@ -104,8 +110,16 @@ const DevTools: FC = () => {
 							</div>
 							<div className="p-2 space-y-1">
 								{[
-									{ label: "📖 逐章精读", value: "chapter", desc: "按章节深入" },
-									{ label: "🔍 重点检索", value: "search", desc: "直接搜关键词" },
+									{
+										label: "📖 逐章精读",
+										value: "chapter",
+										desc: "按章节深入",
+									},
+									{
+										label: "🔍 重点检索",
+										value: "search",
+										desc: "直接搜关键词",
+									},
 									{ label: "📝 快速总结", value: "summary", desc: "先看概要" },
 								].map((opt, i) => (
 									<button
@@ -121,7 +135,9 @@ const DevTools: FC = () => {
 										}`}
 									>
 										<span className="font-medium">{opt.label}</span>
-										<span className="block text-[10px] text-zinc-400 mt-0.5">{opt.desc}</span>
+										<span className="block text-[10px] text-zinc-400 mt-0.5">
+											{opt.desc}
+										</span>
 									</button>
 								))}
 							</div>
@@ -143,7 +159,10 @@ const DevTools: FC = () => {
 									{askCustom.trim() && (
 										<button
 											type="button"
-											onClick={() => { setAskResult(askCustom.trim()); setAskCustom(""); }}
+											onClick={() => {
+												setAskResult(askCustom.trim());
+												setAskCustom("");
+											}}
 											className="p-0.5 text-amber-500 hover:text-amber-600 transition cursor-pointer shrink-0"
 										>
 											<Send className="w-3 h-3" />
@@ -156,7 +175,11 @@ const DevTools: FC = () => {
 						<div className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
 							<Check className="w-3.5 h-3.5 shrink-0" />
 							<span className="font-medium flex-1">{askResult}</span>
-							<button type="button" onClick={() => setAskResult(null)} className="text-zinc-400 hover:text-zinc-600 cursor-pointer">
+							<button
+								type="button"
+								onClick={() => setAskResult(null)}
+								className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+							>
 								<X className="w-3 h-3" />
 							</button>
 						</div>
@@ -185,7 +208,11 @@ const DevTools: FC = () => {
 								</span>
 							</div>
 							<div className="p-2 space-y-1">
-								{["Transformer self-attention 复杂度", "多头注意力设计动机", "位置编码方案对比"].map((q, i) => (
+								{[
+									"Transformer self-attention 复杂度",
+									"多头注意力设计动机",
+									"位置编码方案对比",
+								].map((q, i) => (
 									<button
 										key={q}
 										type="button"
@@ -210,7 +237,10 @@ const DevTools: FC = () => {
 									<input
 										type="text"
 										value={suggestCustom}
-										onChange={(e) => { setSuggestCustom(e.target.value); setSuggestSel(3); }}
+										onChange={(e) => {
+											setSuggestCustom(e.target.value);
+											setSuggestSel(3);
+										}}
 										onFocus={() => setSuggestSel(3)}
 										placeholder="自定义查询..."
 										className="flex-1 bg-transparent text-xs outline-none text-zinc-700 dark:text-zinc-300 placeholder-zinc-400"
@@ -220,33 +250,76 @@ const DevTools: FC = () => {
 							<div className="px-3 pb-2">
 								<div className="flex items-center justify-between mb-1">
 									<span className="text-[10px] text-zinc-400">检索数量</span>
-									<span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 tabular-nums">{topK} 条</span>
+									<span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 tabular-nums">
+										{topK} 条
+									</span>
 								</div>
-								<input type="range" min={1} max={20} value={topK} onChange={(e) => setTopK(Number(e.target.value))} className="w-full h-1 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer accent-blue-500" />
+								<input
+									type="range"
+									min={1}
+									max={20}
+									value={topK}
+									onChange={(e) => setTopK(Number(e.target.value))}
+									className="w-full h-1 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer accent-blue-500"
+								/>
 							</div>
 							<div className="flex items-center gap-1.5 px-3 py-2 border-t border-divider dark:border-divider-dark">
-								<button type="button" onClick={() => setSuggestResult("auto")} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition cursor-pointer">
+								<button
+									type="button"
+									onClick={() => setSuggestResult("auto")}
+									className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition cursor-pointer"
+								>
 									<Sparkles className="w-2.5 h-2.5" /> 帮我选
 								</button>
-								<button type="button" onClick={() => setSuggestResult("confirm")} className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-sm transition">
+								<button
+									type="button"
+									onClick={() => setSuggestResult("confirm")}
+									className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-sm transition"
+								>
 									<Search className="w-2.5 h-2.5" /> 确认检索
 								</button>
-								<button type="button" onClick={() => setSuggestResult("skip")} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition cursor-pointer">
+								<button
+									type="button"
+									onClick={() => setSuggestResult("skip")}
+									className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition cursor-pointer"
+								>
 									<X className="w-2.5 h-2.5" /> 跳过
 								</button>
 							</div>
 						</div>
 					) : (
-						<div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs border ${
-							suggestResult === "skip"
-								? "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200/60 dark:border-zinc-700/40 text-zinc-500"
-								: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/30 text-emerald-700 dark:text-emerald-400"
-						}`}>
-							{suggestResult === "skip" ? <X className="w-3.5 h-3.5" /> : suggestResult === "auto" ? <Sparkles className="w-3.5 h-3.5" /> : <Search className="w-3.5 h-3.5" />}
+						<div
+							className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs border ${
+								suggestResult === "skip"
+									? "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200/60 dark:border-zinc-700/40 text-zinc-500"
+									: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200/60 dark:border-emerald-800/30 text-emerald-700 dark:text-emerald-400"
+							}`}
+						>
+							{suggestResult === "skip" ? (
+								<X className="w-3.5 h-3.5" />
+							) : suggestResult === "auto" ? (
+								<Sparkles className="w-3.5 h-3.5" />
+							) : (
+								<Search className="w-3.5 h-3.5" />
+							)}
 							<span className="font-medium">
-								{suggestResult === "skip" ? "已跳过" : suggestResult === "auto" ? "已委托 AI 选择" : `已确认（${topK} 条）`}
+								{suggestResult === "skip"
+									? "已跳过"
+									: suggestResult === "auto"
+										? "已委托 AI 选择"
+										: `已确认（${topK} 条）`}
 							</span>
-							<button type="button" onClick={() => { setSuggestResult(null); setSuggestSel(null); setSuggestCustom(""); }} className="ml-auto text-zinc-400 hover:text-zinc-600 cursor-pointer"><X className="w-3 h-3" /></button>
+							<button
+								type="button"
+								onClick={() => {
+									setSuggestResult(null);
+									setSuggestSel(null);
+									setSuggestCustom("");
+								}}
+								className="ml-auto text-zinc-400 hover:text-zinc-600 cursor-pointer"
+							>
+								<X className="w-3 h-3" />
+							</button>
 						</div>
 					)}
 				</Col>
@@ -260,7 +333,9 @@ const DevTools: FC = () => {
 								<Loader2 className="w-3 h-3 text-cyan-500 animate-spin" />
 							</div>
 							<span className="text-xs font-medium">搜索中...</span>
-							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">transformer</span>
+							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">
+								transformer
+							</span>
 						</div>
 					</div>
 					{/* Complete */}
@@ -269,8 +344,12 @@ const DevTools: FC = () => {
 							<div className="p-1 rounded-lg bg-cyan-100 dark:bg-cyan-900/30">
 								<Globe className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
 							</div>
-							<span className="text-xs font-medium">{MOCK_RESULTS.length} 条结果</span>
-							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">transformer</span>
+							<span className="text-xs font-medium">
+								{MOCK_RESULTS.length} 条结果
+							</span>
+							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">
+								transformer
+							</span>
 						</div>
 						<div className="p-1.5">
 							<ExaResultList results={MOCK_RESULTS} previewCount={2} />
@@ -285,8 +364,12 @@ const DevTools: FC = () => {
 							<div className="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/30">
 								<GraduationCap className="w-3 h-3 text-purple-600 dark:text-purple-400" />
 							</div>
-							<span className="text-xs font-medium">{MOCK_RESULTS.length} 篇论文</span>
-							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">scaling laws</span>
+							<span className="text-xs font-medium">
+								{MOCK_RESULTS.length} 篇论文
+							</span>
+							<span className="text-[10px] text-zinc-400 italic truncate ml-auto">
+								scaling laws
+							</span>
 						</div>
 						<div className="p-1.5">
 							<ExaResultList results={MOCK_RESULTS} previewCount={2} />
@@ -295,7 +378,9 @@ const DevTools: FC = () => {
 
 					{/* Status pills showcase */}
 					<div className="space-y-1.5 mt-1">
-						<div className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-1">完成态</div>
+						<div className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest px-1">
+							完成态
+						</div>
 						<div className="flex items-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/30 px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
 							<Loader2 className="w-3 h-3 animate-spin" />
 							<span className="font-medium">正在检索文档...</span>

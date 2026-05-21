@@ -152,7 +152,9 @@ export function isChinese(text: string): boolean {
 // ── Batch Markdown Translation ──────────────────────────────────────────────
 
 /** Group paragraphs into batches that fit within CHUNK_LIMIT. */
-function buildBatches(paragraphs: string[]): { text: string; empty: boolean }[] {
+function buildBatches(
+	paragraphs: string[],
+): { text: string; empty: boolean }[] {
 	const batches: { text: string; empty: boolean }[] = [];
 	let batch: string[] = [];
 	let batchLen = 0;
@@ -208,9 +210,7 @@ async function mapConcurrent<T, R>(
 	};
 
 	await Promise.all(
-		Array.from({ length: Math.min(concurrency, items.length) }, () =>
-			worker(),
-		),
+		Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
 	);
 	return results;
 }
