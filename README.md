@@ -1,6 +1,8 @@
-# StudyDojo 学乐园
+# StudyDojo
 
-> 🎓 让读论文变成一场冒险 —— 四位 AI 导师，文字 / 语音 / 剧情三种模式，陪你把论文啃穿。
+**English** | [中文](./README.zh-CN.md)
+
+> 🎓 Turn reading academic papers into an adventure — four AI mentors, three interaction modes (text / voice / visual novel), and a full-stack edge-deployed RAG pipeline.
 
 <p align="center">
   <img src="public/characters/raiden/avatars/neutral.webp" width="64" />
@@ -10,88 +12,88 @@
 </p>
 
 <p align="center">
-  <a href="https://study-dojo.thebinwang.com/"><strong>👉 立即体验（完全免费，无需部署）</strong></a>
+  <a href="https://study-dojo.thebinwang.com/"><strong>👉 Try it now (free, no setup required)</strong></a>
 </p>
 
-## 🎬 演示视频
+## 🎬 Demo
 
 <https://github.com/user-attachments/assets/d5993730-fa1c-4878-aff2-86437b52d278>
 
 ---
 
-## 📋 项目背景
+## 📋 Project Background
 
-本项目基于「林亦LYi」频道的开源项目 [暴躁教授论文陪读](https://github.com/LYiHub/mad-professor-public) 进行二次开发。原项目是一个集成了 PDF 解析、RAG、LLM 角色扮演和实时语音交互的桌面应用，旨在作为学术论文的 AI 阅读伴侣。
+This project builds on **[mad-professor-public](https://github.com/LYiHub/mad-professor-public)** by the open-source channel 「林亦LYi」. The original is a desktop application that wires together PDF parsing, RAG, LLM role-play, and realtime voice — designed as an AI reading companion for academic papers.
 
-**StudyDojo 选择的方向是「特性增强 + 模块重组」双线并行**：保留原项目 RAG 检索 + 角色扮演 + 语音交互的核心思路，同时从零开始重新设计架构，将桌面应用重构为云端全栈 Web 应用，并在此基础上做了大量创新扩展。
+**StudyDojo takes that foundation in a different direction: feature extension + full rearchitecture.** The original's core ideas (RAG retrieval, character role-play, voice interaction) are preserved, but the entire stack has been redesigned from the ground up — moving from a Python desktop app to a cloud-native full-stack Web application, with significant new capabilities layered on top.
 
-## 💡 创意说明
+## 💡 Design Notes
 
-### 从一个角色到一支教学天团
+### From one professor to a four-mentor team
 
-原项目只有一位"暴躁教授"。我觉得学习这件事，不同场景需要不同的陪伴：有时需要被骂醒，有时需要被鼓励，有时只想找个人耐心听你说"这段没看懂"。所以我设计了四位风格迥异的 AI 导师，每位都有独立的人设提示词、语音音色和对话风格：
+The original project has a single "Mad Professor". I think learning needs more than one voice — sometimes you need to be yelled at, sometimes you need encouragement, and sometimes you just want someone patient to listen to "I don't understand this part". So StudyDojo ships with four mentors, each with their own personality prompts, voice timbre, and dialogue style:
 
-| 角色 | 名称 | 风格 | 一句话介绍 |
-|:---:|------|------|-----------|
-| ⚡ | **雷电教授** | 学术暴君 | 嘴上凶巴巴但内心敦促你进步的严师，动不动就"罚你抄写整篇论文" |
-| 💥 | **可莉导师** | 爆炸专家 | 用蹦蹦炸弹给你讲论文的元气少女，学习也可以超级有趣 |
-| 🌸 | **诗雨学姐** | 解忧百科 | 温柔耐心的知心学姐，再笨的问题她都不会嫌你烦 |
-| 📐 | **逸轩学长** | 论文翻译官 | 务实靠谱的理工男，擅长把复杂概念掰开揉碎讲给你听 |
+| Avatar | Name | Style | One-liner |
+|:---:|------|-------|-----------|
+| ⚡ | **Raiden** | The strict professor | Gruff on the outside, secretly invested — quick to assign "you'll be copying this entire paper as punishment" |
+| 💥 | **Klee** | The bomb expert | The energetic kid who explains papers with explosives. Learning can be ridiculously fun |
+| 🌸 | **Shiyu** | The empathetic senior | Patient, kind, never makes you feel dumb for asking — the "no question is too small" mentor |
+| 📐 | **Yixuan** | The concept decoder | The grounded senior who's great at breaking complex ideas into pieces a beginner can hold |
 
-### 从文字聊天到三种沉浸体验
+### From text chat to three immersive modes
 
-原项目以文字 + 语音为主。我额外引入了**剧情伴读模式**——像玩视觉小说一样读论文。AI 导师会带着立绘和表情变化，用 RPG 对话选项引导你探索论文，偶尔还会触发庆祝烟花、闪电、炸弹爆炸等 16 种视觉特效。
+The original is mostly text + voice. StudyDojo adds a **Visual Novel mode** — reading a paper like you're playing a story-driven game. Mentors appear with character portraits and expression changes, RPG-style dialogue options nudge you through the paper, and 16 visual effects (fireworks, lightning, explosions, glitches, rain…) fire on key beats.
 
-三种模式可以无缝切换，对话历史在模式之间自动合并：
+All three modes share state and conversation history — you can switch on the fly:
 
-| 模式 | 体验 | 适合场景 |
-|------|------|---------|
-| 💬 **文字模式** | 传统 AI 对话，支持工具调用、代码高亮、推理可视化 | 精读细节、深度提问 |
-| 🎙️ **语音模式** | 实时语音对话，支持打断，像和真人讨论 | 通勤路上、解放双手 |
-| 🎬 **剧情模式** | 视觉小说风格，角色立绘 + 表情 + 选项 + 特效 | 轻松探索、趣味学习 |
+| Mode | What it feels like | Best for |
+|------|--------------------|---------|
+| 💬 **Text** | Classic AI chat with tool use, syntax highlighting, and reasoning trails | Close reading, deep questioning |
+| 🎙️ **Voice** | Realtime voice with interruption support — closer to talking to a human | Commuting, hands-free study |
+| 🎬 **Visual Novel** | Character portraits + expressions + dialogue choices + effects | Lighthearted exploration, fun mode |
 
-### 从本地工具到云端全栈
+### From a local tool to a full-stack edge platform
 
-原项目是基于 Python 的桌面应用。我将整个架构重构为**全栈 Web 应用**，部署在 Cloudflare 边缘网络上，打开浏览器就能用，无需安装任何软件：
+The original is a Python desktop app. StudyDojo rebuilds the entire stack as a **full-stack Web application** deployed on Cloudflare's edge network — open a browser and you're in, nothing to install:
 
-- **前端**：React 19 + Tailwind CSS 4 + Assistant-UI 组件库
-- **后端**：Cloudflare Workers + Hono + Vercel AI SDK
-- **存储**：D1（关系数据）+ R2（文档对象）+ Vectorize（向量检索）
-- **全球部署**：Cloudflare 边缘节点自动就近响应
+- **Frontend**: React 19 + Tailwind CSS 4 + Assistant-UI
+- **Backend**: Cloudflare Workers + Hono + Vercel AI SDK
+- **Storage**: D1 (relational) + R2 (objects) + Vectorize (embeddings)
+- **Global delivery**: Cloudflare edge nodes route to the nearest region automatically
 
-### 除此之外还折腾了什么
+### What else I built on top
 
-- 🔍 **两阶段 RAG**：向量召回 + Cohere 重排序，比单纯向量检索更精准
-- 🌐 **联网搜索**：Exa API 实时搜网页和学术论文，引用真实来源
-- 🧠 **长期记忆**：Mem0 记住用户偏好，跨会话生效（"记住我不喜欢看公式推导"）
-- 📄 **多格式文档库**：PDF / DOCX / DOC / 图片 / TXT / MD，自动解析翻译向量化
-- 🛠️ **交互式工具卡片**：文档检索建议、用户提问确认等通过可视化卡片完成，不是冷冰冰的函数调用
-- 🎨 **16 种视觉特效**：烟花、闪电、炸弹爆炸、漩涡、故障、下雨……剧情模式专属彩蛋
-- 🔐 **用户认证**：Clerk 登录，每个用户有独立的对话历史和文档库
+- 🔍 **Two-stage RAG** — vector recall followed by Cohere reranking, materially more precise than vector-only retrieval
+- 🌐 **Live web search** — Exa API for real-time web + academic paper search with verifiable sources
+- 🧠 **Long-term memory** — Mem0 retains user preferences across sessions ("remember that I prefer skipping math derivations")
+- 📄 **Multi-format document pipeline** — PDF / DOCX / DOC / images / TXT / MD, parsed, translated, and vectorized automatically
+- 🛠️ **Interactive tool cards** — document-retrieval suggestions and user-confirmation steps render as visual cards, not bare function calls
+- 🎨 **16 visual effects** — fireworks, lightning, bombs, vortexes, glitches, rain… exclusive to visual-novel mode
+- 🔐 **Authentication** — Clerk login; every user gets isolated conversation history and document library
 
 ---
 
-## 🏗️ 系统架构
+## 🏗️ System Architecture
 
 ```mermaid
 graph TB
-    subgraph 客户端
+    subgraph Client
         UI[React 19 + Tailwind CSS 4]
-        AUI[Assistant-UI 组件库]
-        TTS[ElevenLabs 语音合成]
-        STT[ElevenLabs 语音识别]
+        AUI[Assistant-UI component library]
+        TTS[ElevenLabs TTS]
+        STT[ElevenLabs STT]
         UI --> AUI
         AUI --> TTS
         AUI --> STT
     end
 
     subgraph Cloudflare Workers
-        API[Hono API 路由]
-        CHAT[文本对话]
-        DIAL[剧情对话]
-        RAG[RAG 检索引擎]
-        TRANS[腾讯云翻译]
-        OCR[PaddleOCR 解析]
+        API[Hono API routes]
+        CHAT[Text chat]
+        DIAL[Visual-novel dialogue]
+        RAG[RAG retrieval engine]
+        TRANS[Tencent Cloud MT]
+        OCR[PaddleOCR parsing]
         API --> CHAT
         API --> DIAL
         API --> RAG
@@ -99,21 +101,21 @@ graph TB
         API --> OCR
     end
 
-    subgraph AI 服务
-        LLM[OpenRouter LLM]
-        EMB[向量 Embedding]
-        RERANK[Cohere 重排序]
-        MEM[Mem0 长期记忆]
-        EXA[Exa 联网搜索]
+    subgraph AI Services
+        LLM[OpenRouter LLM gateway]
+        EMB[Embedding model]
+        RERANK[Cohere reranker]
+        MEM[Mem0 long-term memory]
+        EXA[Exa web/academic search]
     end
 
-    subgraph 存储
+    subgraph Storage
         D1[(Cloudflare D1)]
         R2[(Cloudflare R2)]
         VEC[(Cloudflare Vectorize)]
     end
 
-    UI -->|AI SDK 流式协议| API
+    UI -->|AI SDK streaming protocol| API
     CHAT --> LLM
     DIAL --> LLM
     RAG --> EMB
@@ -121,166 +123,166 @@ graph TB
     RAG --> VEC
     CHAT --> MEM
     CHAT --> EXA
-    TRANS -->|并发翻译| 腾讯TMT
-    OCR -->|文档解析| PaddleOCR
+    TRANS -->|concurrent translation| TencentTMT
+    OCR -->|document parsing| PaddleOCR
     API --> D1
     API --> R2
     RAG --> D1
 ```
 
-## 📄 文档处理流水线
+## 📄 Document Processing Pipeline
 
 ```mermaid
 flowchart LR
-    UPLOAD[📤 上传文件] --> PARSE{格式识别}
-    PARSE -->|PDF / 图片 / DOC| OCR[PaddleOCR]
+    UPLOAD[📤 Upload] --> PARSE{Format detection}
+    PARSE -->|PDF / image / DOC| OCR[PaddleOCR]
     PARSE -->|DOCX| MAMMOTH[Mammoth]
-    PARSE -->|TXT / MD| RAW[直接读取]
+    PARSE -->|TXT / MD| RAW[Read directly]
     OCR --> MD[Markdown]
     MAMMOTH --> MD
     RAW --> MD
-    MD --> LANG{语言检测}
-    LANG -->|英文| TRANSLATE[腾讯云翻译<br/>并发 4 路]
-    LANG -->|中文| CHUNK
-    TRANSLATE --> CHUNK[分块<br/>2048 字 / 256 重叠]
-    CHUNK --> EMBED[向量化]
-    EMBED --> STORE[(Vectorize 存储)]
+    MD --> LANG{Language detect}
+    LANG -->|English| TRANSLATE[Tencent Cloud MT<br/>4-way concurrent]
+    LANG -->|Chinese| CHUNK
+    TRANSLATE --> CHUNK[Chunk<br/>2048 chars / 256 overlap]
+    CHUNK --> EMBED[Embed]
+    EMBED --> STORE[(Vectorize)]
 ```
 
 ---
 
-## 🚀 在线使用
+## 🚀 Use it online
 
-最快的方式——打开浏览器直接用，注册即可，完全免费：
+Fastest path — open the browser, sign up, you're in. Free, no setup:
 
 **👉 [https://study-dojo.thebinwang.com/](https://study-dojo.thebinwang.com/)**
 
-无需安装任何软件，无需配置环境变量，无需部署服务器。注册账号后即可上传论文、选择导师、开始学习。
+No install, no env vars, no server. Sign up, upload a paper, pick a mentor, start reading.
 
-如果你想本地开发或二次开发，请继续往下看 👇
+If you'd rather run it locally or fork the code, keep reading 👇
 
 ---
 
-## 🛠️ 本地开发
+## 🛠️ Local Development
 
-### 环境要求
+### Requirements
 
 - Node.js 20+
 - PNPM 9+
-- Cloudflare 账号（需开通 D1、R2、Vectorize 服务）
+- A Cloudflare account with D1, R2, and Vectorize enabled
 
-### 快速开始
+### Quick start
 
 ```bash
-# 1. 克隆项目
+# 1. Clone
 git clone https://github.com/BingoWon/study-dojo.git
 cd study-dojo
 
-# 2. 安装依赖
+# 2. Install
 pnpm install
 
-# 3. 配置环境变量
+# 3. Configure env vars
 cp .dev.vars.example .dev.vars
-# 编辑 .dev.vars，填入各服务的密钥（详见下方说明）
+# Edit .dev.vars and fill in service credentials (see below)
 
-# 4. 初始化 Cloudflare 资源（首次运行）
+# 4. Provision Cloudflare resources (first run only)
 npx wrangler d1 create study-dojo-db
 npx wrangler r2 bucket create study-dojo-papers
 npx wrangler vectorize create knowledge-index --dimensions 1536 --metric cosine
-# 将生成的 ID 填入 wrangler.toml 对应位置
+# Drop the generated IDs into the right spots in wrangler.toml
 
-# 5. 启动开发服务器
+# 5. Start the dev server
 pnpm dev
 ```
 
-### 常用命令
+### Common commands
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` | 启动本地开发服务器 |
-| `pnpm build` | 构建生产版本 |
-| `pnpm deploy` | 构建并部署到 Cloudflare |
-| `pnpm check` | 运行代码检查（lint + 类型检查） |
-| `pnpm cf-typegen` | 生成 Cloudflare 类型定义 |
+| Command | What it does |
+|---------|--------------|
+| `pnpm dev` | Start the local dev server |
+| `pnpm build` | Production build |
+| `pnpm deploy` | Build and deploy to Cloudflare |
+| `pnpm check` | Run linting and type checking |
+| `pnpm cf-typegen` | Generate Cloudflare type definitions |
 
-## ⚙️ 环境变量
+## ⚙️ Environment Variables
 
-在 `.dev.vars` 中配置以下变量。生产环境通过 `wrangler secret put <变量名>` 设置。
+Configure these in `.dev.vars` locally. In production, set them with `wrangler secret put <NAME>`.
 
-### 核心 LLM
+### Core LLM
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `LLM_BASE_URL` | 主模型 API 地址 | `https://openrouter.ai/api/v1` |
-| `LLM_API_KEY` | 主模型 API 密钥 | `sk-or-v1-xxx` |
-| `LLM_MODEL` | 文本对话使用的模型 | `anthropic/claude-sonnet-4` |
-| `DIALOGUE_BASE_URL` | 剧情模式 API 地址（可选，默认同主模型） | 同上 |
-| `DIALOGUE_API_KEY` | 剧情模式 API 密钥（可选） | 同上 |
-| `DIALOGUE_MODEL` | 剧情模式使用的模型（可选） | `google/gemini-2.5-flash` |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `LLM_BASE_URL` | Primary model API endpoint | `https://openrouter.ai/api/v1` |
+| `LLM_API_KEY` | Primary model API key | `sk-or-v1-xxx` |
+| `LLM_MODEL` | Model used for text chat | `anthropic/claude-sonnet-4` |
+| `DIALOGUE_BASE_URL` | Visual-novel mode endpoint (optional, defaults to primary) | same as above |
+| `DIALOGUE_API_KEY` | Visual-novel mode API key (optional) | same as above |
+| `DIALOGUE_MODEL` | Visual-novel mode model (optional) | `google/gemini-2.5-flash` |
 
-### 向量检索与重排序
+### Retrieval & reranking
 
-| 变量 | 说明 |
-|------|------|
-| `EMBEDDING_BASE_URL` | Embedding 服务地址 |
-| `EMBEDDING_API_KEY` | Embedding API 密钥 |
-| `EMBEDDING_MODEL` | Embedding 模型（如 `qwen/qwen3-embedding-4b`） |
-| `RERANK_MODEL` | 重排序模型（如 `cohere/rerank-4-fast`） |
+| Variable | Description |
+|----------|-------------|
+| `EMBEDDING_BASE_URL` | Embedding service endpoint |
+| `EMBEDDING_API_KEY` | Embedding API key |
+| `EMBEDDING_MODEL` | Embedding model (e.g. `qwen/qwen3-embedding-4b`) |
+| `RERANK_MODEL` | Reranker model (e.g. `cohere/rerank-4-fast`) |
 
-### 文档处理
+### Document processing
 
-| 变量 | 说明 |
-|------|------|
-| `PADDLE_OCR_TOKEN` | PaddleOCR 服务 Token，用于 PDF 和图片解析 |
-| `TMT_SECRET_ID` | 腾讯云翻译 SecretId，用于英文文档自动翻译 |
-| `TMT_SECRET_KEY` | 腾讯云翻译 SecretKey |
+| Variable | Description |
+|----------|-------------|
+| `PADDLE_OCR_TOKEN` | PaddleOCR token for PDF and image parsing |
+| `TMT_SECRET_ID` | Tencent Cloud MT SecretId for auto-translation of English documents |
+| `TMT_SECRET_KEY` | Tencent Cloud MT SecretKey |
 
-### 语音交互
+### Voice
 
-| 变量 | 说明 |
-|------|------|
-| `ELEVENLABS_API_KEY` | ElevenLabs API 密钥，用于语音合成和语音识别 |
+| Variable | Description |
+|----------|-------------|
+| `ELEVENLABS_API_KEY` | ElevenLabs API key for both TTS and STT |
 
-### 联网搜索与长期记忆
+### Web search & long-term memory
 
-| 变量 | 说明 |
-|------|------|
-| `EXA_API_KEY` | Exa 搜索 API 密钥，用于联网搜索和学术论文检索 |
-| `MEM0_API_KEY` | Mem0 API 密钥，用于跨会话长期记忆 |
+| Variable | Description |
+|----------|-------------|
+| `EXA_API_KEY` | Exa search API key for web + academic paper retrieval |
+| `MEM0_API_KEY` | Mem0 API key for cross-session memory |
 
-### 用户认证
+### Auth
 
-| 变量 | 说明 |
-|------|------|
-| `CLERK_JWKS_URL` | Clerk JWKS 端点地址 |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk 前端可公开密钥 |
+| Variable | Description |
+|----------|-------------|
+| `CLERK_JWKS_URL` | Clerk JWKS endpoint |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk frontend publishable key |
 
-## 🛠️ 技术栈
+## 🛠️ Tech Stack
 
-| 层 | 技术 |
-|---|------|
-| **前端** | React 19、TypeScript、Tailwind CSS 4、Assistant-UI、Vite 8 |
-| **后端** | Cloudflare Workers、Hono、Vercel AI SDK |
-| **数据库** | Cloudflare D1（SQLite）、Drizzle ORM |
-| **向量库** | Cloudflare Vectorize |
-| **对象存储** | Cloudflare R2 |
-| **LLM 网关** | OpenRouter（兼容任意 OpenAI 接口） |
-| **语音** | ElevenLabs（TTS + STT） |
-| **搜索** | Exa（网页 + 学术论文） |
-| **记忆** | Mem0（长期记忆管理） |
-| **认证** | Clerk |
-| **代码规范** | Biome（lint + format） |
+| Layer | Tech |
+|-------|------|
+| **Frontend** | React 19, TypeScript, Tailwind CSS 4, Assistant-UI, Vite 8 |
+| **Backend** | Cloudflare Workers, Hono, Vercel AI SDK |
+| **Database** | Cloudflare D1 (SQLite), Drizzle ORM |
+| **Vector store** | Cloudflare Vectorize |
+| **Object storage** | Cloudflare R2 |
+| **LLM gateway** | OpenRouter (OpenAI-compatible) |
+| **Voice** | ElevenLabs (TTS + STT) |
+| **Search** | Exa (web + academic papers) |
+| **Memory** | Mem0 (long-term memory management) |
+| **Auth** | Clerk |
+| **Code style** | Biome (lint + format) |
 
-## 🤝 参与贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！无论是修 Bug、加功能还是改文档，都非常欢迎。
+Issues and pull requests welcome — bug fixes, new features, doc improvements, all of it.
 
-1. Fork 本仓库
-2. 创建你的分支：`git checkout -b feat/my-feature`
-3. 提交改动：`git commit -m "feat: add my feature"`
-4. 推送分支：`git push origin feat/my-feature`
-5. 发起 Pull Request
+1. Fork the repo
+2. Create your branch: `git checkout -b feat/my-feature`
+3. Commit your changes: `git commit -m "feat: add my feature"`
+4. Push the branch: `git push origin feat/my-feature`
+5. Open a Pull Request
 
-如果你有好的角色创意或功能建议，也欢迎在 Issues 中讨论 💬
+Got an idea for a new mentor character or feature? Open an issue and let's discuss 💬
 
-不想折腾代码？没关系，直接到 [在线版](https://study-dojo.thebinwang.com/) 体验，用起来再说！
+Not in the mood to deal with code? Just go to the [live version](https://study-dojo.thebinwang.com/) and try it.
