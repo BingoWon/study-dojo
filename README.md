@@ -29,55 +29,42 @@
 
 ---
 
-## 📋 Project Background
+## 📋 Background
 
-This project builds on **[mad-professor-public](https://github.com/LYiHub/mad-professor-public)** by the open-source channel 「林亦LYi」. The original is a desktop application that wires together PDF parsing, RAG, LLM role-play, and realtime voice — designed as an AI reading companion for academic papers.
+Built on **[mad-professor-public](https://github.com/LYiHub/mad-professor-public)** by 「林亦LYi」 — a Python desktop app that wires together PDF parsing, RAG, LLM role-play, and realtime voice as an AI reading companion for papers.
 
-**StudyDojo takes that foundation in a different direction: feature extension + full rearchitecture.** The original's core ideas (RAG retrieval, character role-play, voice interaction) are preserved, but the entire stack has been redesigned from the ground up — moving from a Python desktop app to a cloud-native full-stack Web application, with significant new capabilities layered on top.
+**StudyDojo keeps the core idea, but rebuilds the stack from the ground up** — from a Python desktop app into a cloud-native full-stack Web application, with significant new modes (multi-mentor, visual novel) and infra (two-stage RAG, Mem0, Exa search) on top.
 
 ## 💡 Design Notes
 
-### From one professor to a four-mentor team
+### Four mentors instead of one
 
-The original project has a single "Mad Professor". I think learning needs more than one voice — sometimes you need to be yelled at, sometimes you need encouragement, and sometimes you just want someone patient to listen to "I don't understand this part". So StudyDojo ships with four mentors, each with their own personality prompts, voice timbre, and dialogue style:
+The original ships a single "Mad Professor". I think learning needs more than one voice — sometimes you need to be yelled at, sometimes encouraged, sometimes just heard. So StudyDojo has four mentors, each with their own personality prompt, voice timbre, and dialogue style:
 
 | Avatar | Name | Style | One-liner |
 |:---:|------|-------|-----------|
-| ⚡ | **Raiden** | The strict professor | Gruff on the outside, secretly invested — quick to assign "you'll be copying this entire paper as punishment" |
-| 💥 | **Klee** | The bomb expert | The energetic kid who explains papers with explosives. Learning can be ridiculously fun |
-| 🌸 | **Shiyu** | The empathetic senior | Patient, kind, never makes you feel dumb for asking — the "no question is too small" mentor |
-| 📐 | **Yixuan** | The concept decoder | The grounded senior who's great at breaking complex ideas into pieces a beginner can hold |
+| ⚡ | **Raiden** | Strict professor | Gruff on the outside, secretly invested — quick to assign "you'll be copying this entire paper" |
+| 💥 | **Klee** | Bomb expert | Explains papers with explosives. Learning can be ridiculously fun |
+| 🌸 | **Shiyu** | Empathetic senior | Patient, kind — the "no question is too small" mentor |
+| 📐 | **Yixuan** | Concept decoder | Grounded, great at breaking complex ideas into pieces a beginner can hold |
 
-### From text chat to three immersive modes
+### Three modes sharing one conversation
 
-The original is mostly text + voice. StudyDojo adds a **Visual Novel mode** — reading a paper like you're playing a story-driven game. Mentors appear with character portraits and expression changes, RPG-style dialogue options nudge you through the paper, and 16 visual effects (fireworks, lightning, explosions, glitches, rain…) fire on key beats.
+The original is mostly text + voice. StudyDojo adds **Visual Novel mode** — reading a paper like a story-driven game, with character portraits, expression changes, RPG dialogue options, and 16 visual effects. All three modes share state — switch freely:
 
-All three modes share state and conversation history — you can switch on the fly:
-
-| Mode | What it feels like | Best for |
-|------|--------------------|---------|
-| 💬 **Text** | Classic AI chat with tool use, syntax highlighting, and reasoning trails | Close reading, deep questioning |
+| Mode | Feels like | Best for |
+|------|-----------|---------|
+| 💬 **Text** | Classic AI chat with tool use, syntax highlighting, reasoning trails | Close reading, deep questioning |
 | 🎙️ **Voice** | Realtime voice with interruption support — closer to talking to a human | Commuting, hands-free study |
-| 🎬 **Visual Novel** | Character portraits + expressions + dialogue choices + effects | Lighthearted exploration, fun mode |
+| 🎬 **Visual Novel** | Portraits + expressions + dialogue choices + effects | Lighthearted exploration |
 
-### From a local tool to a full-stack edge platform
+### What else got built on top
 
-The original is a Python desktop app. StudyDojo rebuilds the entire stack as a **full-stack Web application** deployed on Cloudflare's edge network — open a browser and you're in, nothing to install:
-
-- **Frontend**: React 19 + Tailwind CSS 4 + Assistant-UI
-- **Backend**: Cloudflare Workers + Hono + Vercel AI SDK
-- **Storage**: D1 (relational) + R2 (objects) + Vectorize (embeddings)
-- **Global delivery**: Cloudflare edge nodes route to the nearest region automatically
-
-### What else I built on top
-
-- 🔍 **Two-stage RAG** — vector recall followed by Cohere reranking, materially more precise than vector-only retrieval
-- 🌐 **Live web search** — Exa API for real-time web + academic paper search with verifiable sources
-- 🧠 **Long-term memory** — Mem0 retains user preferences across sessions ("remember that I prefer skipping math derivations")
-- 📄 **Multi-format document pipeline** — PDF / DOCX / DOC / images / TXT / MD, parsed, translated, and vectorized automatically
-- 🛠️ **Interactive tool cards** — document-retrieval suggestions and user-confirmation steps render as visual cards, not bare function calls
-- 🎨 **16 visual effects** — fireworks, lightning, bombs, vortexes, glitches, rain… exclusive to visual-novel mode
-- 🔐 **Authentication** — Clerk login; every user gets isolated conversation history and document library
+- 🔍 **Two-stage RAG** — vector recall + Cohere reranking; materially more precise than vector-only retrieval
+- 🌐 **Live web + paper search** — Exa API for real-time sources, with citations
+- 🧠 **Long-term memory** — Mem0 retains preferences across sessions ("remember I prefer skipping math derivations")
+- 📄 **Multi-format ingest** — PDF / DOCX / DOC / images / TXT / MD parsed, translated, vectorized
+- 🛠️ **Interactive tool cards** — retrieval suggestions and user-confirmation render as visual cards, not bare function calls
 
 ---
 
@@ -123,7 +110,7 @@ graph TB
         VEC[(Cloudflare Vectorize)]
     end
 
-    UI -->|AI SDK streaming protocol| API
+    UI -->|AI SDK streaming| API
     CHAT --> LLM
     DIAL --> LLM
     RAG --> EMB
@@ -131,139 +118,67 @@ graph TB
     RAG --> VEC
     CHAT --> MEM
     CHAT --> EXA
-    TRANS -->|concurrent translation| TencentTMT
-    OCR -->|document parsing| PaddleOCR
     API --> D1
     API --> R2
     RAG --> D1
-```
-
-## 📄 Document Processing Pipeline
-
-```mermaid
-flowchart LR
-    UPLOAD[📤 Upload] --> PARSE{Format detection}
-    PARSE -->|PDF / image / DOC| OCR[PaddleOCR]
-    PARSE -->|DOCX| MAMMOTH[Mammoth]
-    PARSE -->|TXT / MD| RAW[Read directly]
-    OCR --> MD[Markdown]
-    MAMMOTH --> MD
-    RAW --> MD
-    MD --> LANG{Language detect}
-    LANG -->|English| TRANSLATE[Tencent Cloud MT<br/>4-way concurrent]
-    LANG -->|Chinese| CHUNK
-    TRANSLATE --> CHUNK[Chunk<br/>2048 chars / 256 overlap]
-    CHUNK --> EMBED[Embed]
-    EMBED --> STORE[(Vectorize)]
 ```
 
 ---
 
 ## 🚀 Use it online
 
-Fastest path — open the browser, sign up, you're in. Free, no setup:
+Open the browser, sign up, you're in. No install, no env vars, no server:
 
-**👉 [https://study-dojo.thebinwang.com/](https://study-dojo.thebinwang.com/)**
+**👉 [study-dojo.thebinwang.com](https://study-dojo.thebinwang.com/)**
 
-No install, no env vars, no server. Sign up, upload a paper, pick a mentor, start reading.
-
-If you'd rather run it locally or fork the code, keep reading 👇
-
----
+To run it locally or fork the code, keep reading 👇
 
 ## 🛠️ Local Development
 
-### Requirements
-
-- Node.js 20+
-- PNPM 9+
-- A Cloudflare account with D1, R2, and Vectorize enabled
-
-### Quick start
+**Requires** Node.js 20+, PNPM 9+, and a Cloudflare account with D1 / R2 / Vectorize enabled.
 
 ```bash
-# 1. Clone
 git clone https://github.com/BingoWon/study-dojo.git
 cd study-dojo
-
-# 2. Install
 pnpm install
+cp .dev.vars.example .dev.vars     # fill in service credentials — see below
 
-# 3. Configure env vars
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars and fill in service credentials (see below)
-
-# 4. Provision Cloudflare resources (first run only)
+# First-run only: provision Cloudflare resources
 npx wrangler d1 create study-dojo-db
 npx wrangler r2 bucket create study-dojo-papers
 npx wrangler vectorize create knowledge-index --dimensions 1536 --metric cosine
-# Drop the generated IDs into the right spots in wrangler.toml
+# Drop the generated IDs into wrangler.toml
 
-# 5. Start the dev server
-pnpm dev
+pnpm dev      # local dev server
+pnpm deploy   # build + deploy to Cloudflare
+pnpm check    # lint + type check
 ```
-
-### Common commands
-
-| Command | What it does |
-|---------|--------------|
-| `pnpm dev` | Start the local dev server |
-| `pnpm build` | Production build |
-| `pnpm deploy` | Build and deploy to Cloudflare |
-| `pnpm check` | Run linting and type checking |
-| `pnpm cf-typegen` | Generate Cloudflare type definitions |
 
 ## ⚙️ Environment Variables
 
-Configure these in `.dev.vars` locally. In production, set them with `wrangler secret put <NAME>`.
+Configure in `.dev.vars` for local development. For production, use `wrangler secret put <NAME>`.
 
-### Core LLM
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `LLM_BASE_URL` | Primary model API endpoint | `https://openrouter.ai/api/v1` |
-| `LLM_API_KEY` | Primary model API key | `sk-or-v1-xxx` |
-| `LLM_MODEL` | Model used for text chat | `anthropic/claude-sonnet-4` |
-| `DIALOGUE_BASE_URL` | Visual-novel mode endpoint (optional, defaults to primary) | same as above |
-| `DIALOGUE_API_KEY` | Visual-novel mode API key (optional) | same as above |
-| `DIALOGUE_MODEL` | Visual-novel mode model (optional) | `google/gemini-2.5-flash` |
-
-### Retrieval & reranking
+### LLM
 
 | Variable | Description |
 |----------|-------------|
-| `EMBEDDING_BASE_URL` | Embedding service endpoint |
-| `EMBEDDING_API_KEY` | Embedding API key |
-| `EMBEDDING_MODEL` | Embedding model (e.g. `qwen/qwen3-embedding-4b`) |
-| `RERANK_MODEL` | Reranker model (e.g. `cohere/rerank-4-fast`) |
+| `LLM_BASE_URL` | Primary model endpoint (e.g. `https://openrouter.ai/api/v1`) |
+| `LLM_API_KEY` | Primary model API key |
+| `LLM_MODEL` | Text chat model (e.g. `anthropic/claude-sonnet-4`) |
+| `DIALOGUE_BASE_URL` / `DIALOGUE_API_KEY` / `DIALOGUE_MODEL` | Optional override for visual-novel mode (defaults to primary) |
+| `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL` | Embedding service (e.g. `qwen/qwen3-embedding-4b`) |
+| `RERANK_MODEL` | Reranker (e.g. `cohere/rerank-4-fast`) |
 
-### Document processing
-
-| Variable | Description |
-|----------|-------------|
-| `PADDLE_OCR_TOKEN` | PaddleOCR token for PDF and image parsing |
-| `TMT_SECRET_ID` | Tencent Cloud MT SecretId for auto-translation of English documents |
-| `TMT_SECRET_KEY` | Tencent Cloud MT SecretKey |
-
-### Voice
+### Services
 
 | Variable | Description |
 |----------|-------------|
-| `ELEVENLABS_API_KEY` | ElevenLabs API key for both TTS and STT |
-
-### Web search & long-term memory
-
-| Variable | Description |
-|----------|-------------|
-| `EXA_API_KEY` | Exa search API key for web + academic paper retrieval |
-| `MEM0_API_KEY` | Mem0 API key for cross-session memory |
-
-### Auth
-
-| Variable | Description |
-|----------|-------------|
-| `CLERK_JWKS_URL` | Clerk JWKS endpoint |
-| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk frontend publishable key |
+| `PADDLE_OCR_TOKEN` | PaddleOCR — PDF and image parsing |
+| `TMT_SECRET_ID` / `TMT_SECRET_KEY` | Tencent Cloud MT — auto-translation of English documents |
+| `ELEVENLABS_API_KEY` | ElevenLabs — TTS and STT |
+| `EXA_API_KEY` | Exa — web + academic paper search |
+| `MEM0_API_KEY` | Mem0 — cross-session memory |
+| `CLERK_JWKS_URL` / `VITE_CLERK_PUBLISHABLE_KEY` | Clerk authentication |
 
 ## 🛠️ Tech Stack
 
@@ -272,25 +187,14 @@ Configure these in `.dev.vars` locally. In production, set them with `wrangler s
 | **Frontend** | React 19, TypeScript, Tailwind CSS 4, Assistant-UI, Vite 8 |
 | **Backend** | Cloudflare Workers, Hono, Vercel AI SDK |
 | **Database** | Cloudflare D1 (SQLite), Drizzle ORM |
-| **Vector store** | Cloudflare Vectorize |
-| **Object storage** | Cloudflare R2 |
+| **Vector / Object store** | Cloudflare Vectorize, Cloudflare R2 |
 | **LLM gateway** | OpenRouter (OpenAI-compatible) |
-| **Voice** | ElevenLabs (TTS + STT) |
-| **Search** | Exa (web + academic papers) |
-| **Memory** | Mem0 (long-term memory management) |
+| **Voice / Search / Memory** | ElevenLabs (TTS+STT), Exa, Mem0 |
 | **Auth** | Clerk |
-| **Code style** | Biome (lint + format) |
+| **Tooling** | Biome (lint + format) |
 
 ## 🤝 Contributing
 
-Issues and pull requests welcome — bug fixes, new features, doc improvements, all of it.
+Issues and pull requests welcome — bug fixes, new features, doc improvements, all of it. Got an idea for a new mentor character? Open an issue and let's discuss 💬
 
-1. Fork the repo
-2. Create your branch: `git checkout -b feat/my-feature`
-3. Commit your changes: `git commit -m "feat: add my feature"`
-4. Push the branch: `git push origin feat/my-feature`
-5. Open a Pull Request
-
-Got an idea for a new mentor character or feature? Open an issue and let's discuss 💬
-
-Not in the mood to deal with code? Just go to the [live version](https://study-dojo.thebinwang.com/) and try it.
+Not into code? Just go to the [live version](https://study-dojo.thebinwang.com/) and try it.
