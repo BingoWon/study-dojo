@@ -5,6 +5,7 @@
 > 🎓 让读论文变成一场冒险——四位 AI 导师，文字 / 语音 / 剧情三种模式，边缘部署的全栈 RAG 管线陪你把论文啃穿。
 
 <p align="center">
+  <a href="https://github.com/BingoWon/study-dojo/actions/workflows/ci.yml"><img src="https://github.com/BingoWon/study-dojo/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/runtime-Cloudflare_Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
