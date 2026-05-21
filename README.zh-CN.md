@@ -5,6 +5,14 @@
 > 🎓 让读论文变成一场冒险 —— 四位 AI 导师，文字 / 语音 / 剧情三种模式，陪你把论文啃穿。
 
 <p align="center">
+  <img src="https://img.shields.io/badge/runtime-Cloudflare_Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/RAG-two--stage-8A2BE2" alt="Two-stage RAG" />
+  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT License" />
+</p>
+
+<p align="center">
   <img src="public/characters/raiden/avatars/neutral.webp" width="64" />
   <img src="public/characters/keli/avatars/neutral.webp" width="64" />
   <img src="public/characters/shiyu/avatars/neutral.webp" width="64" />
